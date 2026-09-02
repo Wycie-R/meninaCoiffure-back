@@ -1,0 +1,57 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: menina_app
+    restart: unless-stopped
+    volumes:
+      - ./src:/var/www
+    working_dir: /var/www
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - menina_net
+
+  nginx:
+    image: nginx:alpine
+    container_name: menina_nginx
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+    volumes:
+      - ./src:/var/www
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on:
+      - app
+    networks:
+      - menina_net
+
+  db:
+    image: postgres:18
+    container_name: menina_db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: menina_coiffure
+      POSTGRES_USER: menina
+      POSTGRES_PASSWORD: menina123
+    ports:
+      - "5432:5432"
+    volumes:
+      - db_data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U menina -d menina_coiffure"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+    networks:
+      - menina_net
+
+networks:
+  menina_net:
+    driver: bridge
+
+volumes:
+  db_data:
