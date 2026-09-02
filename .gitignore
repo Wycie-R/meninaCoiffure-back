@@ -1,0 +1,12 @@
+# Laravel
+src/.env
+src/vendor/
+src/node_modules/
+src/storage/*.key
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.log
