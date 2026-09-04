@@ -1,174 +1,108 @@
 # Menina Coiffure - Backend API
 
-Guía de instalación, configuración, despliegue y pruebas del backend.
-Desarrollado en **Laravel** y containerizado mediante **Docker**.
-
----
-
-## 📋 Tabla de Contenidos
-
-1. [Descripción General](#-descripción-general)
-2. [Requisitos Previos](#-requisitos-previos)
-3. [Guía de Instalación Paso a Paso](#-guía-de-instalación-paso-a-paso)
-   - [Paso 1: Clonar el Repositorio](#paso-1-clonar-el-repositorio)
-   - [Paso 2: Acceder al Directorio](#paso-2-acceder-al-directorio)
-   - [Paso 3: Instalar Dependencias con Composer](#paso-3-instalar-dependencias-con-composer)
-   - [Paso 4: Construir y Levantar Contenedores](#paso-4-construir-y-levantar-contenedores)
-   - [Paso 5: Generar la Clave de la Aplicación](#paso-5-generar-la-clave-de-la-aplicación)
-   - [Paso 6: Migraciones y Poblado de Datos (Seeders)](#paso-6-migraciones-y-poblado-de-datos-seeders)
-4. [Verificación y Pruebas](#-verificación-y-pruebas)
-5. [Endpoints y Rutas Principales](#-endpoints-y-rutas-principales)
-6. [Comandos Frecuentes y Mantenimiento](#-comandos-frecuentes-y-mantenimiento)
-7. [Solución de Problemas Comunes](#-solución-de-problemas-comunes)
-
----
-
-## 📖 Descripción General
-
-Este backend gestiona los servicios, clientes y reservas para **Menina Coiffure**. 
-Es una API RESTful estructurada construida con el framework Laravel y preparada para ejecutarse en entornos aislados y reproducibles con Docker y Docker Compose.
+Guía para el despliegue del entorno de desarrollo mediante Docker, con la estructura del proyecto en `src/`, permisos de usuario en Linux y la ejecución correcta de seeders.
 
 ---
 
 ## ⚙️ Requisitos Previos
 
-Antes de comenzar, asegúrate de contar con las siguientes herramientas instaladas en tu sistema:
-
-- **[Git](https://git-scm.com/)** (v2.30 o superior)
-- **[Docker](https://www.docker.com/)** (Docker Desktop en Windows/macOS o Docker Engine en Linux)
-- **Docker Compose** (integrado en versiones recientes de Docker o standalone `docker-compose`)
-
-> **Nota:** No es estrictamente obligatorio tener PHP ni Composer instalados en el host, ya que todas las dependencias y comandos se ejecutan a través de los contenedores Docker.
+- [Docker Engine](https://docs.docker.com/engine/install/) y **Docker Compose**
+- [Git](https://git-scm.com/)
 
 ---
 
-## 🚀 Guía de Instalación Paso a Paso
+## 🚀 Pasos de Instalación
 
-Sigue rigurosamente el orden de los siguientes pasos para configurar el proyecto desde cero:
-
-### Paso 1: Clonar el Repositorio
-
-Dirígete al directorio de tu preferencia, abre una terminal o línea de comandos y descarga el código fuente oficial:
-
+### 1. Clonar el repositorio
 ```bash
 git clone https://github.com/Wycie-R/meninaCoiffure-back.git
+cd meninaCoiffure-back
 ```
 
-### Paso 2: Acceder al Directorio
-
-Ingresa a la carpeta del proyecto recién clonado:
+### 2. Configurar variables de entorno y permisos
+Copia la plantilla base a la carpeta `src/` y habilita permisos de escritura para que Artisan pueda registrar la clave:
 
 ```bash
-cd menina_coiffure
+cp src/.env.example src/.env
+sudo chmod 666 src/.env
 ```
 
-> *(Opcional, ya que en teoría ya tenemos este archivo, pero si quieres modificarlo sigue estos pasos)* Si tu entorno requiere un archivo `.env`,
-> asegúrate de crearlo a partir del archivo de ejemplo antes de levantar los servicios:
-> ```bash
-> cp .env.example .env
-> ```
-
-### Paso 3: Instalar Dependencias con Composer
-
-Descargar todas las dependencias del proyecto sin necesidad de tener PHP instalado localmente:
+### 3. Instalar dependencias de PHP
+Ejecutar Composer como superusuario (`-u 0`) para evitar bloqueos de permisos al crear `/var/www/vendor`:
 
 ```bash
-docker compose run --rm app composer install
+docker compose run --rm -u 0 app composer install
 ```
 
-### Paso 4: Construir y Levantar Contenedores
+Reasigna la propiedad de los archivos generados a tu usuario del host:
 
-Compila las imágenes e inicia los servicios (aplicación, servidor web y base de datos) en segundo plano (*detached mode*):
+```bash
+sudo chown -R $USER:$USER src/vendor
+```
+
+### 4. Permisos de almacenamiento y caché de Laravel
+Concede acceso a los directorios de logs, sesiones y compilación:
+
+```bash
+sudo chmod -R 777 src/storage src/bootstrap/cache
+```
+
+### 5. Construir y levantar contenedores
+Inicia los servicios (`app`, `db`, `nginx`) en segundo plano:
 
 ```bash
 docker compose up -d --build
 ```
 
-Para verificar que los contenedores estén corriendo correctamente, puedes ejecutar (deberías ver que están 'UP'):
+Verifica que los tres contenedores estén corriendo:
 
 ```bash
 docker compose ps
 ```
 
-### Paso 5: Generar la Clave de la Aplicación
-
-Genera la clave de encriptación (`APP_KEY`) propia de Laravel dentro del contenedor:
-
+### 6. Generar la clave de la aplicación
 ```bash
 docker compose exec app php artisan key:generate
 ```
 
-### Paso 6: Migraciones y Poblado de Datos (Seeders). Los seeders son básicamente 'pruebas'
-
-Ejecuta el esquema de base de datos y añade los datos iniciales requeridos utilizando el seeder asignado:
+### 7. Ejecutar migraciones y poblar la base de datos
+Ejecuta el esquema de tablas y el seeder con el nombre de clase exacto:
 
 ```bash
-docker compose exec app php artisan migrate --seed --seeder=AvanceDosSeeder
+docker compose exec app php artisan migrate
+docker compose exec app php artisan db:seed --class=AvanceDosSeeder
 ```
-
-> **Nota de sintaxis:** El comando original indicado es `Avance DosSeeder`. Si tu terminal interpreta el espacio, enciérralo entre comillas (`--seeder="Avance DosSeeder"`) o utiliza el nombre de clase exacto según tu convención (ej. `AvanceDosSeeder`).
 
 ---
 
 ## 🧪 Verificación y Pruebas
 
-Para garantizar que todos los módulos y la suite de pruebas automatizadas funcionen sin errores:
+Para comprobar que la API y las reglas de negocio respondan correctamente:
 
 ```bash
 docker compose exec app php artisan test
 ```
 
-Si todos los tests devuelven un estado exitoso (`PASS`), la instalación ha culminado con éxito.
+---
+
+## 🌐 Puntos de Acceso
+
+- **Entrada base:** [http://localhost:8000](http://localhost:8000)
+- **API Reservas:** [http://localhost:8000/api/reservas](http://localhost:8000/api/reservas)
 
 ---
 
-## 🌐 Endpoints y Rutas Principales
+## 🛠️ Comandos Frecuentes
 
-Una vez en ejecución, los siguientes servicios estarán accesibles en tu máquina local:
-
-| Servicio | URL | Descripción |
-| :--- | :--- | :--- |
-| **Página Principal** | [http://localhost:8000](http://localhost:8000) | Entrada base del backend / Laravel welcome |
-| **API Reservas** | [http://localhost:8000/api/reservas](http://localhost:8000/api/reservas) | Endpoint para consultar y gestionar reservas |
-
----
-
-## 🛠️ Comandos Frecuentes y Mantenimiento
-
-Lista de comandos para el día a día con Docker:
-
-- **Detener los servicios:**
+- **Detener servicios:**
   ```bash
   docker compose down
   ```
-
-- **Ver registros y logs en tiempo real:**
+- **Ver logs en vivo:**
   ```bash
   docker compose logs -f app
   ```
-
-- **Acceder a la terminal interactiva del contenedor:**
+- **Acceso interactivo al contenedor:**
   ```bash
   docker compose exec app bash
   ```
-
-- **Limpiar cachés de Laravel:**
-  ```bash
-  docker compose exec app php artisan optimize:clear
-  ```
-
----
-
-## ❓ Solución de Problemas Comunes
-
-1. **Error de permisos en directorios (`storage` o `bootstrap/cache`):**
-   ```bash
-   docker compose exec app chmod -R 775 storage bootstrap/cache
-   ```
-
-2. **Error de conexión a la base de datos:**
-   - Asegúrate de que el contenedor de la base de datos haya terminado de inicializarse antes de lanzar las migraciones.
-   - Verifica que las credenciales en tu `.env` coincidan con los valores definidos en `docker-compose.yml`.
-
-3. **Conflicto de puertos (`Port 8000 already in use`):**
-   - Comprueba si tienes otro proceso usando el puerto 8000 y finalízalo, o bien modifica el mapeo de puertos en el archivo `docker-compose.yml`.
