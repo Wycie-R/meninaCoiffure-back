@@ -1,0 +1,347 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "Menina Coiffure API",
+        "description": "Documentación interactiva de la API para el sistema de reservas y gestión de peluquería Menina Coiffure.",
+        "version": "1.0.0"
+    },
+    "servers": [
+        {
+            "url": "http://localhost:8000",
+            "description": "Servidor de Desarrollo Local"
+        }
+    ],
+    "paths": {
+        "/api/reservas": {
+            "get": {
+                "tags": [
+                    "Reservas"
+                ],
+                "summary": "Listado paginado de reservas",
+                "description": "Retorna un listado paginado con carga ansiosa de cliente, personal y detalles de servicios asociados.",
+                "operationId": "8536ca90a9f5ba3709643c0493395478",
+                "parameters": [
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Número de página",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 1
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Cantidad de registros por página",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 15
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Listado de reservas obtenido exitosamente"
+                    }
+                }
+            },
+            "post": {
+                "tags": [
+                    "Reservas"
+                ],
+                "summary": "Crear una nueva reserva",
+                "description": "Registra una reserva con sus detalles de servicios. Aplica validaciones: no solapamiento del personal, horario dentro del turno laboral, servicios activos y congelamiento de precios vigentes.",
+                "operationId": "3b0d25aeb18200cc0887c6cb9d929934",
+                "requestBody": {
+                    "description": "Datos para registrar la reserva",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "cliente_id",
+                                    "personal_id",
+                                    "fecha",
+                                    "hora_inicio",
+                                    "hora_fin",
+                                    "servicios"
+                                ],
+                                "properties": {
+                                    "cliente_id": {
+                                        "description": "ID del cliente",
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "personal_id": {
+                                        "description": "ID del personal/estilista",
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "fecha": {
+                                        "description": "Fecha de la reserva (YYYY-MM-DD)",
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2026-09-07"
+                                    },
+                                    "hora_inicio": {
+                                        "description": "Hora de inicio (HH:MM o HH:MM:SS)",
+                                        "type": "string",
+                                        "example": "10:00"
+                                    },
+                                    "hora_fin": {
+                                        "description": "Hora de finalización (HH:MM o HH:MM:SS)",
+                                        "type": "string",
+                                        "example": "11:00"
+                                    },
+                                    "servicios": {
+                                        "description": "Lista de IDs de servicios",
+                                        "type": "array",
+                                        "items": {
+                                            "type": "integer",
+                                            "example": 1
+                                        }
+                                    },
+                                    "descuento_id": {
+                                        "description": "ID del descuento opcional",
+                                        "type": "integer",
+                                        "example": null,
+                                        "nullable": true
+                                    },
+                                    "estado": {
+                                        "type": "string",
+                                        "example": "pendiente",
+                                        "enum": [
+                                            "pendiente",
+                                            "confirmada",
+                                            "cancelada",
+                                            "completada"
+                                        ]
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Reserva creada exitosamente con precios congelados"
+                    },
+                    "422": {
+                        "description": "Error de validación (solapamiento horario, fuera de turno o servicio inactivo)"
+                    }
+                }
+            }
+        },
+        "/api/reservas/{reserva}": {
+            "get": {
+                "tags": [
+                    "Reservas"
+                ],
+                "summary": "Ver detalle de una reserva",
+                "description": "Obtiene la información completa de una reserva, su cliente, personal y servicios detallados.",
+                "operationId": "279dc61a683d7791f2392b9f44e98adc",
+                "parameters": [
+                    {
+                        "name": "reserva",
+                        "in": "path",
+                        "description": "ID de la reserva a consultar",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Detalle de la reserva obtenido exitosamente"
+                    },
+                    "404": {
+                        "description": "Reserva no encontrada"
+                    }
+                }
+            },
+            "put": {
+                "tags": [
+                    "Reservas"
+                ],
+                "summary": "Actualizar una reserva existente",
+                "description": "Actualiza campos de la reserva. Si se modifican horarios o profesional, re-valida turnos y solapamientos. Regla 5: Bloquea modificaciones si la reserva ya está completada.",
+                "operationId": "5e205f5f1e4090f29a0e88a2e525a9b6",
+                "parameters": [
+                    {
+                        "name": "reserva",
+                        "in": "path",
+                        "description": "ID de la reserva a actualizar",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "description": "Datos a actualizar en la reserva",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "cliente_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "personal_id": {
+                                        "type": "integer",
+                                        "example": 1
+                                    },
+                                    "fecha": {
+                                        "type": "string",
+                                        "format": "date",
+                                        "example": "2026-09-07"
+                                    },
+                                    "hora_inicio": {
+                                        "type": "string",
+                                        "example": "10:30"
+                                    },
+                                    "hora_fin": {
+                                        "type": "string",
+                                        "example": "11:30"
+                                    },
+                                    "estado": {
+                                        "type": "string",
+                                        "example": "confirmada",
+                                        "enum": [
+                                            "pendiente",
+                                            "confirmada",
+                                            "cancelada",
+                                            "completada"
+                                        ]
+                                    },
+                                    "descuento_id": {
+                                        "type": "integer",
+                                        "example": null,
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Reserva actualizada exitosamente"
+                    },
+                    "422": {
+                        "description": "Error de validación o reserva en estado completada"
+                    },
+                    "404": {
+                        "description": "Reserva no encontrada"
+                    }
+                }
+            },
+            "delete": {
+                "tags": [
+                    "Reservas"
+                ],
+                "summary": "Cancelar una reserva (baja lógica)",
+                "description": "Modifica el estado de la reserva a cancelada. Regla 5: Bloquea la cancelación si la reserva ya está completada.",
+                "operationId": "4c6d5a08bc012744b5d042940a2d5bea",
+                "parameters": [
+                    {
+                        "name": "reserva",
+                        "in": "path",
+                        "description": "ID de la reserva a cancelar",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Reserva cancelada exitosamente"
+                    },
+                    "422": {
+                        "description": "Error: No se puede cancelar una reserva completada"
+                    },
+                    "404": {
+                        "description": "Reserva no encontrada"
+                    }
+                }
+            }
+        },
+        "/api/reservas/{reserva}/servicios": {
+            "post": {
+                "tags": [
+                    "Reservas"
+                ],
+                "summary": "Agregar servicio en el momento a una reserva",
+                "description": "Permite agregar un nuevo servicio a una reserva existente en curso, congelando el precio vigente a la fecha de la reserva y marcando agregado_en_el_momento = true.",
+                "operationId": "07d912f8420ba5845bb18fb5726d11cd",
+                "parameters": [
+                    {
+                        "name": "reserva",
+                        "in": "path",
+                        "description": "ID de la reserva a la cual sumar el servicio",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "description": "Datos del servicio adicional a agregar",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "servicio_id"
+                                ],
+                                "properties": {
+                                    "servicio_id": {
+                                        "description": "ID del servicio a agregar",
+                                        "type": "integer",
+                                        "example": 3
+                                    },
+                                    "cantidad": {
+                                        "description": "Cantidad del servicio",
+                                        "type": "integer",
+                                        "example": 1,
+                                        "default": 1
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Servicio agregado a la reserva exitosamente con precio congelado"
+                    },
+                    "422": {
+                        "description": "Error de validación (servicio inexistente o inactivo)"
+                    },
+                    "404": {
+                        "description": "Reserva no encontrada"
+                    }
+                }
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Reservas",
+            "description": "Operaciones y ciclo de vida del CRUD de Reservas"
+        }
+    ]
+}
