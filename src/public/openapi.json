@@ -1,0 +1,688 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Menina Coiffure — API REST",
+    "description": "Documentación interactiva de la API para el sistema de gestión de peluquería y estética Menina Coiffure (Villa Elisa, Paraguay).\n\n### Alcance al 18/09/2026 (Sprint 1 + Inicio Sprint 2):\n- **HU-25:** Autenticación de usuarios y diferenciación por roles (`admin`, `recepcionista`, `profesional`).\n- **HU-10 y HU-01:** Catálogo de servicios para clientes y gestión administrativa con histórico de precios vigentes.\n- **HU-07:** Gestión de profesionales y sus turnos laborales semanales.\n- **Reservas:** Módulo central con aplicación de las 5 Reglas de Negocio (no solapamiento, turnos, servicios activos, precio congelado e inmutabilidad de completadas).\n\n> Puedes usar el botón **\"Try it out\"** en cualquier endpoint para probar peticiones reales en vivo.",
+    "version": "1.0.0"
+  },
+  "servers": [
+    {
+      "url": "http://localhost:8000",
+      "description": "Servidor Local (Docker)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Autenticación (HU-25)",
+      "description": "Inicio de sesión por rol, cierre de sesión y consulta de usuario autenticado."
+    },
+    {
+      "name": "Servicios y Catálogo (HU-10, HU-01)",
+      "description": "Catálogo público para clientes con cálculo de precio vigente y gestión administrativa con histórico."
+    },
+    {
+      "name": "Categorías de Servicio",
+      "description": "Clasificación de los servicios ofrecidos en el salón."
+    },
+    {
+      "name": "Personal y Turnos (HU-07)",
+      "description": "Administración del staff, turnos de trabajo por día de semana e inactivación."
+    },
+    {
+      "name": "Reservas (Módulo Central)",
+      "description": "Agendamiento con aplicación estricta de las 5 reglas de negocio y precios congelados."
+    }
+  ],
+  "paths": {
+    "/api/auth/login": {
+      "post": {
+        "tags": ["Autenticación (HU-25)"],
+        "summary": "Iniciar sesión en el sistema",
+        "description": "Permite iniciar sesión con correo y contraseña. Devuelve los datos del usuario junto a su rol (`admin`, `recepcionista`, `profesional`) y su vínculo con personal si aplica.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["email", "password"],
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "example": "admin@meninacoiffure.com"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "example": "password123"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Inicio de sesión exitoso.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Inicio de sesión exitoso.",
+                  "data": {
+                    "user": {
+                      "id": 1,
+                      "name": "Administradora General",
+                      "email": "admin@meninacoiffure.com",
+                      "rol": "admin",
+                      "personal": null
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Credenciales inválidas o error de validación.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Las credenciales proporcionadas no son válidas.",
+                  "errors": {
+                    "email": ["Las credenciales proporcionadas no son válidas."]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/logout": {
+      "post": {
+        "tags": ["Autenticación (HU-25)"],
+        "summary": "Cerrar sesión activa",
+        "description": "Invalida la sesión actual del usuario.",
+        "responses": {
+          "200": {
+            "description": "Sesión cerrada correctamente.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Sesión cerrada correctamente."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/me": {
+      "get": {
+        "tags": ["Autenticación (HU-25)"],
+        "summary": "Obtener usuario autenticado",
+        "description": "Devuelve el perfil del usuario actual, su rol y datos de personal asociado.",
+        "responses": {
+          "200": {
+            "description": "Datos del usuario obtenidos exitosamente.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": {
+                    "id": 1,
+                    "name": "Administradora General",
+                    "email": "admin@meninacoiffure.com",
+                    "rol": "admin",
+                    "personal": null
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "No autenticado."
+          }
+        }
+      }
+    },
+    "/api/servicios": {
+      "get": {
+        "tags": ["Servicios y Catálogo (HU-10, HU-01)"],
+        "summary": "Consultar catálogo de servicios (HU-01)",
+        "description": "Lista los servicios disponibles para clientes. Incluye el cálculo dinámico del precio vigente a la fecha.",
+        "parameters": [
+          {
+            "name": "categoria_id",
+            "in": "query",
+            "required": false,
+            "description": "Filtrar por ID de categoría de servicio",
+            "schema": {
+              "type": "integer",
+              "example": 1
+            }
+          },
+          {
+            "name": "buscar",
+            "in": "query",
+            "required": false,
+            "description": "Término para buscar por nombre o descripción (ej: 'corte', 'color')",
+            "schema": {
+              "type": "string",
+              "example": "Corte"
+            }
+          },
+          {
+            "name": "solo_activos",
+            "in": "query",
+            "required": false,
+            "description": "Filtrar solo servicios activos (por defecto true)",
+            "schema": {
+              "type": "boolean",
+              "example": true
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Catálogo de servicios listado exitosamente.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "data": [
+                    {
+                      "id": 1,
+                      "nombre": "Corte Femenino",
+                      "descripcion": "Corte y peinado personalizado",
+                      "duracion_minutos": 45,
+                      "activo": true,
+                      "categoria": {
+                        "id": 1,
+                        "nombre": "Corte y Peinado"
+                      },
+                      "precio_vigente": 70000,
+                      "precio_vigente_desde": "2026-01-01"
+                    },
+                    {
+                      "id": 2,
+                      "nombre": "Baño de Crema / Nutrición",
+                      "descripcion": "Hidratación profunda para cabello seco",
+                      "duracion_minutos": 30,
+                      "activo": true,
+                      "categoria": {
+                        "id": 1,
+                        "nombre": "Corte y Peinado"
+                      },
+                      "precio_vigente": 50000,
+                      "precio_vigente_desde": "2026-01-01"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Servicios y Catálogo (HU-10, HU-01)"],
+        "summary": "Crear nuevo servicio con precio inicial (HU-10)",
+        "description": "Crea un servicio en el catálogo asignando su categoría, duración en minutos y creando automáticamente su primer registro de precio vigente en `precios_servicio`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["categoria_id", "nombre", "duracion_minutos", "precio"],
+                "properties": {
+                  "categoria_id": {
+                    "type": "integer",
+                    "example": 1
+                  },
+                  "nombre": {
+                    "type": "string",
+                    "example": "Botox Capilar Rejuvenecedor"
+                  },
+                  "descripcion": {
+                    "type": "string",
+                    "example": "Tratamiento intensivo con ácido hialurónico"
+                  },
+                  "duracion_minutos": {
+                    "type": "integer",
+                    "example": 60
+                  },
+                  "precio": {
+                    "type": "number",
+                    "format": "float",
+                    "example": 120000
+                  },
+                  "activo": {
+                    "type": "boolean",
+                    "example": true
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Servicio creado exitosamente.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Servicio creado exitosamente con su precio inicial.",
+                  "data": {
+                    "id": 5,
+                    "nombre": "Botox Capilar Rejuvenecedor",
+                    "descripcion": "Tratamiento intensivo con ácido hialurónico",
+                    "duracion_minutos": 60,
+                    "activo": true,
+                    "precio_actual": 120000
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error de validación."
+          }
+        }
+      }
+    },
+    "/api/servicios/{id}": {
+      "get": {
+        "tags": ["Servicios y Catálogo (HU-10, HU-01)"],
+        "summary": "Ver detalle de un servicio y su historial de precios",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "example": 1 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Detalle del servicio obtenido."
+          },
+          "404": {
+            "description": "Servicio no encontrado."
+          }
+        }
+      },
+      "put": {
+        "tags": ["Servicios y Catálogo (HU-10, HU-01)"],
+        "summary": "Actualizar datos de un servicio (HU-10)",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "example": 1 }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nombre": { "type": "string", "example": "Corte Femenino y Brushing" },
+                  "duracion_minutos": { "type": "integer", "example": 50 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Servicio actualizado exitosamente." }
+        }
+      },
+      "delete": {
+        "tags": ["Servicios y Catálogo (HU-10, HU-01)"],
+        "summary": "Inactivar un servicio (HU-10)",
+        "description": "Marca el servicio como inactivo (`activo = false`) para que no pueda ser seleccionado en reservas futuras.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "example": 1 }
+          }
+        ],
+        "responses": {
+          "200": { "description": "Servicio desactivado exitosamente." }
+        }
+      }
+    },
+    "/api/servicios/{id}/cambiar-precio": {
+      "post": {
+        "tags": ["Servicios y Catálogo (HU-10, HU-01)"],
+        "summary": "Actualizar precio manteniendo histórico de vigencias (HU-10)",
+        "description": "Cierra la vigencia del precio actual e inserta un nuevo registro en `precios_servicio`. Las reservas pasadas NO se alteran.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "example": 1 }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["precio"],
+                "properties": {
+                  "precio": { "type": "number", "example": 80000 },
+                  "vigente_desde": { "type": "string", "format": "date", "example": "2026-10-01" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Precio actualizado exitosamente con histórico.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Precio del servicio actualizado exitosamente manteniendo el historial.",
+                  "data": {
+                    "servicio_id": 1,
+                    "nuevo_precio": 80000,
+                    "vigente_desde": "2026-10-01"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/categorias-servicio": {
+      "get": {
+        "tags": ["Categorías de Servicio"],
+        "summary": "Listar categorías de servicio",
+        "responses": {
+          "200": { "description": "Listado de categorías." }
+        }
+      },
+      "post": {
+        "tags": ["Categorías de Servicio"],
+        "summary": "Crear nueva categoría",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["nombre"],
+                "properties": {
+                  "nombre": { "type": "string", "example": "Manicura y Pedicura" },
+                  "descripcion": { "type": "string", "example": "Cuidado estético de manos y pies" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Categoría creada exitosamente." }
+        }
+      }
+    },
+    "/api/personal": {
+      "get": {
+        "tags": ["Personal y Turnos (HU-07)"],
+        "summary": "Listar personal con sus turnos de trabajo",
+        "responses": {
+          "200": {
+            "description": "Listado de profesionales con sus horarios semanales."
+          }
+        }
+      },
+      "post": {
+        "tags": ["Personal y Turnos (HU-07)"],
+        "summary": "Alta de nuevo personal y asignación opcional de turnos",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["nombre", "apellido"],
+                "properties": {
+                  "nombre": { "type": "string", "example": "Elena" },
+                  "apellido": { "type": "string", "example": "González" },
+                  "telefono": { "type": "string", "example": "0981123456" },
+                  "email": { "type": "string", "example": "elena@meninacoiffure.com" },
+                  "turnos": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "dia_semana": { "type": "integer", "description": "1=Lunes, 7=Domingo", "example": 1 },
+                        "hora_inicio": { "type": "string", "example": "08:00" },
+                        "hora_fin": { "type": "string", "example": "18:00" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": { "description": "Personal registrado exitosamente." }
+        }
+      }
+    },
+    "/api/personal/{id}/turnos": {
+      "post": {
+        "tags": ["Personal y Turnos (HU-07)"],
+        "summary": "Actualizar o reemplazar turnos laborales del profesional",
+        "description": "Define los días y rangos horarios en que el profesional atiende citas.",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "example": 1 }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["turnos"],
+                "properties": {
+                  "turnos": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "properties": {
+                        "dia_semana": { "type": "integer", "example": 1 },
+                        "hora_inicio": { "type": "string", "example": "08:00" },
+                        "hora_fin": { "type": "string", "example": "17:00" }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": { "description": "Turnos de trabajo actualizados exitosamente." }
+        }
+      }
+    },
+    "/api/reservas": {
+      "get": {
+        "tags": ["Reservas (Módulo Central)"],
+        "summary": "Listar reservas con paginación y carga ansiosa",
+        "description": "Devuelve reservas ordenadas por fecha reciente con datos completos de cliente, profesional y detalles de servicios.",
+        "responses": {
+          "200": { "description": "Listado paginado de reservas." }
+        }
+      },
+      "post": {
+        "tags": ["Reservas (Módulo Central)"],
+        "summary": "Crear nueva reserva (Aplica las 5 Reglas de Negocio)",
+        "description": "Crea una cita validando:\n1. **Regla 1:** No solapamiento de horarios con el mismo profesional.\n2. **Regla 2:** Rango dentro del turno laboral del profesional.\n3. **Regla 3:** Servicios solicitados deben estar activos.\n4. **Regla 4:** Congela el precio vigente a la fecha de la cita en `detalle_reserva.precio_aplicado`.\n5. Inicia con estado `pendiente`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["cliente_id", "personal_id", "fecha", "hora_inicio", "hora_fin", "servicios"],
+                "properties": {
+                  "cliente_id": { "type": "integer", "example": 1 },
+                  "personal_id": { "type": "integer", "example": 1 },
+                  "fecha": { "type": "string", "format": "date", "example": "2026-09-21" },
+                  "hora_inicio": { "type": "string", "example": "10:00" },
+                  "hora_fin": { "type": "string", "example": "11:30" },
+                  "servicios": {
+                    "type": "array",
+                    "items": { "type": "integer" },
+                    "example": [1, 2]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Reserva creada con precio congelado.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Reserva creada exitosamente.",
+                  "data": {
+                    "id": 1,
+                    "cliente_id": 1,
+                    "personal_id": 1,
+                    "fecha": "2026-09-21",
+                    "hora_inicio": "10:00:00",
+                    "hora_fin": "11:30:00",
+                    "estado": "pendiente",
+                    "detalles": [
+                      {
+                        "servicio_id": 1,
+                        "precio_aplicado": "70000.00",
+                        "cantidad": 1,
+                        "agregado_en_el_momento": false
+                      },
+                      {
+                        "servicio_id": 2,
+                        "precio_aplicado": "50000.00",
+                        "cantidad": 1,
+                        "agregado_en_el_momento": false
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Falla por solapamiento (Regla 1), fuera de turno (Regla 2) o servicio inactivo (Regla 3)."
+          }
+        }
+      }
+    },
+    "/api/reservas/{id}": {
+      "get": {
+        "tags": ["Reservas (Módulo Central)"],
+        "summary": "Ver detalle de una reserva",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "example": 1 } }
+        ],
+        "responses": { "200": { "description": "Detalle de la reserva." } }
+      },
+      "put": {
+        "tags": ["Reservas (Módulo Central)"],
+        "summary": "Actualizar datos o estado de reserva (Reglas 1, 2 y 5)",
+        "description": "Revalida solapamiento excluyendo la cita actual. Si la cita ya está `completada`, rechaza transiciones a otro estado (Regla 5).",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "example": 1 } }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "estado": { "type": "string", "enum": ["pendiente", "confirmada", "cancelada", "completada"], "example": "confirmada" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "Reserva actualizada." } }
+      },
+      "delete": {
+        "tags": ["Reservas (Módulo Central)"],
+        "summary": "Cancelar reserva (Regla 5)",
+        "description": "Cancela la reserva cambiando su estado a `cancelada` sin borrar el registro de la BD. Si la reserva ya está `completada`, rechaza la cancelación con código 422.",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "example": 1 } }
+        ],
+        "responses": {
+          "200": { "description": "Reserva cancelada exitosamente." },
+          "422": { "description": "No se puede cancelar una reserva ya completada." }
+        }
+      }
+    },
+    "/api/reservas/{id}/servicios": {
+      "post": {
+        "tags": ["Reservas (Módulo Central)"],
+        "summary": "Agregar servicio en el momento a una cita",
+        "description": "Permite sumar un servicio pedido verbalmente durante la atención. Congela el precio vigente a la fecha de la cita y marca `agregado_en_el_momento: true`.",
+        "parameters": [
+          { "name": "id", "in": "path", "required": true, "schema": { "type": "integer", "example": 1 } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["servicio_id"],
+                "properties": {
+                  "servicio_id": { "type": "integer", "example": 3 },
+                  "cantidad": { "type": "integer", "example": 1 }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Servicio agregado exitosamente.",
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Servicio agregado a la reserva exitosamente.",
+                  "data": {
+                    "reserva_id": 1,
+                    "servicio_id": 3,
+                    "precio_aplicado": "180000.00",
+                    "cantidad": 1,
+                    "agregado_en_el_momento": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
