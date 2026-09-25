@@ -95,10 +95,17 @@ class ReservaService
     public function actualizarReserva(Reserva $reserva, array $datos): Reserva
     {
         return DB::transaction(function () use ($reserva, $datos) {
-            // Regla 5: Una reserva completada no puede pasar a ningún otro estado
-            if ($reserva->estado === 'completada' && isset($datos['estado']) && $datos['estado'] !== 'completada') {
+            // Regla 5: Una reserva completada es inmutable
+            if ($reserva->estado === 'completada') {
                 throw ValidationException::withMessages([
-                    'estado' => ['Una reserva en estado completada no puede cambiar a otro estado.'],
+                    'estado' => ['Una reserva en estado completada es inmutable y no puede modificarse ni cambiar a otro estado.'],
+                ]);
+            }
+
+            // Regla de Negocio: Una reserva cancelada no puede reactivarse ni modificarse
+            if ($reserva->estado === 'cancelada') {
+                throw ValidationException::withMessages([
+                    'estado' => ['Una reserva en estado cancelada no puede ser modificada ni reactivarse.'],
                 ]);
             }
 
@@ -152,6 +159,13 @@ class ReservaService
     public function agregarDetalle(Reserva $reserva, int $servicioId, int $cantidad = 1): DetalleReserva
     {
         return DB::transaction(function () use ($reserva, $servicioId, $cantidad) {
+            // Regla de Negocio: Solo reservas activas admiten nuevos servicios
+            if (in_array($reserva->estado, ['cancelada', 'completada'])) {
+                throw ValidationException::withMessages([
+                    'estado' => ["No se pueden agregar servicios a una reserva en estado {$reserva->estado}."],
+                ]);
+            }
+
             // Regla 3 y Regla 4: Validar servicio activo y precio vigente congelado
             $precioAplicado = $this->obtenerPrecioVigente($servicioId, $reserva->fecha);
 
@@ -179,6 +193,21 @@ class ReservaService
             if ($reserva->estado === 'completada') {
                 throw ValidationException::withMessages([
                     'estado' => ['No se puede cancelar una reserva que ya ha sido completada.'],
+                ]);
+            }
+
+            // Regla de Negocio: No se puede cancelar una reserva que ya está cancelada
+            if ($reserva->estado === 'cancelada') {
+                throw ValidationException::withMessages([
+                    'estado' => ['La reserva ya se encuentra cancelada.'],
+                ]);
+            }
+
+            // Regla de Negocio: No se puede cancelar una reserva cuya cita ya transcurrió
+            $fechaHoraInicio = Carbon::parse("{$reserva->fecha} {$reserva->hora_inicio}");
+            if ($fechaHoraInicio->isPast()) {
+                throw ValidationException::withMessages([
+                    'estado' => ['No se puede cancelar una reserva cuya fecha y hora de atención ya ha transcurrido.'],
                 ]);
             }
 

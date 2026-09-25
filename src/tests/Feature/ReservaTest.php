@@ -339,4 +339,113 @@ class ReservaTest extends TestCase
             'agregado_en_el_momento' => true,
         ]);
     }
+
+    /**
+     * Test 8: Falla al intentar cancelar una reserva que ya está cancelada.
+     */
+    public function test_falla_por_intentar_re_cancelar_reserva_ya_cancelada(): void
+    {
+        $fecha = $this->obtenerProximoLunes();
+
+        $creada = $this->postJson('/api/reservas', [
+            'cliente_id' => 1,
+            'personal_id' => 1,
+            'fecha' => $fecha,
+            'hora_inicio' => '09:00',
+            'hora_fin' => '10:00',
+            'servicios' => [1],
+        ])->assertStatus(201);
+
+        $reservaId = $creada->json('data.id');
+
+        // Primera cancelación (exitosa)
+        $this->deleteJson("/api/reservas/{$reservaId}")
+            ->assertStatus(200);
+
+        // Segunda cancelación (debe fallar con 422)
+        $reintentar = $this->deleteJson("/api/reservas/{$reservaId}");
+        $reintentar->assertStatus(422)
+            ->assertJsonValidationErrors(['estado']);
+    }
+
+    /**
+     * Test 9: Falla al intentar modificar o reactivar una reserva cancelada vía PUT.
+     */
+    public function test_falla_por_intentar_modificar_reserva_cancelada(): void
+    {
+        $fecha = $this->obtenerProximoLunes();
+
+        $creada = $this->postJson('/api/reservas', [
+            'cliente_id' => 1,
+            'personal_id' => 1,
+            'fecha' => $fecha,
+            'hora_inicio' => '10:00',
+            'hora_fin' => '11:00',
+            'servicios' => [1],
+        ])->assertStatus(201);
+
+        $reservaId = $creada->json('data.id');
+
+        $this->deleteJson("/api/reservas/{$reservaId}")
+            ->assertStatus(200);
+
+        // Intentar reactivarla a confirmada
+        $updateResponse = $this->putJson("/api/reservas/{$reservaId}", [
+            'estado' => 'confirmada',
+        ]);
+
+        $updateResponse->assertStatus(422)
+            ->assertJsonValidationErrors(['estado']);
+    }
+
+    /**
+     * Test 10: Falla al intentar agregar servicios a una reserva cancelada.
+     */
+    public function test_falla_por_intentar_agregar_servicios_a_reserva_cancelada(): void
+    {
+        $fecha = $this->obtenerProximoLunes();
+
+        $creada = $this->postJson('/api/reservas', [
+            'cliente_id' => 1,
+            'personal_id' => 1,
+            'fecha' => $fecha,
+            'hora_inicio' => '11:00',
+            'hora_fin' => '12:00',
+            'servicios' => [1],
+        ])->assertStatus(201);
+
+        $reservaId = $creada->json('data.id');
+
+        $this->deleteJson("/api/reservas/{$reservaId}")
+            ->assertStatus(200);
+
+        // Intentar agregar servicio a la reserva cancelada
+        $response = $this->postJson("/api/reservas/{$reservaId}/servicios", [
+            'servicio_id' => 2,
+            'cantidad' => 1,
+        ]);
+
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['estado']);
+    }
+
+    /**
+     * Test 11: Falla al intentar cancelar una reserva cuya cita ya transcurrió en el pasado.
+     */
+    public function test_falla_por_intentar_cancelar_reserva_en_el_pasado(): void
+    {
+        // Insertar directamente una reserva con fecha anterior
+        $reservaPasada = Reserva::create([
+            'cliente_id' => 1,
+            'personal_id' => 1,
+            'fecha' => Carbon::yesterday()->toDateString(),
+            'hora_inicio' => '10:00:00',
+            'hora_fin' => '11:00:00',
+            'estado' => 'pendiente',
+        ]);
+
+        $response = $this->deleteJson("/api/reservas/{$reservaPasada->id}");
+        $response->assertStatus(422)
+            ->assertJsonValidationErrors(['estado']);
+    }
 }

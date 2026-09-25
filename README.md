@@ -88,7 +88,10 @@ docker compose exec app php artisan test
 ## 🌐 Puntos de Acceso
 
 - **Entrada base:** [http://localhost:8000](http://localhost:8000)
+- **Documentación Swagger / OpenAPI:** [http://localhost:8000/docs](http://localhost:8000/docs)
 - **API Reservas:** [http://localhost:8000/api/reservas](http://localhost:8000/api/reservas)
+- **Consola Portainer (HTTPS):** [https://localhost:9443](https://localhost:9443)
+- **Consola Portainer (HTTP):** [http://localhost:9001](http://localhost:9001)
 
 ---
 

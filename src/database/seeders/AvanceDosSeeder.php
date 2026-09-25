@@ -10,6 +10,11 @@ class AvanceDosSeeder extends Seeder
 {
     public function run(): void
     {
+        // Evitar duplicados si ya fue ejecutado previamente
+        if (DB::table('categorias_servicio')->count() > 0) {
+            return;
+        }
+
         // 1. Clientes
         $cliente1Id = DB::table('clientes')->insertGetId([
             'nombre' => 'Ana',
