@@ -73,6 +73,33 @@ docker compose exec app php artisan migrate
 docker compose exec app php artisan db:seed --class=AvanceDosSeeder
 ```
 
+### 8. Instalar y compilar el Frontend (Vue 3 + Inertia + Vite)
+Inertia.js requiere dependencias tanto en el **Backend (PHP/Composer)** como en el **Frontend (Node/NPM)**. Se deben ejecutar los comandos dentro del contenedor `app` de Docker:
+
+1. **Asegurar dependencias de PHP (Inertia Laravel adapter):**
+   ```bash
+   docker compose exec app composer install
+   ```
+
+2. **Instalar dependencias de JavaScript (Vue 3, Inertia Vue adapter, Vite, Tailwind):**
+   ```bash
+   docker compose exec app npm install
+   ```
+
+3. **Compilar los assets del frontend:**
+   ```bash
+   docker compose exec app npm run build
+   ```
+   > 💡 **Nota:** Una vez compilados con `npm run build`, la interfaz web queda lista y servida automáticamente por Nginx en [http://localhost:8000](http://localhost:8000).
+
+*(Opcional) Modo desarrollo con recarga automática (HMR):*
+Si tienes Node.js instalado en tu máquina host y deseas ver los cambios en tiempo real mientras programas componentes:
+```bash
+cd src
+npm install
+npm run dev
+```
+
 ---
 
 ## 🧪 Verificación y Pruebas
@@ -87,7 +114,7 @@ docker compose exec app php artisan test
 
 ## 🌐 Puntos de Acceso
 
-- **Entrada base:** [http://localhost:8000](http://localhost:8000)
+- **Frontend / Entrada base:** [http://localhost:8000](http://localhost:8000)
 - **Documentación Swagger / OpenAPI:** [http://localhost:8000/docs](http://localhost:8000/docs)
 - **API Reservas:** [http://localhost:8000/api/reservas](http://localhost:8000/api/reservas)
 - **Consola Portainer (HTTPS):** [https://localhost:9443](https://localhost:9443)
@@ -97,6 +124,10 @@ docker compose exec app php artisan test
 
 ## 🛠️ Comandos Frecuentes
 
+- **Compilar frontend:**
+  ```bash
+  docker compose exec app npm run build
+  ```
 - **Detener servicios:**
   ```bash
   docker compose down
@@ -109,3 +140,4 @@ docker compose exec app php artisan test
   ```bash
   docker compose exec app bash
   ```
+
