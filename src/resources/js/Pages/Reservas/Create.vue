@@ -442,6 +442,7 @@ function inputBorder(campo) {
                     >
                         <Button
                             label="Cancelar"
+                            href="/reservas"
                             variant="secondary"
                             class="w-full sm:w-auto"
                         />

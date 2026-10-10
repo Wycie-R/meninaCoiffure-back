@@ -1,5 +1,6 @@
 <script setup>
 import { computed } from 'vue'
+import { Link } from '@inertiajs/vue3'
 
 const props = defineProps({
     label: {
@@ -20,7 +21,14 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    href: {
+        type: String,
+        default: null,
+    },
 })
+
+const baseClass =
+    'inline-flex items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3] disabled:cursor-not-allowed disabled:opacity-50'
 
 const variants = {
     primary: 'border-transparent bg-[#D4C3A3] text-[#1C1B1A] enabled:hover:bg-[#E0CDAF]',
@@ -28,15 +36,30 @@ const variants = {
     danger: 'border-[#6A3A3A] bg-[#3A2626] text-[#F0A8A8] enabled:hover:border-[#8A4A4A] enabled:hover:bg-[#472D2D]',
 }
 
+const linkHover = {
+    primary: 'hover:bg-[#E0CDAF]',
+    secondary: 'hover:border-[#8C7961] hover:bg-[#403629]',
+    danger: 'hover:border-[#8A4A4A] hover:bg-[#472D2D]',
+}
+
 const variantClass = computed(() => variants[props.variant])
+const esEnlace = computed(() => props.href && !props.disabled)
 </script>
 
 <template>
+    <Link
+        v-if="esEnlace"
+        :href="href"
+        :class="[baseClass, variantClass, linkHover[variant]]"
+    >
+        <slot>{{ label }}</slot>
+    </Link>
+
     <button
+        v-else
         :type="type"
         :disabled="disabled"
-        class="inline-flex items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3] disabled:cursor-not-allowed disabled:opacity-50"
-        :class="variantClass"
+        :class="[baseClass, variantClass]"
     >
         <slot>{{ label }}</slot>
     </button>

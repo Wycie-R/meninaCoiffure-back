@@ -208,7 +208,7 @@ function nombresServicios(reserva) {
                         Reservas
                     </h1>
 
-                        <Button label="+ Nueva reserva" />
+                        <Button label="+ Nueva reserva" href="/reservas/crear" />
                 </div>
 
                 <!-- Búsqueda y filtro -->

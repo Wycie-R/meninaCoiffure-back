@@ -1,5 +1,6 @@
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { Link, usePage } from '@inertiajs/vue3'
 
 const openMenu = ref(null)
 
@@ -8,53 +9,66 @@ const openMobile = ref(null)
 
 const header = ref(null)
 
-const linkClass =
-    'rounded-md px-3 py-2 text-sm text-[#BEB3A6] transition-colors hover:bg-[#34302B] hover:text-[#F3ECE0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3]'
+const page = usePage()
+const rutaActual = computed(() => page.url.split('?')[0])
 
-const mobileLinkClass =
-    'block w-full rounded-md px-3 py-3 text-left text-sm text-[#F3ECE0] transition-colors hover:bg-[#34302B] hover:text-[#F3ECE0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3]'
+const focusClass =
+    'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3]'
+
+const linkClass = `rounded-md px-3 py-2 text-sm transition-colors hover:bg-[#34302B] hover:text-[#F3ECE0] ${focusClass}`
+
+const mobileLinkClass = `block w-full rounded-md px-3 py-3 text-left text-sm transition-colors hover:bg-[#34302B] ${focusClass}`
 
 const navItems = [
-    { key: 'dashboard', label: 'Dashboard', href: '#' },
+    { key: 'dashboard', label: 'Dashboard', href: '/dashboard' },
     {
         key: 'reservas',
         label: 'Reservas',
         items: [
-            { label: 'Ver reservas', href: '#' },
-            { label: 'Nueva reserva', href: '#' },
+            { label: 'Ver reservas', href: '/reservas' },
+            { label: 'Nueva reserva', href: '/reservas/crear' },
         ],
     },
     {
         key: 'servicios',
         label: 'Servicios',
         items: [
-            { label: 'Ver servicios', href: '#' },
-            { label: 'Nuevo servicio', href: '#' },
-            { label: 'Categorías', href: '#' },
+            { label: 'Ver servicios', href: '/servicios' },
+            { label: 'Nuevo servicio', href: null },
+            { label: 'Categorías', href: null },
         ],
     },
     {
         key: 'personal',
         label: 'Personal',
         items: [
-            { label: 'Ver personal', href: '#' },
-            { label: 'Nuevo profesional', href: '#' },
-            { label: 'Horarios', href: '#' },
+            { label: 'Ver personal', href: null },
+            { label: 'Nuevo profesional', href: null },
+            { label: 'Horarios', href: null },
         ],
     },
-    { key: 'reportes', label: 'Reportes', href: '#' },
-    { key: 'configuracion', label: 'Configuración', href: '#' },
+    { key: 'reportes', label: 'Reportes', href: null },
+    { key: 'configuracion', label: 'Configuración', href: null },
     {
         key: 'usuario',
         label: 'Usuario',
         alignRight: true,
         items: [
-            { label: 'Mi perfil', href: '#' },
-            { label: 'Configuración', href: '#' },
-            { label: 'Cerrar sesión', href: '#' },
+            { label: 'Mi perfil', href: null },
+            { label: 'Configuración', href: null },
+            { label: 'Cerrar sesión', href: null },
         ],
     },
 ]
+
+function esActual(href) {
+    return Boolean(href) && rutaActual.value === href
+}
+
+function seccionActiva(item) {
+    if (item.items) return item.items.some((link) => esActual(link.href))
+    return esActual(item.href)
+}
 
 function open(key) {
     openMenu.value = key
@@ -106,22 +120,35 @@ onBeforeUnmount(() => {
     <div class="min-h-screen bg-[#1C1B1A]">
         <header ref="header" class="border-b border-[#47413B] bg-[#292725]">
             <div class="mx-auto flex max-w-7xl items-center gap-8 px-6 py-4">
-                <a
-                    href="#"
-                    class="text-sm font-semibold uppercase tracking-[0.25em] text-[#D4C3A3]"
+                <Link
+                    href="/dashboard"
+                    class="rounded text-sm font-semibold uppercase tracking-[0.25em] text-[#D4C3A3]"
+                    :class="focusClass"
                 >
                     Menina Coiffure
-                </a>
+                </Link>
 
                 <nav class="hidden flex-1 items-center gap-1 lg:flex">
                     <template v-for="item in navItems" :key="item.key">
-                        <a
-                            v-if="!item.items"
-                            :href="item.href"
-                            :class="linkClass"
-                        >
-                            {{ item.label }}
-                        </a>
+                        <template v-if="!item.items">
+                            <Link
+                                v-if="item.href"
+                                :href="item.href"
+                                :class="[linkClass, seccionActiva(item) ? 'bg-[#34302B] text-[#E0CDAF]' : 'text-[#BEB3A6]']"
+                                :aria-current="seccionActiva(item) ? 'page' : undefined"
+                            >
+                                {{ item.label }}
+                            </Link>
+
+                            <span
+                                v-else
+                                class="cursor-not-allowed rounded-md px-3 py-2 text-sm text-[#BEB3A6] opacity-50"
+                                title="Próximamente"
+                                aria-disabled="true"
+                            >
+                                {{ item.label }}
+                            </span>
+                        </template>
 
                         <div
                             v-else
@@ -135,7 +162,11 @@ onBeforeUnmount(() => {
                                 class="flex items-center gap-1"
                                 :class="[
                                     linkClass,
-                                    { 'bg-[#34302B] text-[#F3ECE0]': openMenu === item.key }
+                                    openMenu === item.key
+                                        ? 'bg-[#34302B] text-[#F3ECE0]'
+                                        : seccionActiva(item)
+                                            ? 'bg-[#34302B] text-[#E0CDAF]'
+                                            : 'text-[#BEB3A6]'
                                 ]"
                                 aria-haspopup="true"
                                 :aria-expanded="openMenu === item.key"
@@ -174,15 +205,27 @@ onBeforeUnmount(() => {
                                     <div
                                         class="w-52 rounded-lg border border-[#5B5147] bg-[#34302B] py-1 shadow-xl"
                                     >
-                                        <a
-                                            v-for="link in item.items"
-                                            :key="link.label"
-                                            :href="link.href"
-                                            class="block px-4 py-2 text-sm text-[#F3ECE0] transition-colors hover:bg-[#403629] hover:text-[#E0CDAF]"
-                                            @click="close"
-                                        >
-                                            {{ link.label }}
-                                        </a>
+                                        <template v-for="link in item.items" :key="link.label">
+                                            <Link
+                                                v-if="link.href"
+                                                :href="link.href"
+                                                class="block px-4 py-2 text-sm transition-colors hover:bg-[#403629] hover:text-[#E0CDAF]"
+                                                :class="esActual(link.href) ? 'bg-[#403629] font-medium text-[#E0CDAF]' : 'text-[#F3ECE0]'"
+                                                :aria-current="esActual(link.href) ? 'page' : undefined"
+                                                @click="close"
+                                            >
+                                                {{ link.label }}
+                                            </Link>
+
+                                            <span
+                                                v-else
+                                                class="block cursor-not-allowed px-4 py-2 text-sm text-[#BEB3A6] opacity-50"
+                                                title="Próximamente"
+                                                aria-disabled="true"
+                                            >
+                                                {{ link.label }}
+                                            </span>
+                                        </template>
                                     </div>
                                 </div>
                             </Transition>
@@ -192,7 +235,8 @@ onBeforeUnmount(() => {
 
                 <button
                     type="button"
-                    class="ml-auto rounded-md p-2 text-[#F3ECE0] transition-colors hover:bg-[#34302B] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3] lg:hidden"
+                    class="ml-auto rounded-md p-2 text-[#F3ECE0] transition-colors hover:bg-[#34302B] lg:hidden"
+                    :class="focusClass"
                     :aria-label="mobileOpen ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'"
                     aria-controls="mobile-menu"
                     :aria-expanded="mobileOpen"
@@ -246,14 +290,25 @@ onBeforeUnmount(() => {
                     class="border-t border-[#47413B] bg-[#292725] px-4 py-3 lg:hidden"
                 >
                     <template v-for="item in navItems" :key="item.key">
-                        <a
-                            v-if="!item.items"
-                            :href="item.href"
-                            :class="mobileLinkClass"
-                            @click="closeMobile"
-                        >
-                            {{ item.label }}
-                        </a>
+                        <template v-if="!item.items">
+                            <Link
+                                v-if="item.href"
+                                :href="item.href"
+                                :class="[mobileLinkClass, seccionActiva(item) ? 'font-medium text-[#E0CDAF]' : 'text-[#F3ECE0]']"
+                                :aria-current="seccionActiva(item) ? 'page' : undefined"
+                                @click="closeMobile"
+                            >
+                                {{ item.label }}
+                            </Link>
+
+                            <span
+                                v-else
+                                class="block cursor-not-allowed rounded-md px-3 py-3 text-sm text-[#BEB3A6] opacity-50"
+                                aria-disabled="true"
+                            >
+                                {{ item.label }}
+                            </span>
+                        </template>
 
                         <div
                             v-else
@@ -266,10 +321,11 @@ onBeforeUnmount(() => {
                                 class="flex items-center justify-between"
                                 :class="[
                                     mobileLinkClass,
-                                    {
-                                        'bg-[#403629] text-[#E0CDAF]':
-                                            openMobile === item.key
-                                    }
+                                    openMobile === item.key
+                                        ? 'bg-[#403629] text-[#E0CDAF]'
+                                        : seccionActiva(item)
+                                            ? 'font-medium text-[#E0CDAF]'
+                                            : 'text-[#F3ECE0]'
                                 ]"
                                 :aria-expanded="openMobile === item.key"
                                 @click="toggleMobileSubmenu(item.key)"
@@ -295,15 +351,26 @@ onBeforeUnmount(() => {
                                 v-if="openMobile === item.key"
                                 class="ml-3 mt-1 border-l border-[#5B5147] pl-2"
                             >
-                                <a
-                                    v-for="link in item.items"
-                                    :key="link.label"
-                                    :href="link.href"
-                                    class="block rounded-md px-3 py-2.5 text-sm text-[#BEB3A6] transition-colors hover:bg-[#34302B] hover:text-[#F3ECE0]"
-                                    @click="closeMobile"
-                                >
-                                    {{ link.label }}
-                                </a>
+                                <template v-for="link in item.items" :key="link.label">
+                                    <Link
+                                        v-if="link.href"
+                                        :href="link.href"
+                                        class="block rounded-md px-3 py-2.5 text-sm transition-colors hover:bg-[#34302B] hover:text-[#F3ECE0]"
+                                        :class="esActual(link.href) ? 'font-medium text-[#E0CDAF]' : 'text-[#BEB3A6]'"
+                                        :aria-current="esActual(link.href) ? 'page' : undefined"
+                                        @click="closeMobile"
+                                    >
+                                        {{ link.label }}
+                                    </Link>
+
+                                    <span
+                                        v-else
+                                        class="block cursor-not-allowed rounded-md px-3 py-2.5 text-sm text-[#BEB3A6] opacity-50"
+                                        aria-disabled="true"
+                                    >
+                                        {{ link.label }}
+                                    </span>
+                                </template>
                             </div>
                         </div>
                     </template>
@@ -316,4 +383,5 @@ onBeforeUnmount(() => {
         </main>
     </div>
 </template>
+
 

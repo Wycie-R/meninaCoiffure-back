@@ -1,6 +1,7 @@
 
 <script setup>
 import { computed } from 'vue'
+import { Link } from '@inertiajs/vue3'
 import AppLayout from '../../Layouts/AppLayout.vue'
 import Button from '../../Components/Button.vue'
 import StatusBadge from '../../Components/StatusBadge.vue'
@@ -265,7 +266,7 @@ const personalHoy = computed(() =>
                         </p>
                     </div>
 
-                        <Button label="+ Nueva reserva" />
+                        <Button label="+ Nueva reserva" href="/reservas/crear" />
                 </div>
 
                 <!-- Tarjetas de resumen -->
@@ -311,12 +312,12 @@ const personalHoy = computed(() =>
                                 Agenda de hoy
                             </h2>
 
-                            <a
-                                href="#"
+                            <Link
+                                href="/reservas"
                                 class="rounded text-sm text-[#D4C3A3] transition-colors hover:text-[#F3ECE0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3]"
                             >
                                 Ver todas →
-                            </a>
+                            </Link>
                         </div>
 
                         <ul
@@ -368,6 +369,7 @@ const personalHoy = computed(() =>
 
                             <Button
                                 label="+ Nueva reserva"
+                                href="/reservas/crear"
                                 variant="secondary"
                                 class="mt-4"
                             />
