@@ -1,4 +1,3 @@
-
 <script setup>
 import { ref, onMounted, onBeforeUnmount } from 'vue'
 
@@ -10,10 +9,10 @@ const openMobile = ref(null)
 const header = ref(null)
 
 const linkClass =
-    'rounded-md px-3 py-2 text-sm text-neutral-200 transition-colors hover:bg-neutral-800 hover:text-white'
+    'rounded-md px-3 py-2 text-sm text-[#BEB3A6] transition-colors hover:bg-[#34302B] hover:text-[#F3ECE0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3]'
 
 const mobileLinkClass =
-    'block w-full rounded-md px-3 py-3 text-left text-sm text-[#F3ECE0] transition-colors hover:bg-[#34302B] hover:text-[#F3ECE0]'
+    'block w-full rounded-md px-3 py-3 text-left text-sm text-[#F3ECE0] transition-colors hover:bg-[#34302B] hover:text-[#F3ECE0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3]'
 
 const navItems = [
     { key: 'dashboard', label: 'Dashboard', href: '#' },
@@ -104,12 +103,12 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-    <div class="min-h-screen bg-beige-50">
-        <header ref="header" class="border-b border-neutral-800 bg-[#252525]">
+    <div class="min-h-screen bg-[#1C1B1A]">
+        <header ref="header" class="border-b border-[#47413B] bg-[#292725]">
             <div class="mx-auto flex max-w-7xl items-center gap-8 px-6 py-4">
                 <a
                     href="#"
-                    class="text-sm font-semibold uppercase tracking-[0.25em] text-beige-100"
+                    class="text-sm font-semibold uppercase tracking-[0.25em] text-[#D4C3A3]"
                 >
                     Menina Coiffure
                 </a>
@@ -136,7 +135,7 @@ onBeforeUnmount(() => {
                                 class="flex items-center gap-1"
                                 :class="[
                                     linkClass,
-                                    { 'bg-neutral-800 text-white': openMenu === item.key }
+                                    { 'bg-[#34302B] text-[#F3ECE0]': openMenu === item.key }
                                 ]"
                                 aria-haspopup="true"
                                 :aria-expanded="openMenu === item.key"
@@ -173,13 +172,13 @@ onBeforeUnmount(() => {
                                     :class="item.alignRight ? 'right-0' : 'left-0'"
                                 >
                                     <div
-                                        class="w-52 rounded-lg border border-neutral-700 bg-neutral-900 py-1 shadow-lg"
+                                        class="w-52 rounded-lg border border-[#5B5147] bg-[#34302B] py-1 shadow-xl"
                                     >
                                         <a
                                             v-for="link in item.items"
                                             :key="link.label"
                                             :href="link.href"
-                                            class="block px-4 py-2 text-sm text-neutral-200 transition-colors hover:bg-neutral-800 hover:text-beige-100"
+                                            class="block px-4 py-2 text-sm text-[#F3ECE0] transition-colors hover:bg-[#403629] hover:text-[#E0CDAF]"
                                             @click="close"
                                         >
                                             {{ link.label }}
@@ -193,7 +192,7 @@ onBeforeUnmount(() => {
 
                 <button
                     type="button"
-                    class="ml-auto rounded-md p-2 text-beige-100 transition-colors hover:bg-neutral-800 lg:hidden"
+                    class="ml-auto rounded-md p-2 text-[#F3ECE0] transition-colors hover:bg-[#34302B] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3] lg:hidden"
                     :aria-label="mobileOpen ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'"
                     aria-controls="mobile-menu"
                     :aria-expanded="mobileOpen"
@@ -244,7 +243,7 @@ onBeforeUnmount(() => {
                 <nav
                     v-if="mobileOpen"
                     id="mobile-menu"
-                    class="border-t border-[#51483F] bg-[#252525] px-4 py-3 lg:hidden"
+                    class="border-t border-[#47413B] bg-[#292725] px-4 py-3 lg:hidden"
                 >
                     <template v-for="item in navItems" :key="item.key">
                         <a
@@ -259,7 +258,7 @@ onBeforeUnmount(() => {
                         <div
                             v-else
                             :class="{
-                                'mt-2 border-t border-[#51483F] pt-2': item.alignRight
+                                'mt-2 border-t border-[#47413B] pt-2': item.alignRight
                             }"
                         >
                             <button
@@ -312,8 +311,9 @@ onBeforeUnmount(() => {
             </Transition>
         </header>
 
-        <main class="bg-beige-50">
+        <main>
             <slot />
         </main>
     </div>
 </template>
+
