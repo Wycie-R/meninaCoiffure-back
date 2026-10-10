@@ -265,9 +265,7 @@ const personalHoy = computed(() =>
                         </p>
                     </div>
 
-                    <div class="rounded-lg ring-1 ring-[#8C7961]/60">
                         <Button label="+ Nueva reserva" />
-                    </div>
                 </div>
 
                 <!-- Tarjetas de resumen -->

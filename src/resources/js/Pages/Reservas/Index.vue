@@ -208,9 +208,7 @@ function nombresServicios(reserva) {
                         Reservas
                     </h1>
 
-                    <div class="rounded-lg ring-1 ring-[#8C7961]/60">
                         <Button label="+ Nueva reserva" />
-                    </div>
                 </div>
 
                 <!-- Búsqueda y filtro -->

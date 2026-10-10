@@ -151,9 +151,7 @@ function duracion(minutos) {
                         Servicios
                     </h1>
 
-                    <div class="rounded-lg ring-1 ring-[#8C7961]/60">
-                        <Button label="+ Nuevo servicio" />
-                    </div>
+                                        <Button label="+ Nuevo servicio" />
                 </div>
 
                 <div

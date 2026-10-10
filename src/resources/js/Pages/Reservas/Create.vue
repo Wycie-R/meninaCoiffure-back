@@ -446,13 +446,11 @@ function inputBorder(campo) {
                             class="w-full sm:w-auto"
                         />
 
-                        <div class="rounded-lg ring-1 ring-[#8C7961]/60">
-                            <Button
-                                label="Guardar reserva"
-                                type="submit"
-                                class="w-full sm:w-auto"
-                            />
-                        </div>
+                                                <Button
+                            label="Guardar reserva"
+                            type="submit"
+                            class="w-full sm:w-auto"
+                        />
                     </div>
 
                 </form>
