@@ -1,0 +1,319 @@
+
+<script setup>
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+
+const openMenu = ref(null)
+
+const mobileOpen = ref(false)
+const openMobile = ref(null)
+
+const header = ref(null)
+
+const linkClass =
+    'rounded-md px-3 py-2 text-sm text-neutral-200 transition-colors hover:bg-neutral-800 hover:text-white'
+
+const mobileLinkClass =
+    'block w-full rounded-md px-3 py-3 text-left text-sm text-[#F3ECE0] transition-colors hover:bg-[#34302B] hover:text-[#F3ECE0]'
+
+const navItems = [
+    { key: 'dashboard', label: 'Dashboard', href: '#' },
+    {
+        key: 'reservas',
+        label: 'Reservas',
+        items: [
+            { label: 'Ver reservas', href: '#' },
+            { label: 'Nueva reserva', href: '#' },
+        ],
+    },
+    {
+        key: 'servicios',
+        label: 'Servicios',
+        items: [
+            { label: 'Ver servicios', href: '#' },
+            { label: 'Nuevo servicio', href: '#' },
+            { label: 'Categorías', href: '#' },
+        ],
+    },
+    {
+        key: 'personal',
+        label: 'Personal',
+        items: [
+            { label: 'Ver personal', href: '#' },
+            { label: 'Nuevo profesional', href: '#' },
+            { label: 'Horarios', href: '#' },
+        ],
+    },
+    { key: 'reportes', label: 'Reportes', href: '#' },
+    { key: 'configuracion', label: 'Configuración', href: '#' },
+    {
+        key: 'usuario',
+        label: 'Usuario',
+        alignRight: true,
+        items: [
+            { label: 'Mi perfil', href: '#' },
+            { label: 'Configuración', href: '#' },
+            { label: 'Cerrar sesión', href: '#' },
+        ],
+    },
+]
+
+function open(key) {
+    openMenu.value = key
+}
+
+function close() {
+    openMenu.value = null
+}
+
+function toggleMobile() {
+    mobileOpen.value = !mobileOpen.value
+    openMobile.value = null
+}
+
+function closeMobile() {
+    mobileOpen.value = false
+    openMobile.value = null
+}
+
+function toggleMobileSubmenu(key) {
+    openMobile.value = openMobile.value === key ? null : key
+}
+
+function closeAll() {
+    close()
+    closeMobile()
+}
+
+function handleClickOutside(event) {
+    if (header.value && !event.composedPath().includes(header.value)) closeAll()
+}
+
+function handleEscape(event) {
+    if (event.key === 'Escape') closeAll()
+}
+
+onMounted(() => {
+    document.addEventListener('click', handleClickOutside)
+    document.addEventListener('keydown', handleEscape)
+})
+
+onBeforeUnmount(() => {
+    document.removeEventListener('click', handleClickOutside)
+    document.removeEventListener('keydown', handleEscape)
+})
+</script>
+
+<template>
+    <div class="min-h-screen bg-beige-50">
+        <header ref="header" class="border-b border-neutral-800 bg-[#252525]">
+            <div class="mx-auto flex max-w-7xl items-center gap-8 px-6 py-4">
+                <a
+                    href="#"
+                    class="text-sm font-semibold uppercase tracking-[0.25em] text-beige-100"
+                >
+                    Menina Coiffure
+                </a>
+
+                <nav class="hidden flex-1 items-center gap-1 lg:flex">
+                    <template v-for="item in navItems" :key="item.key">
+                        <a
+                            v-if="!item.items"
+                            :href="item.href"
+                            :class="linkClass"
+                        >
+                            {{ item.label }}
+                        </a>
+
+                        <div
+                            v-else
+                            class="relative"
+                            :class="{ 'ml-auto': item.alignRight }"
+                            @mouseenter="open(item.key)"
+                            @mouseleave="close"
+                        >
+                            <button
+                                type="button"
+                                class="flex items-center gap-1"
+                                :class="[
+                                    linkClass,
+                                    { 'bg-neutral-800 text-white': openMenu === item.key }
+                                ]"
+                                aria-haspopup="true"
+                                :aria-expanded="openMenu === item.key"
+                                @click="open(item.key)"
+                            >
+                                {{ item.label }}
+
+                                <svg
+                                    class="h-3.5 w-3.5 transition-transform duration-150"
+                                    :class="{ 'rotate-180': openMenu === item.key }"
+                                    viewBox="0 0 20 20"
+                                    fill="currentColor"
+                                    aria-hidden="true"
+                                >
+                                    <path
+                                        fill-rule="evenodd"
+                                        d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+                                        clip-rule="evenodd"
+                                    />
+                                </svg>
+                            </button>
+
+                            <Transition
+                                enter-active-class="transition duration-150 ease-out"
+                                enter-from-class="opacity-0 -translate-y-1"
+                                enter-to-class="opacity-100 translate-y-0"
+                                leave-active-class="transition duration-100 ease-in"
+                                leave-from-class="opacity-100 translate-y-0"
+                                leave-to-class="opacity-0 -translate-y-1"
+                            >
+                                <div
+                                    v-if="openMenu === item.key"
+                                    class="absolute top-full z-20 pt-1"
+                                    :class="item.alignRight ? 'right-0' : 'left-0'"
+                                >
+                                    <div
+                                        class="w-52 rounded-lg border border-neutral-700 bg-neutral-900 py-1 shadow-lg"
+                                    >
+                                        <a
+                                            v-for="link in item.items"
+                                            :key="link.label"
+                                            :href="link.href"
+                                            class="block px-4 py-2 text-sm text-neutral-200 transition-colors hover:bg-neutral-800 hover:text-beige-100"
+                                            @click="close"
+                                        >
+                                            {{ link.label }}
+                                        </a>
+                                    </div>
+                                </div>
+                            </Transition>
+                        </div>
+                    </template>
+                </nav>
+
+                <button
+                    type="button"
+                    class="ml-auto rounded-md p-2 text-beige-100 transition-colors hover:bg-neutral-800 lg:hidden"
+                    :aria-label="mobileOpen ? 'Cerrar menú de navegación' : 'Abrir menú de navegación'"
+                    aria-controls="mobile-menu"
+                    :aria-expanded="mobileOpen"
+                    @click.stop="toggleMobile"
+                >
+                    <svg
+                        v-if="!mobileOpen"
+                        class="h-6 w-6"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        aria-hidden="true"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M4 6h16M4 12h16M4 18h16"
+                        />
+                    </svg>
+
+                    <svg
+                        v-else
+                        class="h-6 w-6"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="1.5"
+                        aria-hidden="true"
+                    >
+                        <path
+                            stroke-linecap="round"
+                            stroke-linejoin="round"
+                            d="M6 6l12 12M18 6L6 18"
+                        />
+                    </svg>
+                </button>
+            </div>
+
+            <Transition
+                enter-active-class="transition duration-150 ease-out"
+                enter-from-class="opacity-0 -translate-y-1"
+                enter-to-class="opacity-100 translate-y-0"
+                leave-active-class="transition duration-100 ease-in"
+                leave-from-class="opacity-100 translate-y-0"
+                leave-to-class="opacity-0 -translate-y-1"
+            >
+                <nav
+                    v-if="mobileOpen"
+                    id="mobile-menu"
+                    class="border-t border-[#51483F] bg-[#252525] px-4 py-3 lg:hidden"
+                >
+                    <template v-for="item in navItems" :key="item.key">
+                        <a
+                            v-if="!item.items"
+                            :href="item.href"
+                            :class="mobileLinkClass"
+                            @click="closeMobile"
+                        >
+                            {{ item.label }}
+                        </a>
+
+                        <div
+                            v-else
+                            :class="{
+                                'mt-2 border-t border-[#51483F] pt-2': item.alignRight
+                            }"
+                        >
+                            <button
+                                type="button"
+                                class="flex items-center justify-between"
+                                :class="[
+                                    mobileLinkClass,
+                                    {
+                                        'bg-[#403629] text-[#E0CDAF]':
+                                            openMobile === item.key
+                                    }
+                                ]"
+                                :aria-expanded="openMobile === item.key"
+                                @click="toggleMobileSubmenu(item.key)"
+                            >
+                                {{ item.label }}
+
+                                <svg
+                                    class="h-4 w-4 transition-transform duration-150"
+                                    :class="{ 'rotate-180': openMobile === item.key }"
+                                    viewBox="0 0 20 20"
+                                    fill="currentColor"
+                                    aria-hidden="true"
+                                >
+                                    <path
+                                        fill-rule="evenodd"
+                                        d="M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z"
+                                        clip-rule="evenodd"
+                                    />
+                                </svg>
+                            </button>
+
+                            <div
+                                v-if="openMobile === item.key"
+                                class="ml-3 mt-1 border-l border-[#5B5147] pl-2"
+                            >
+                                <a
+                                    v-for="link in item.items"
+                                    :key="link.label"
+                                    :href="link.href"
+                                    class="block rounded-md px-3 py-2.5 text-sm text-[#BEB3A6] transition-colors hover:bg-[#34302B] hover:text-[#F3ECE0]"
+                                    @click="closeMobile"
+                                >
+                                    {{ link.label }}
+                                </a>
+                            </div>
+                        </div>
+                    </template>
+                </nav>
+            </Transition>
+        </header>
+
+        <main class="bg-beige-50">
+            <slot />
+        </main>
+    </div>
+</template>

@@ -19,8 +19,16 @@ export default defineConfig({
         vue(),
     ],
     server: {
+        // Hace que public/hot use localhost en lugar de 0.0.0.0 (el navegador no acepta 0.0.0.0)
+        hmr: {
+            host: 'localhost',
+        },
         watch: {
-            ignored: ['**/storage/framework/views/**'],
+            usePolling: true,
+            interval: 300,
+            ignored: ['**/storage/framework/views/**', '**/vendor/**'],
         },
     },
 });
+
+
