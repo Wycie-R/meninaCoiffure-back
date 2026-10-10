@@ -219,13 +219,13 @@ function guardar() {
 
 
 const inputClass =
-    'w-full min-w-0 min-h-12 rounded-lg border bg-[#34302B] px-4 py-3 text-sm font-medium text-[#F3ECE0] shadow-[0_3px_12px_rgba(0,0,0,0.12)] [color-scheme:dark] transition-all duration-150 hover:border-[#8C7961] focus-visible:border-[#D4C3A3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4C3A3]/30'
+    'w-full min-w-0 min-h-12 rounded-lg border bg-[#34302B] px-4 py-3 text-sm font-medium text-[#F3ECE0] shadow-[0_3px_12px_rgba(0,0,0,0.12)] [color-scheme:dark] transition-all duration-150 hover:border-[#9C8A74] focus-visible:border-[#D4C3A3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4C3A3]/30'
 
 
 function inputBorder(campo) {
     return error(campo)
         ? 'border-[#F19F9F]'
-        : 'border-[#5B5147]'
+        : 'border-[#7A6E61]'
 }
 </script>
 
@@ -390,7 +390,7 @@ function inputBorder(campo) {
                             >
                                 <input
                                     type="checkbox"
-                                    class="mt-0.5 h-4 w-4 shrink-0 accent-[#D4C3A3]"
+                                    class="mt-0.5 h-4 w-4 shrink-0 accent-[#D4C3A3] [color-scheme:dark]"
                                     :checked="form.servicios.includes(servicio.id)"
                                     @change="alternarServicio(servicio.id)"
                                 />

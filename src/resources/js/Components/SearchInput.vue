@@ -1,4 +1,3 @@
-
 <script setup>
 defineProps({
     modelValue: {
@@ -39,8 +38,9 @@ const emit = defineEmits(['update:modelValue'])
             :placeholder="placeholder"
             :disabled="disabled"
             :aria-label="placeholder"
-            class="w-full rounded-md border border-[#5B5147] bg-[#34302B] py-2 pl-9 pr-3 text-sm text-[#F3ECE0] placeholder:text-[#BEB3A6] transition-colors enabled:hover:border-[#8C7961] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3] disabled:cursor-not-allowed disabled:opacity-50"
+            class="w-full rounded-md border border-[#7A6E61] bg-[#34302B] py-2 pl-9 pr-3 text-sm text-[#F3ECE0] placeholder:text-[#BEB3A6] transition-colors enabled:hover:border-[#9C8A74] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3] disabled:cursor-not-allowed disabled:opacity-50"
             @input="emit('update:modelValue', $event.target.value)"
         />
     </div>
 </template>
+

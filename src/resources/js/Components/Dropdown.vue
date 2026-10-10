@@ -67,8 +67,8 @@ onBeforeUnmount(() => {
         <button
             type="button"
             :disabled="disabled"
-            class="flex w-full items-center justify-between gap-2 rounded-md border bg-[#34302B] px-3 py-2 text-left text-sm transition-colors enabled:hover:border-[#8C7961] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3] disabled:cursor-not-allowed disabled:opacity-50"
-            :class="isOpen ? 'border-[#D4C3A3]' : 'border-[#5B5147]'"
+            class="flex w-full items-center justify-between gap-2 rounded-md border bg-[#34302B] px-3 py-2 text-left text-sm transition-colors enabled:hover:border-[#9C8A74] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3] disabled:cursor-not-allowed disabled:opacity-50"
+            :class="isOpen ? 'border-[#D4C3A3]' : 'border-[#7A6E61]'"
             aria-haspopup="listbox"
             :aria-expanded="isOpen"
             @click="toggle"
