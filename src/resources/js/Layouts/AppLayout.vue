@@ -1,6 +1,7 @@
 <script setup>
 import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 import { Link, usePage } from '@inertiajs/vue3'
+import { useUsuario, cerrarSesion } from '../auth'
 
 const openMenu = ref(null)
 
@@ -11,6 +12,8 @@ const header = ref(null)
 
 const page = usePage()
 const rutaActual = computed(() => page.url.split('?')[0])
+
+const usuario = useUsuario()
 
 const focusClass =
     'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3]'
@@ -56,10 +59,20 @@ const navItems = [
         items: [
             { label: 'Mi perfil', href: null },
             { label: 'Configuración', href: null },
-            { label: 'Cerrar sesión', href: null },
+            { label: 'Cerrar sesión', accion: cerrarSesion },
         ],
     },
 ]
+
+function etiqueta(item) {
+    if (item.key === 'usuario') return usuario.value?.name ?? 'Usuario'
+    return item.label
+}
+
+function ejecutar(link) {
+    closeAll()
+    link.accion()
+}
 
 function esActual(href) {
     return Boolean(href) && rutaActual.value === href
@@ -172,7 +185,7 @@ onBeforeUnmount(() => {
                                 :aria-expanded="openMenu === item.key"
                                 @click="open(item.key)"
                             >
-                                {{ item.label }}
+                                {{ etiqueta(item) }}
 
                                 <svg
                                     class="h-3.5 w-3.5 transition-transform duration-150"
@@ -205,6 +218,13 @@ onBeforeUnmount(() => {
                                     <div
                                         class="w-52 rounded-lg border border-[#5B5147] bg-[#34302B] py-1 shadow-xl"
                                     >
+                                        <p
+                                            v-if="item.key === 'usuario' && usuario?.rol"
+                                            class="mb-1 border-b border-[#47413B] px-4 pb-2 pt-1 text-xs capitalize text-[#BEB3A6]"
+                                        >
+                                            {{ usuario.rol }}
+                                        </p>
+
                                         <template v-for="link in item.items" :key="link.label">
                                             <Link
                                                 v-if="link.href"
@@ -216,6 +236,15 @@ onBeforeUnmount(() => {
                                             >
                                                 {{ link.label }}
                                             </Link>
+
+                                            <button
+                                                v-else-if="link.accion"
+                                                type="button"
+                                                class="block w-full px-4 py-2 text-left text-sm text-[#F3ECE0] transition-colors hover:bg-[#403629] hover:text-[#E0CDAF]"
+                                                @click="ejecutar(link)"
+                                            >
+                                                {{ link.label }}
+                                            </button>
 
                                             <span
                                                 v-else
@@ -330,7 +359,7 @@ onBeforeUnmount(() => {
                                 :aria-expanded="openMobile === item.key"
                                 @click="toggleMobileSubmenu(item.key)"
                             >
-                                {{ item.label }}
+                                {{ etiqueta(item) }}
 
                                 <svg
                                     class="h-4 w-4 transition-transform duration-150"
@@ -351,6 +380,13 @@ onBeforeUnmount(() => {
                                 v-if="openMobile === item.key"
                                 class="ml-3 mt-1 border-l border-[#5B5147] pl-2"
                             >
+                                <p
+                                    v-if="item.key === 'usuario' && usuario?.rol"
+                                    class="px-3 py-1.5 text-xs capitalize text-[#BEB3A6]"
+                                >
+                                    {{ usuario.rol }}
+                                </p>
+
                                 <template v-for="link in item.items" :key="link.label">
                                     <Link
                                         v-if="link.href"
@@ -362,6 +398,15 @@ onBeforeUnmount(() => {
                                     >
                                         {{ link.label }}
                                     </Link>
+
+                                    <button
+                                        v-else-if="link.accion"
+                                        type="button"
+                                        class="block w-full rounded-md px-3 py-2.5 text-left text-sm text-[#BEB3A6] transition-colors hover:bg-[#34302B] hover:text-[#F3ECE0]"
+                                        @click="ejecutar(link)"
+                                    >
+                                        {{ link.label }}
+                                    </button>
 
                                     <span
                                         v-else

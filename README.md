@@ -1,17 +1,17 @@
-# Menina Coiffure - Backend API
+# Menina Coiffure
 
-Guía para el despliegue del entorno de desarrollo mediante Docker, con la estructura del proyecto en `src/`, permisos de usuario en Linux, la ejecución correcta de seeders y la configuración del frontend con Vue, Inertia.js, Tailwind CSS y Vite.
+Sistema de gestión para Menina Coiffure: API en Laravel y frontend con Vue 3, Inertia.js, Tailwind CSS y Vite. El código de Laravel está en `src/` y todo el entorno corre con Docker.
 
 
 
-## ⚙️ Requisitos Previos
+## ⚙️ Requisitos previos
 
 * [Docker Engine](https://docs.docker.com/engine/install/) y **Docker Compose**
 * [Git](https://git-scm.com/)
 
 
 
-## 🚀 Pasos de Instalación
+## 🚀 Instalación
 
 ### 1. Clonar el repositorio
 
@@ -20,9 +20,9 @@ git clone https://github.com/Wycie-R/meninaCoiffure-back.git
 cd meninaCoiffure-back
 ```
 
-### 2. Configurar variables de entorno y permisos
+### 2. Configurar variables de entorno
 
-Copia la plantilla base a la carpeta `src/` y habilita permisos de escritura para que Artisan pueda registrar la clave:
+Copia la plantilla base a `src/` y habilita permisos de escritura para que Artisan pueda registrar la clave:
 
 ```bash
 cp src/.env.example src/.env
@@ -31,19 +31,19 @@ sudo chmod 666 src/.env
 
 ### 3. Instalar dependencias de PHP
 
-Ejecutar Composer como superusuario (`-u 0`) para evitar bloqueos de permisos al crear `/var/www/vendor`:
+Ejecuta Composer como superusuario (`-u 0`) para evitar bloqueos de permisos al crear `/var/www/vendor`:
 
 ```bash
 docker compose run --rm -u 0 app composer install
 ```
 
-Reasigna la propiedad de los archivos generados a tu usuario del host:
+Reasigna la propiedad de los archivos generados a tu usuario:
 
 ```bash
 sudo chown -R $USER:$USER src/vendor
 ```
 
-### 4. Permisos de almacenamiento y caché de Laravel
+### 4. Permisos de almacenamiento y caché
 
 Concede acceso a los directorios de logs, sesiones y compilación:
 
@@ -51,87 +51,88 @@ Concede acceso a los directorios de logs, sesiones y compilación:
 sudo chmod -R 777 src/storage src/bootstrap/cache
 ```
 
-### 5. Construir y levantar contenedores
+### 5. Construir y levantar los contenedores
 
-Inicia los servicios (`app`, `db`, `nginx`) en segundo plano:
+Inicia los servicios (`app`, `nginx`, `db` y `portainer`) en segundo plano:
 
 ```bash
 docker compose up -d --build
 ```
 
-Verifica que los tres contenedores estén corriendo:
+Verifica que estén corriendo:
 
 ```bash
 docker compose ps
 ```
 
-> **Importante:** El contenedor `app` incluye **Node.js 22 y npm** para ejecutar y construir el frontend con Vue, Inertia.js, Tailwind CSS y Vite.
->
-> Si se realizan cambios en el `Dockerfile`, es necesario reconstruir la imagen para que los cambios se apliquen:
->
-> ```bash
-> docker compose up -d --build
-> ```
+> **Importante:** El contenedor `app` incluye **Node.js 22 y npm** para construir el frontend. Si se modifica el `Dockerfile`, vuelve a ejecutar `docker compose up -d --build` para aplicar los cambios.
 
-### 6. Instalar dependencias del frontend
-
-Instala las dependencias de Vue, Inertia.js, Tailwind CSS y Vite:
-
-```bash
-docker compose exec app npm install
-```
-
-Para generar la versión compilada del frontend:
-
-```bash
-docker compose exec app npm run build
-```
-
-### 7. Generar la clave de la aplicación
+### 6. Generar la clave de la aplicación
 
 ```bash
 docker compose exec app php artisan key:generate
 ```
 
-### 8. Ejecutar migraciones y poblar la base de datos
+### 7. Crear las tablas y cargar los datos
 
-Ejecuta el esquema de tablas y el seeder con el nombre de clase exacto:
+Ejecuta las migraciones y todos los seeders (incluyen los usuarios para iniciar sesión):
 
 ```bash
 docker compose exec app php artisan migrate
-docker compose exec app php artisan db:seed --class=AvanceDosSeeder
+docker compose exec app php artisan db:seed
 ```
 
-### 8. Instalar y compilar el Frontend (Vue 3 + Inertia + Vite)
-Inertia.js requiere dependencias tanto en el **Backend (PHP/Composer)** como en el **Frontend (Node/NPM)**. Se deben ejecutar los comandos dentro del contenedor `app` de Docker:
+> **Nota:** Si ya tenías la base de datos creada y el login dice "Las credenciales proporcionadas no son válidas.", vuelve a ejecutar `docker compose exec app php artisan db:seed`. Es seguro repetirlo: no duplica datos.
 
-1. **Asegurar dependencias de PHP (Inertia Laravel adapter):**
-   ```bash
-   docker compose exec app composer install
-   ```
+### 8. Instalar y compilar el frontend
 
-2. **Instalar dependencias de JavaScript (Vue 3, Inertia Vue adapter, Vite, Tailwind):**
-   ```bash
-   docker compose exec app npm install
-   ```
+Instala las dependencias de JavaScript (Vue 3, Inertia, Tailwind y Vite):
 
-3. **Compilar los assets del frontend:**
-   ```bash
-   docker compose exec app npm run build
-   ```
-   > 💡 **Nota:** Una vez compilados con `npm run build`, la interfaz web queda lista y servida automáticamente por Nginx en [http://localhost:8000](http://localhost:8000).
+```bash
+docker compose exec app npm install
+```
 
-*(Opcional) Modo desarrollo con recarga automática (HMR):*
-Si tienes Node.js instalado en tu máquina host y deseas ver los cambios en tiempo real mientras programas componentes:
+Compila los archivos del frontend:
+
+```bash
+docker compose exec app npm run build
+```
+
+> 💡 Una vez compilado, el sistema queda disponible en [http://localhost:8000](http://localhost:8000).
+
+*(Opcional) Modo desarrollo con recarga automática (HMR):* si tienes Node.js instalado en tu máquina y quieres ver los cambios en tiempo real mientras programas:
+
 ```bash
 cd src
 npm install
 npm run dev
 ```
 
----
 
-## 🧪 Verificación y Pruebas
+
+## 🔐 Acceso al sistema
+
+Las pantallas del sistema (Dashboard, Reservas y Servicios) requieren iniciar sesión en [http://localhost:8000/login](http://localhost:8000/login). Usuarios de prueba creados por los seeders:
+
+| Rol | Correo | Contraseña |
+|---|---|---|
+| Admin | admin@meninacoiffure.com | password123 |
+| Recepcionista | recepcion@meninacoiffure.com | password123 |
+| Profesional | carla@meninacoiffure.com | password123 |
+
+
+
+## 🌐 Puntos de acceso
+
+- **Sistema (frontend):** [http://localhost:8000](http://localhost:8000)
+- **Documentación Swagger / OpenAPI:** [http://localhost:8000/docs](http://localhost:8000/docs)
+- **API Reservas:** [http://localhost:8000/api/reservas](http://localhost:8000/api/reservas)
+- **Consola Portainer (HTTPS):** [https://localhost:9443](https://localhost:9443)
+- **Consola Portainer (HTTP):** [http://localhost:9001](http://localhost:9001)
+
+
+
+## 🧪 Pruebas
 
 Para comprobar que la API y las reglas de negocio respondan correctamente:
 
@@ -141,35 +142,25 @@ docker compose exec app php artisan test
 
 
 
-## 🌐 Puntos de Acceso
+## 🛠️ Comandos frecuentes
 
-- **Frontend / Entrada base:** [http://localhost:8000](http://localhost:8000)
-- **Documentación Swagger / OpenAPI:** [http://localhost:8000/docs](http://localhost:8000/docs)
-- **API Reservas:** [http://localhost:8000/api/reservas](http://localhost:8000/api/reservas)
-- **Consola Portainer (HTTPS):** [https://localhost:9443](https://localhost:9443)
-- **Consola Portainer (HTTP):** [http://localhost:9001](http://localhost:9001)
-
-
-## 🛠️ Comandos Frecuentes
-
-* **Detener servicios:**
-
-- **Compilar frontend:**
+- **Compilar el frontend:**
   ```bash
   docker compose exec app npm run build
   ```
-- **Detener servicios:**
+- **Cargar o actualizar los datos de prueba:**
   ```bash
-  docker compose down
+  docker compose exec app php artisan db:seed
   ```
-* **Ver logs en vivo:**
-
+- **Ver logs en vivo:**
   ```bash
   docker compose logs -f app
   ```
-* **Acceso interactivo al contenedor:**
-
+- **Entrar al contenedor:**
   ```bash
   docker compose exec app bash
   ```
-
+- **Detener los servicios:**
+  ```bash
+  docker compose down
+  ```
