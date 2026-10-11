@@ -1,6 +1,6 @@
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 
 const props = defineProps({
     modelValue: {
@@ -25,6 +25,15 @@ const emit = defineEmits(['update:modelValue'])
 
 const isOpen = ref(false)
 const root = ref(null)
+const lista = ref(null)
+
+watch(isOpen, async (abierto) => {
+    if (!abierto) return
+    await nextTick()
+    const seleccionada = lista.value?.querySelector('[aria-selected="true"]')
+    if (!seleccionada) return
+    lista.value.scrollTop = seleccionada.offsetTop - (lista.value.clientHeight - seleccionada.offsetHeight) / 2
+})
 
 const selectedOption = computed(() =>
     props.options.find((option) => option.value === props.modelValue)
@@ -108,6 +117,7 @@ onBeforeUnmount(() => {
         >
             <div
                 v-if="isOpen"
+                ref="lista"
                 role="listbox"
                 class="scroll-fino absolute z-20 mt-2 max-h-64 w-full origin-top overflow-auto rounded-xl border border-hilo-fuerte bg-raso p-1.5 shadow-2xl shadow-black/50"
             >

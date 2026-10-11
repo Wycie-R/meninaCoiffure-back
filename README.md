@@ -112,7 +112,7 @@ npm run dev
 
 ## 🔐 Acceso al sistema
 
-Las pantallas del sistema (Dashboard, Reservas y Servicios) requieren iniciar sesión en [http://localhost:8000/login](http://localhost:8000/login). Usuarios de prueba creados por los seeders:
+Las pantallas del sistema (Dashboard, Reservas, Servicios, Categorías y Personal) requieren iniciar sesión en [http://localhost:8000/login](http://localhost:8000/login). Usuarios de prueba creados por los seeders:
 
 | Rol | Correo | Contraseña |
 |---|---|---|
@@ -151,6 +151,10 @@ docker compose exec app php artisan test
 - **Cargar o actualizar los datos de prueba:**
   ```bash
   docker compose exec app php artisan db:seed
+  ```
+- **Limpiar la caché de rutas** (si una pantalla nueva responde 404):
+  ```bash
+  docker compose exec app php artisan route:clear
   ```
 - **Ver logs en vivo:**
   ```bash

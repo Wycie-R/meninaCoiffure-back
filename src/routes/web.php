@@ -35,6 +35,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/categorias', function () {
         return Inertia::render('Categorias/Index');
     });
+
+    Route::get('/personal', function () {
+        return Inertia::render('Personal/Index');
+    });
 });
 
 // Documentación interactiva de la API con Swagger UI

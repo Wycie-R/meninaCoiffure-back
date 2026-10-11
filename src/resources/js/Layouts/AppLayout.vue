@@ -39,8 +39,7 @@ const grupos = [
     {
         titulo: 'Equipo',
         items: [
-            { label: 'Personal', icono: 'personal', href: null },
-            { label: 'Horarios', icono: 'pendiente', href: null },
+            { label: 'Personal', icono: 'personal', href: '/personal' },
         ],
     },
     {
