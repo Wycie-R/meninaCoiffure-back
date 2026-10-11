@@ -8,7 +8,7 @@ import Pagination from '../../Components/Pagination.vue'
 import PageHeader from '../../Components/PageHeader.vue'
 import EstadoVacio from '../../Components/EstadoVacio.vue'
 import Icono from '../../Components/Icono.vue'
-import { guaranies } from '../../api'
+import { guaranies } from '../../formato'
 
 const ana = { id: 1, nombre: 'Ana', apellido: 'Gómez', telefono: '0981111222', email: 'ana.gomez@example.com' }
 const beatriz = { id: 2, nombre: 'Beatriz', apellido: 'López', telefono: '0982333444', email: 'beatriz.lopez@example.com' }

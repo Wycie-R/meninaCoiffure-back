@@ -31,7 +31,7 @@ onBeforeUnmount(() => clearTimeout(temporizador))
 
 <template>
     <Teleport to="body">
-        <div class="pointer-events-none fixed inset-x-4 bottom-4 z-50 flex justify-center sm:inset-x-auto sm:right-6 sm:bottom-6">
+        <div class="pointer-events-none fixed inset-x-4 bottom-4 z-[60] flex justify-center sm:bottom-6">
             <Transition
                 enter-active-class="transition duration-300 ease-out"
                 enter-from-class="translate-y-4 opacity-0"

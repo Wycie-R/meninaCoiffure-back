@@ -33,7 +33,7 @@ const grupos = [
         items: [
             { label: 'Servicios', icono: 'servicios', href: '/servicios' },
             { label: 'Nuevo servicio', icono: 'agregar', href: '/servicios/crear' },
-            { label: 'Categorías', icono: 'etiqueta', href: null },
+            { label: 'Categorías', icono: 'etiqueta', href: '/categorias' },
         ],
     },
     {

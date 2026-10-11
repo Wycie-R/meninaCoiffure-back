@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { usePage } from '@inertiajs/vue3'
 import AppLayout from '../../Layouts/AppLayout.vue'
 import Button from '../../Components/Button.vue'
@@ -10,57 +10,31 @@ import EstadoVacio from '../../Components/EstadoVacio.vue'
 import Ilustracion from '../../Components/Ilustracion.vue'
 import Aviso from '../../Components/Aviso.vue'
 import Icono from '../../Components/Icono.vue'
-import { api, guaranies, duracion } from '../../api'
+import Interruptor from '../../Components/Interruptor.vue'
+import PanelLateral from '../../Components/PanelLateral.vue'
+import Campo from '../../Components/Campo.vue'
+import Dropdown from '../../Components/Dropdown.vue'
+import Modal from '../../Components/Modal.vue'
+import { api, primerosErrores, mensajeError } from '../../api'
+import { guaranies, duracion, normalizar, fechaCorta, aISO, hoyISO, plural } from '../../formato'
+import { useCatalogo } from '../../catalogo'
+import { claseEntrada, claseEnfoque, ilustracionDe } from '../../ui'
 
-const servicios = ref([])
-const categorias = ref([])
-const cargando = ref(true)
-const errorCarga = ref('')
+const { servicios, categorias, cargando, error, cargarCatalogo } = useCatalogo()
 
 const page = usePage()
 const servicioNuevo = ref(Number(new URL(page.url, window.location.origin).searchParams.get('nuevo')) || null)
+const aviso = ref('')
 
-async function cargar() {
-    cargando.value = true
-    errorCarga.value = ''
-
-    try {
-        const [respServicios, respCategorias] = await Promise.all([
-            api('/api/servicios?solo_activos=0'),
-            api('/api/categorias-servicio'),
-        ])
-
-        if (!respServicios.ok || !respCategorias.ok) throw new Error()
-
-        servicios.value = respServicios.cuerpo.data
-        categorias.value = respCategorias.cuerpo.data
-    } catch {
-        errorCarga.value = 'Revisa que el servidor esté encendido y vuelve a intentar.'
-    } finally {
-        cargando.value = false
-    }
-}
-
-onMounted(cargar)
-
-const nombreNuevo = computed(() => servicios.value.find((s) => s.id === servicioNuevo.value)?.nombre ?? '')
-const mensajeAviso = computed(() => (nombreNuevo.value ? `Servicio «${nombreNuevo.value}» agregado a la carta.` : ''))
+onMounted(async () => {
+    await cargarCatalogo({ forzar: Boolean(servicioNuevo.value) })
+    const nuevo = servicios.value.find((s) => s.id === servicioNuevo.value)
+    if (nuevo) aviso.value = `Servicio «${nuevo.nombre}» agregado a la carta.`
+})
 
 const busqueda = ref('')
 const categoria = ref('todas')
 const verInactivos = ref(true)
-
-function normalizar(texto) {
-    return texto.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
-}
-
-function ilustracionDe(nombre) {
-    const texto = normalizar(nombre ?? '')
-    if (texto.includes('color') || texto.includes('tint')) return 'bol'
-    if (texto.includes('estetic') || texto.includes('facial') || texto.includes('spa')) return 'gota'
-    if (texto.includes('pelu') || texto.includes('corte')) return 'tijeras'
-    return 'muestrario'
-}
 
 const filtrados = computed(() => {
     const texto = normalizar(busqueda.value)
@@ -78,11 +52,7 @@ const grupos = computed(() => {
     for (const servicio of filtrados.value) {
         const clave = servicio.categoria?.id ?? 0
         if (!porCategoria.has(clave)) {
-            porCategoria.set(clave, {
-                id: clave,
-                nombre: servicio.categoria?.nombre ?? 'Sin categoría',
-                servicios: [],
-            })
+            porCategoria.set(clave, { id: clave, nombre: servicio.categoria?.nombre ?? 'Sin categoría', servicios: [] })
         }
         porCategoria.get(clave).servicios.push(servicio)
     }
@@ -92,7 +62,7 @@ const grupos = computed(() => {
         .map((grupo) => ({
             ...grupo,
             ilustracion: ilustracionDe(grupo.nombre),
-            servicios: grupo.servicios.sort(
+            servicios: [...grupo.servicios].sort(
                 (a, b) => Number(b.activo) - Number(a.activo) || a.nombre.localeCompare(b.nombre, 'es')
             ),
         }))
@@ -111,7 +81,7 @@ const resumen = computed(() => {
     const activos = servicios.value.filter((s) => s.activo).length
     const total = servicios.value.length
     if (!total) return 'Todavía no hay servicios en la carta.'
-    return `${activos} de ${total} servicios disponibles para reservar, en ${categorias.value.length} ${categorias.value.length === 1 ? 'categoría' : 'categorías'}.`
+    return `${activos} de ${total} servicios disponibles para reservar, en ${plural(categorias.value.length, 'categoría', 'categorías')}.`
 })
 
 function limpiarFiltros() {
@@ -119,12 +89,211 @@ function limpiarFiltros() {
     categoria.value = 'todas'
     verInactivos.value = true
 }
+
+const opcionesCategoria = computed(() => categorias.value.map((c) => ({ label: c.nombre, value: c.id })))
+
+const seleccionado = ref(null)
+const detalle = ref(null)
+const cargandoDetalle = ref(false)
+const errorDetalle = ref('')
+
+const form = ref({ nombre: '', categoria_id: null, duracion_minutos: '', descripcion: '' })
+const erroresDatos = ref({})
+const guardandoDatos = ref(false)
+
+const precioNuevo = ref('')
+const desde = ref('hoy')
+const errorPrecio = ref('')
+const guardandoPrecio = ref(false)
+
+const confirmarDesactivar = ref(false)
+const cambiandoEstado = ref(false)
+const errorEstado = ref('')
+
+async function abrirServicio(servicio) {
+    seleccionado.value = servicio.id
+    detalle.value = null
+    errorDetalle.value = ''
+    erroresDatos.value = {}
+    errorPrecio.value = ''
+    errorEstado.value = ''
+    precioNuevo.value = ''
+    desde.value = 'hoy'
+    await cargarDetalle()
+}
+
+async function cargarDetalle() {
+    cargandoDetalle.value = true
+    const respuesta = await api(`/api/servicios/${seleccionado.value}`)
+    cargandoDetalle.value = false
+
+    if (!respuesta.ok) {
+        errorDetalle.value = mensajeError(respuesta, 'cargar el servicio')
+        return
+    }
+
+    detalle.value = respuesta.cuerpo.data
+    form.value = {
+        nombre: detalle.value.nombre,
+        categoria_id: detalle.value.categoria?.id ?? null,
+        duracion_minutos: detalle.value.duracion_minutos,
+        descripcion: detalle.value.descripcion ?? '',
+    }
+}
+
+function cerrarPanel() {
+    seleccionado.value = null
+}
+
+const cambiosPendientes = computed(() => {
+    if (!detalle.value) return false
+    return (
+        form.value.nombre.trim() !== detalle.value.nombre ||
+        form.value.categoria_id !== (detalle.value.categoria?.id ?? null) ||
+        Number(form.value.duracion_minutos) !== detalle.value.duracion_minutos ||
+        form.value.descripcion.trim() !== (detalle.value.descripcion ?? '')
+    )
+})
+
+function validarDatos() {
+    const e = {}
+    const minutos = Number(form.value.duracion_minutos)
+    if (!form.value.nombre.trim()) e.nombre = 'Indica el nombre del servicio.'
+    if (!form.value.categoria_id) e.categoria_id = 'Selecciona una categoría.'
+    if (!Number.isInteger(minutos) || minutos < 5 || minutos > 480) e.duracion_minutos = 'Debe estar entre 5 y 480 minutos (8 horas).'
+    return e
+}
+
+async function guardarDatos() {
+    erroresDatos.value = validarDatos()
+    if (Object.keys(erroresDatos.value).length) return
+
+    guardandoDatos.value = true
+    const respuesta = await api(`/api/servicios/${seleccionado.value}`, {
+        metodo: 'PUT',
+        datos: {
+            nombre: form.value.nombre.trim(),
+            categoria_id: form.value.categoria_id,
+            duracion_minutos: Number(form.value.duracion_minutos),
+            descripcion: form.value.descripcion.trim() || null,
+        },
+    })
+    guardandoDatos.value = false
+
+    if (!respuesta.ok) {
+        erroresDatos.value = respuesta.status === 422
+            ? primerosErrores(respuesta.cuerpo)
+            : { general: mensajeError(respuesta, 'guardar los cambios') }
+        return
+    }
+
+    await Promise.all([cargarCatalogo({ forzar: true }), cargarDetalle()])
+    aviso.value = 'Cambios guardados.'
+}
+
+const precioTexto = computed({
+    get: () => (precioNuevo.value === '' ? '' : Number(precioNuevo.value).toLocaleString('es-PY')),
+    set: (valor) => {
+        const digitos = valor.replace(/\D/g, '').slice(0, 10)
+        precioNuevo.value = digitos === '' ? '' : Number(digitos)
+        errorPrecio.value = ''
+    },
+})
+
+const opcionesDesde = computed(() => {
+    const hoy = new Date()
+    const manana = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 1)
+    const proximoMes = new Date(hoy.getFullYear(), hoy.getMonth() + 1, 1)
+
+    return [
+        { clave: 'hoy', etiqueta: 'Desde hoy', fecha: aISO(hoy) },
+        { clave: 'manana', etiqueta: 'Desde mañana', fecha: aISO(manana) },
+        { clave: 'mes', etiqueta: `Desde el 1 de ${proximoMes.toLocaleDateString('es-PY', { month: 'long' })}`, fecha: aISO(proximoMes) },
+    ]
+})
+
+async function cambiarPrecio() {
+    if (precioNuevo.value === '') {
+        errorPrecio.value = 'Indica el nuevo precio.'
+        return
+    }
+    if (Number(precioNuevo.value) === Number(detalle.value.precio_actual) && desde.value === 'hoy') {
+        errorPrecio.value = 'Es el mismo precio que ya rige.'
+        return
+    }
+
+    guardandoPrecio.value = true
+    const fecha = opcionesDesde.value.find((o) => o.clave === desde.value).fecha
+    const respuesta = await api(`/api/servicios/${seleccionado.value}/cambiar-precio`, {
+        metodo: 'POST',
+        datos: { precio: precioNuevo.value, vigente_desde: fecha },
+    })
+    guardandoPrecio.value = false
+
+    if (!respuesta.ok) {
+        errorPrecio.value = respuesta.status === 422
+            ? primerosErrores(respuesta.cuerpo).precio ?? mensajeError(respuesta, 'cambiar el precio')
+            : mensajeError(respuesta, 'cambiar el precio')
+        return
+    }
+
+    precioNuevo.value = ''
+    await Promise.all([cargarCatalogo({ forzar: true }), cargarDetalle()])
+    aviso.value = fecha === hoyISO() ? 'Precio actualizado desde hoy.' : `Nuevo precio programado desde el ${fechaCorta(fecha)}.`
+}
+
+const historial = computed(() =>
+    (detalle.value?.historial_precios ?? [])
+        .filter((p) => !p.vigente_hasta || p.vigente_hasta >= p.vigente_desde)
+        .map((p) => {
+            const hoy = hoyISO()
+            const vigente = p.vigente_desde <= hoy && (!p.vigente_hasta || p.vigente_hasta >= hoy)
+            const futuro = p.vigente_desde > hoy
+
+            return {
+                id: p.id,
+                precio: guaranies(p.precio),
+                periodo: p.vigente_hasta
+                    ? `Del ${fechaCorta(p.vigente_desde)} al ${fechaCorta(p.vigente_hasta)}`
+                    : `Desde el ${fechaCorta(p.vigente_desde)}`,
+                estado: vigente ? 'vigente' : futuro ? 'programado' : 'anterior',
+            }
+        })
+)
+
+async function cambiarEstado(activo) {
+    cambiandoEstado.value = true
+    errorEstado.value = ''
+
+    const respuesta = activo
+        ? await api(`/api/servicios/${seleccionado.value}`, { metodo: 'PUT', datos: { activo: true } })
+        : await api(`/api/servicios/${seleccionado.value}`, { metodo: 'DELETE' })
+
+    cambiandoEstado.value = false
+    confirmarDesactivar.value = false
+
+    if (!respuesta.ok) {
+        errorEstado.value = mensajeError(respuesta, activo ? 'reactivar el servicio' : 'desactivar el servicio')
+        return
+    }
+
+    await Promise.all([cargarCatalogo({ forzar: true }), cargarDetalle()])
+    aviso.value = activo ? 'El servicio vuelve a estar disponible para reservas.' : 'Servicio desactivado. Ya no aparece al crear reservas.'
+}
+
+watch(aviso, (valor) => {
+    if (!valor) servicioNuevo.value = null
+})
 </script>
 
 <template>
     <AppLayout>
         <div class="mx-auto max-w-6xl px-6 py-10">
-            <PageHeader titulo="Carta de servicios" :descripcion="cargando ? 'Cargando la carta…' : resumen">
+            <PageHeader titulo="Carta de servicios" :descripcion="cargando && !servicios.length ? 'Cargando la carta…' : resumen">
+                <Button href="/categorias" variant="secondary">
+                    <Icono name="etiqueta" class="h-4 w-4" />
+                    Categorías
+                </Button>
                 <Button href="/servicios/crear">
                     <Icono name="agregar" class="h-4 w-4" />
                     Nuevo servicio
@@ -137,12 +306,13 @@ function limpiarFiltros() {
                         v-for="filtro in filtrosCategoria"
                         :key="filtro.id"
                         type="button"
-                        class="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orquidea"
-                        :class="
+                        class="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors"
+                        :class="[
+                            claseEnfoque,
                             categoria === filtro.id
                                 ? 'border-orquidea bg-orquidea/12 text-orquidea-claro'
-                                : 'border-hilo text-bruma hover:border-hilo-fuerte hover:text-perla'
-                        "
+                                : 'border-hilo text-bruma hover:border-hilo-fuerte hover:text-perla',
+                        ]"
                         :aria-pressed="categoria === filtro.id"
                         @click="categoria = filtro.id"
                     >
@@ -152,14 +322,7 @@ function limpiarFiltros() {
                 </div>
 
                 <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
-                    <label class="inline-flex cursor-pointer items-center gap-3 text-sm text-bruma">
-                        <input v-model="verInactivos" type="checkbox" class="peer sr-only" />
-                        <span
-                            class="relative h-6 w-11 rounded-full bg-raso transition-colors after:absolute after:left-1 after:top-1 after:h-4 after:w-4 after:rounded-full after:bg-bruma after:transition-transform peer-checked:bg-orquidea-hondo peer-checked:after:translate-x-5 peer-checked:after:bg-orquidea-claro peer-focus-visible:outline-2 peer-focus-visible:outline-offset-2 peer-focus-visible:outline-orquidea"
-                            aria-hidden="true"
-                        ></span>
-                        Mostrar inactivos
-                    </label>
+                    <Interruptor v-model="verInactivos" etiqueta="Mostrar inactivos" />
                     <div class="sm:w-64">
                         <SearchInput v-model="busqueda" placeholder="Buscar servicio..." />
                     </div>
@@ -167,7 +330,7 @@ function limpiarFiltros() {
             </div>
 
             <div class="mt-10">
-                <div v-if="cargando" class="space-y-10" aria-busy="true" aria-label="Cargando servicios">
+                <div v-if="cargando && !servicios.length" class="space-y-10" aria-busy="true" aria-label="Cargando servicios">
                     <div v-for="n in 2" :key="n" class="animate-pulse">
                         <div class="flex items-center gap-4">
                             <span class="h-14 w-14 rounded-full bg-terciopelo"></span>
@@ -181,14 +344,8 @@ function limpiarFiltros() {
                     </div>
                 </div>
 
-                <EstadoVacio
-                    v-else-if="errorCarga"
-                    tono="error"
-                    titulo="No se pudo cargar la carta"
-                    :descripcion="errorCarga"
-                    role="alert"
-                >
-                    <Button label="Reintentar" variant="secondary" @click="cargar" />
+                <EstadoVacio v-else-if="error" tono="error" titulo="No se pudo cargar la carta" :descripcion="error" role="alert">
+                    <Button label="Reintentar" variant="secondary" @click="cargarCatalogo({ forzar: true })" />
                 </EstadoVacio>
 
                 <EstadoVacio
@@ -205,33 +362,38 @@ function limpiarFiltros() {
                             <Ilustracion :nombre="grupo.ilustracion" class="h-14 w-14 shrink-0" />
                             <div>
                                 <h2 :id="`categoria-${grupo.id}`" class="text-3xl">{{ grupo.nombre }}</h2>
-                                <p class="text-sm text-niebla">
-                                    {{ grupo.servicios.length }} {{ grupo.servicios.length === 1 ? 'servicio' : 'servicios' }}
-                                </p>
+                                <p class="text-sm text-niebla">{{ plural(grupo.servicios.length, 'servicio', 'servicios') }}</p>
                             </div>
                         </div>
 
                         <ul class="mt-5">
-                            <li
-                                v-for="servicio in grupo.servicios"
-                                :key="servicio.id"
-                                class="-mx-4 rounded-2xl px-4 py-4 transition-colors hover:bg-velo"
-                                :class="{ 'bg-menta/8 ring-1 ring-inset ring-menta/30': servicio.id === servicioNuevo }"
-                            >
-                                <div class="flex items-baseline gap-3">
-                                    <p class="min-w-0 text-base font-medium" :class="servicio.activo ? 'text-perla' : 'text-niebla line-through decoration-niebla/60'">
-                                        {{ servicio.nombre }}
-                                    </p>
-                                    <StatusBadge v-if="!servicio.activo" status="inactivo" class="shrink-0 self-center" />
-                                    <span class="hidden min-w-8 flex-1 translate-y-[-4px] border-b border-dotted border-hilo-fuerte sm:block" aria-hidden="true"></span>
-                                    <span class="ml-auto shrink-0 text-sm tabular-nums text-niebla sm:ml-0">{{ duracion(servicio.duracion_minutos) }}</span>
-                                    <span class="w-32 shrink-0 text-right font-display text-xl tabular-nums" :class="servicio.activo ? 'text-perla' : 'text-niebla'">
-                                        {{ guaranies(servicio.precio_vigente) }}
+                            <li v-for="servicio in grupo.servicios" :key="servicio.id">
+                                <button
+                                    type="button"
+                                    class="-mx-4 block w-[calc(100%+2rem)] rounded-2xl px-4 py-4 text-left transition-colors hover:bg-velo"
+                                    :class="[
+                                        claseEnfoque,
+                                        servicio.id === servicioNuevo ? 'bg-menta/8 ring-1 ring-inset ring-menta/30' : '',
+                                        servicio.id === seleccionado ? 'bg-velo ring-1 ring-inset ring-orquidea/40' : '',
+                                    ]"
+                                    :aria-label="`Ver y editar ${servicio.nombre}`"
+                                    @click="abrirServicio(servicio)"
+                                >
+                                    <span class="flex items-baseline gap-3">
+                                        <span class="min-w-0 text-base font-medium" :class="servicio.activo ? 'text-perla' : 'text-niebla line-through decoration-niebla/60'">
+                                            {{ servicio.nombre }}
+                                        </span>
+                                        <StatusBadge v-if="!servicio.activo" status="inactivo" class="shrink-0 self-center" />
+                                        <span class="hidden min-w-8 flex-1 -translate-y-1 border-b border-dotted border-hilo-fuerte sm:block" aria-hidden="true"></span>
+                                        <span class="ml-auto shrink-0 text-sm tabular-nums text-niebla sm:ml-0">{{ duracion(servicio.duracion_minutos) }}</span>
+                                        <span class="w-32 shrink-0 text-right font-display text-xl tabular-nums" :class="servicio.activo ? 'text-perla' : 'text-niebla'">
+                                            {{ guaranies(servicio.precio_vigente) }}
+                                        </span>
                                     </span>
-                                </div>
-                                <p v-if="servicio.descripcion" class="mt-1 max-w-xl text-sm text-bruma">
-                                    {{ servicio.descripcion }}
-                                </p>
+                                    <span v-if="servicio.descripcion" class="mt-1 block max-w-xl text-sm text-bruma">
+                                        {{ servicio.descripcion }}
+                                    </span>
+                                </button>
                             </li>
                         </ul>
                     </section>
@@ -239,6 +401,176 @@ function limpiarFiltros() {
             </div>
         </div>
 
-        <Aviso :mensaje="mensajeAviso" @cerrar="servicioNuevo = null" />
+        <PanelLateral
+            :abierto="Boolean(seleccionado)"
+            :titulo="detalle?.nombre ?? 'Servicio'"
+            :subtitulo="detalle ? `${detalle.categoria?.nombre ?? 'Sin categoría'}, ${duracion(detalle.duracion_minutos)}` : ''"
+            @cerrar="cerrarPanel"
+        >
+            <div v-if="cargandoDetalle && !detalle" class="space-y-4" aria-busy="true">
+                <div v-for="n in 4" :key="n" class="h-12 animate-pulse rounded-xl bg-terciopelo"></div>
+            </div>
+
+            <EstadoVacio v-else-if="errorDetalle" tono="error" titulo="No se pudo abrir el servicio" :descripcion="errorDetalle">
+                <Button label="Reintentar" variant="secondary" @click="cargarDetalle" />
+            </EstadoVacio>
+
+            <div v-else-if="detalle" class="space-y-10">
+                <section aria-labelledby="titulo-precio">
+                    <h3 id="titulo-precio" class="text-xl">Precio</h3>
+
+                    <div class="mt-3 rounded-[24px] bg-orquidea-hondo/35 p-5 ring-1 ring-inset ring-orquidea/25">
+                        <p class="text-sm text-orquidea-claro">Rige hoy</p>
+                        <p class="mt-1 font-display text-4xl tabular-nums">{{ guaranies(detalle.precio_actual) }}</p>
+                    </div>
+
+                    <div class="mt-5">
+                        <Campo etiqueta="Nuevo precio" para="precio-nuevo" :error="errorPrecio">
+                            <div class="relative">
+                                <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-niebla">Gs.</span>
+                                <input
+                                    id="precio-nuevo"
+                                    v-model="precioTexto"
+                                    type="text"
+                                    inputmode="numeric"
+                                    placeholder="0"
+                                    :class="[claseEntrada(Boolean(errorPrecio)), 'pl-12']"
+                                    :aria-invalid="Boolean(errorPrecio)"
+                                />
+                            </div>
+                        </Campo>
+
+                        <div class="mt-3 flex flex-wrap gap-2" role="group" aria-label="Desde cuándo rige">
+                            <button
+                                v-for="opcion in opcionesDesde"
+                                :key="opcion.clave"
+                                type="button"
+                                class="rounded-full border px-3.5 py-1.5 text-sm transition-colors"
+                                :class="[
+                                    claseEnfoque,
+                                    desde === opcion.clave
+                                        ? 'border-orquidea bg-orquidea/12 text-orquidea-claro'
+                                        : 'border-hilo text-bruma hover:border-hilo-fuerte hover:text-perla',
+                                ]"
+                                :aria-pressed="desde === opcion.clave"
+                                @click="desde = opcion.clave"
+                            >
+                                {{ opcion.etiqueta }}
+                            </button>
+                        </div>
+
+                        <Button
+                            class="mt-4"
+                            variant="secondary"
+                            :disabled="guardandoPrecio"
+                            @click="cambiarPrecio"
+                        >
+                            {{ guardandoPrecio ? 'Cambiando…' : 'Cambiar precio' }}
+                        </Button>
+                    </div>
+
+                    <ol v-if="historial.length" class="mt-6 space-y-1" aria-label="Historial de precios">
+                        <li
+                            v-for="precio in historial"
+                            :key="precio.id"
+                            class="flex items-baseline justify-between gap-3 rounded-xl px-3 py-2"
+                            :class="precio.estado === 'vigente' ? 'bg-terciopelo' : ''"
+                        >
+                            <span class="text-sm" :class="precio.estado === 'anterior' ? 'text-niebla' : 'text-bruma'">
+                                {{ precio.periodo }}
+                                <span v-if="precio.estado === 'programado'" class="ml-1 rounded-full bg-miel/15 px-2 py-0.5 text-xs text-miel">Programado</span>
+                            </span>
+                            <span class="shrink-0 tabular-nums" :class="precio.estado === 'anterior' ? 'text-niebla line-through' : 'text-perla'">
+                                {{ precio.precio }}
+                            </span>
+                        </li>
+                    </ol>
+                </section>
+
+                <section aria-labelledby="titulo-datos">
+                    <h3 id="titulo-datos" class="text-xl">Datos del servicio</h3>
+
+                    <form class="mt-4 space-y-5" novalidate @submit.prevent="guardarDatos">
+                        <p v-if="erroresDatos.general" role="alert" class="rounded-xl border border-borgona/40 bg-borgona-hondo px-4 py-3 text-sm text-borgona">
+                            {{ erroresDatos.general }}
+                        </p>
+
+                        <Campo etiqueta="Nombre" para="editar-nombre" :error="erroresDatos.nombre">
+                            <input id="editar-nombre" v-model="form.nombre" type="text" maxlength="255" :class="claseEntrada(Boolean(erroresDatos.nombre))" />
+                        </Campo>
+
+                        <div class="grid gap-5 sm:grid-cols-2">
+                            <Campo etiqueta="Categoría" :error="erroresDatos.categoria_id">
+                                <Dropdown v-model="form.categoria_id" :options="opcionesCategoria" placeholder="Seleccionar" />
+                            </Campo>
+
+                            <Campo etiqueta="Duración (minutos)" para="editar-duracion" :error="erroresDatos.duracion_minutos">
+                                <input
+                                    id="editar-duracion"
+                                    v-model="form.duracion_minutos"
+                                    type="number"
+                                    inputmode="numeric"
+                                    min="5"
+                                    max="480"
+                                    step="5"
+                                    :class="claseEntrada(Boolean(erroresDatos.duracion_minutos))"
+                                />
+                            </Campo>
+                        </div>
+
+                        <Campo etiqueta="Descripción" para="editar-descripcion" opcional>
+                            <textarea id="editar-descripcion" v-model="form.descripcion" rows="3" :class="[claseEntrada(), 'resize-y']" />
+                        </Campo>
+
+                        <Button type="submit" :disabled="guardandoDatos || !cambiosPendientes">
+                            {{ guardandoDatos ? 'Guardando…' : 'Guardar cambios' }}
+                        </Button>
+                    </form>
+                </section>
+
+                <section aria-labelledby="titulo-disponibilidad" class="rounded-[24px] border border-hilo p-5">
+                    <h3 id="titulo-disponibilidad" class="text-xl">Disponibilidad</h3>
+
+                    <div class="mt-2 flex flex-wrap items-center justify-between gap-4">
+                        <p class="max-w-xs text-sm text-bruma">
+                            {{
+                                detalle.activo
+                                    ? 'Aparece al crear reservas. Si lo desactivas, las reservas que ya lo tienen no cambian.'
+                                    : 'No aparece al crear reservas. Puedes volver a activarlo cuando quieras.'
+                            }}
+                        </p>
+
+                        <Button
+                            v-if="detalle.activo"
+                            variant="danger"
+                            :disabled="cambiandoEstado"
+                            @click="confirmarDesactivar = true"
+                        >
+                            Desactivar
+                        </Button>
+                        <Button v-else variant="secondary" :disabled="cambiandoEstado" @click="cambiarEstado(true)">
+                            {{ cambiandoEstado ? 'Reactivando…' : 'Reactivar' }}
+                        </Button>
+                    </div>
+
+                    <p v-if="errorEstado" role="alert" class="mt-3 text-sm text-borgona">{{ errorEstado }}</p>
+                </section>
+            </div>
+        </PanelLateral>
+
+        <Modal :show="confirmarDesactivar" label="Confirmar desactivación" max-width="sm" @close="confirmarDesactivar = false">
+            <h2 class="text-2xl">¿Desactivar «{{ detalle?.nombre }}»?</h2>
+            <p class="mt-2 text-sm text-bruma">
+                Dejará de aparecer al crear reservas. Las reservas que ya lo incluyen se mantienen igual.
+            </p>
+            <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <Button label="Cancelar" variant="secondary" @click="confirmarDesactivar = false" />
+                <Button variant="danger" :disabled="cambiandoEstado" @click="cambiarEstado(false)">
+                    {{ cambiandoEstado ? 'Desactivando…' : 'Desactivar servicio' }}
+                </Button>
+            </div>
+        </Modal>
+
+        <Aviso :mensaje="aviso" @cerrar="aviso = ''" />
     </AppLayout>
 </template>

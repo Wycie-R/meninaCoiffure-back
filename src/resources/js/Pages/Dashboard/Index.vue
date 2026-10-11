@@ -7,7 +7,7 @@ import StatusBadge from '../../Components/StatusBadge.vue'
 import Icono from '../../Components/Icono.vue'
 import PageHeader from '../../Components/PageHeader.vue'
 import EstadoVacio from '../../Components/EstadoVacio.vue'
-import { guaranies } from '../../api'
+import { guaranies } from '../../formato'
 
 const personal = [
     {
