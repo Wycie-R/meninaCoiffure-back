@@ -1,36 +1,46 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import AppLayout from '../../Layouts/AppLayout.vue'
 import Button from '../../Components/Button.vue'
 import SearchInput from '../../Components/SearchInput.vue'
 import Dropdown from '../../Components/Dropdown.vue'
 import StatusBadge from '../../Components/StatusBadge.vue'
 import Pagination from '../../Components/Pagination.vue'
+import { usePage } from '@inertiajs/vue3'
+import { api, guaranies, duracion } from '../../api'
 
-const categorias = [
-    { id: 1, nombre: 'Corte y Peinado' },
-    { id: 2, nombre: 'Coloración' },
-    { id: 3, nombre: 'Estética y Cosmetología' },
-]
+const servicios = ref([])
+const categorias = ref([])
+const cargando = ref(true)
+const errorCarga = ref('')
 
-const servicios = [
-    { id: 1, categoria_id: 1, nombre: 'Corte Femenino', descripcion: null, duracion_minutos: 45, activo: true },
-    { id: 2, categoria_id: 1, nombre: 'Baño de Crema / Nutrición', descripcion: null, duracion_minutos: 30, activo: true },
-    { id: 3, categoria_id: 2, nombre: 'Coloración Completa', descripcion: null, duracion_minutos: 90, activo: true },
-    { id: 4, categoria_id: 2, nombre: 'Decoloración Extrema (Descontinuado)', descripcion: null, duracion_minutos: 120, activo: false },
-    { id: 5, categoria_id: 1, nombre: 'Corte Masculino', descripcion: 'Corte y terminación a máquina o tijera.', duracion_minutos: 30, activo: true },
-    { id: 6, categoria_id: 1, nombre: 'Corte Infantil', descripcion: 'Para niños y niñas desde los 7 años.', duracion_minutos: 30, activo: true },
-    { id: 7, categoria_id: 1, nombre: 'Lavado, Secado y Modelado', descripcion: null, duracion_minutos: 40, activo: true },
-    { id: 8, categoria_id: 1, nombre: 'Peinado para Eventos', descripcion: 'Recogidos y peinados para ocasiones especiales.', duracion_minutos: 60, activo: true },
-    { id: 9, categoria_id: 2, nombre: 'Mechas', descripcion: null, duracion_minutos: 120, activo: true },
-    { id: 10, categoria_id: 2, nombre: 'Reflejos', descripcion: null, duracion_minutos: 90, activo: true },
-    { id: 11, categoria_id: 2, nombre: 'Balayage', descripcion: 'Aclarado degradado a mano alzada.', duracion_minutos: 180, activo: true },
-    { id: 12, categoria_id: 3, nombre: 'Depilación Facial', descripcion: null, duracion_minutos: 20, activo: true },
-    { id: 13, categoria_id: 3, nombre: 'Depilación Corporal', descripcion: null, duracion_minutos: 45, activo: true },
-    { id: 14, categoria_id: 3, nombre: 'Limpieza Facial e Hidratación', descripcion: null, duracion_minutos: 60, activo: true },
-    { id: 15, categoria_id: 3, nombre: 'Maquillaje Social', descripcion: null, duracion_minutos: 60, activo: true },
-    { id: 16, categoria_id: 3, nombre: 'Maquillaje para Eventos', descripcion: 'Maquillaje profesional de larga duración.', duracion_minutos: 90, activo: true },
-]
+const page = usePage()
+const servicioNuevo = ref(Number(new URL(page.url, window.location.origin).searchParams.get('nuevo')) || null)
+
+async function cargar() {
+    cargando.value = true
+    errorCarga.value = ''
+
+    try {
+        const [respServicios, respCategorias] = await Promise.all([
+            api('/api/servicios?solo_activos=0'),
+            api('/api/categorias-servicio'),
+        ])
+
+        if (!respServicios.ok || !respCategorias.ok) throw new Error()
+
+        servicios.value = respServicios.cuerpo.data
+        categorias.value = respCategorias.cuerpo.data
+    } catch {
+        errorCarga.value = 'No se pudieron cargar los servicios. Revisa la conexión e intenta de nuevo.'
+    } finally {
+        cargando.value = false
+    }
+}
+
+onMounted(cargar)
+
+const nombreNuevo = computed(() => servicios.value.find((s) => s.id === servicioNuevo.value)?.nombre ?? '')
 
 const porPagina = 8
 
@@ -39,10 +49,10 @@ const categoria = ref('todas')
 const estado = ref('todos')
 const paginaActual = ref(1)
 
-const opcionesCategoria = [
+const opcionesCategoria = computed(() => [
     { label: 'Todas las categorías', value: 'todas' },
-    ...categorias.map((c) => ({ label: c.nombre, value: c.id })),
-]
+    ...categorias.value.map((c) => ({ label: c.nombre, value: c.id })),
+])
 
 const opcionesEstado = [
     { label: 'Todos los estados', value: 'todos' },
@@ -50,25 +60,25 @@ const opcionesEstado = [
     { label: 'Inactivos', value: 'inactivos' },
 ]
 
-const nombresCategoria = Object.fromEntries(categorias.map((c) => [c.id, c.nombre]))
-
 function nombreCategoria(servicio) {
-    return nombresCategoria[servicio.categoria_id] ?? 'Sin categoría'
+    return servicio.categoria?.nombre ?? 'Sin categoría'
 }
 
 function normalizar(texto) {
     return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 }
 
-const serviciosOrdenados = [...servicios].sort(
-    (a, b) => nombreCategoria(a).localeCompare(nombreCategoria(b), 'es') || a.nombre.localeCompare(b.nombre, 'es')
+const serviciosOrdenados = computed(() =>
+    [...servicios.value].sort(
+        (a, b) => nombreCategoria(a).localeCompare(nombreCategoria(b), 'es') || a.nombre.localeCompare(b.nombre, 'es')
+    )
 )
 
 const serviciosFiltrados = computed(() => {
     const texto = normalizar(busqueda.value)
 
-    return serviciosOrdenados.filter((servicio) => {
-        const coincideCategoria = categoria.value === 'todas' || servicio.categoria_id === categoria.value
+    return serviciosOrdenados.value.filter((servicio) => {
+        const coincideCategoria = categoria.value === 'todas' || servicio.categoria?.id === categoria.value
         const coincideEstado =
             estado.value === 'todos' ||
             (estado.value === 'activos' && servicio.activo) ||
@@ -131,15 +141,6 @@ function irAPagina(url) {
     const pagina = Number(new URL(url, window.location.origin).searchParams.get('page'))
     if (pagina >= 1 && pagina <= totalPaginas.value) paginaActual.value = pagina
 }
-
-function duracion(minutos) {
-    const horas = Math.floor(minutos / 60)
-    const resto = minutos % 60
-
-    if (!horas) return `${resto} min`
-    if (!resto) return `${horas} h`
-    return `${horas} h ${resto} min`
-}
 </script>
 
 <template>
@@ -151,7 +152,23 @@ function duracion(minutos) {
                         Servicios
                     </h1>
 
-                                        <Button label="+ Nuevo servicio" />
+                                        <Button label="+ Nuevo servicio" href="/servicios/crear" />
+                </div>
+
+                <div
+                    v-if="nombreNuevo"
+                    role="status"
+                    class="mt-6 flex items-start justify-between gap-3 rounded-lg border border-[#355C43] bg-[#22332A] px-4 py-3 text-sm text-[#9AD9AE]"
+                >
+                    <p>Se creó el servicio «{{ nombreNuevo }}».</p>
+                    <button
+                        type="button"
+                        class="shrink-0 rounded px-1 text-[#9AD9AE] hover:text-[#F3ECE0] focus-visible:outline-2 focus-visible:outline-[#9AD9AE]"
+                        aria-label="Cerrar aviso"
+                        @click="servicioNuevo = null"
+                    >
+                        ✕
+                    </button>
                 </div>
 
                 <div
@@ -177,7 +194,32 @@ function duracion(minutos) {
 
                 <div class="mt-6">
                     <div
-                        v-if="!serviciosFiltrados.length"
+                        v-if="cargando"
+                        class="rounded-xl border border-[#47413B] bg-[#292725] px-5 py-12 text-center"
+                    >
+                        <p class="text-sm text-[#BEB3A6]">
+                            Cargando servicios...
+                        </p>
+                    </div>
+
+                    <div
+                        v-else-if="errorCarga"
+                        role="alert"
+                        class="rounded-xl border border-[#6A3A3A] bg-[#3A2626] px-5 py-10 text-center"
+                    >
+                        <p class="text-sm text-[#F0A8A8]">
+                            {{ errorCarga }}
+                        </p>
+                        <Button
+                            label="Reintentar"
+                            variant="secondary"
+                            class="mt-4"
+                            @click="cargar"
+                        />
+                    </div>
+
+                    <div
+                        v-else-if="!serviciosFiltrados.length"
                         class="rounded-xl border border-[#47413B] bg-[#292725] px-5 py-12 text-center"
                     >
                         <p class="text-sm text-[#BEB3A6]">
@@ -202,6 +244,9 @@ function duracion(minutos) {
                                             Duración
                                         </th>
                                         <th scope="col" class="px-5 py-3 font-medium">
+                                            Precio
+                                        </th>
+                                        <th scope="col" class="px-5 py-3 font-medium">
                                             Estado
                                         </th>
                                     </tr>
@@ -212,6 +257,7 @@ function duracion(minutos) {
                                         v-for="servicio in serviciosPagina"
                                         :key="servicio.id"
                                         class="transition-colors hover:bg-[#302D29]"
+                                        :class="{ 'bg-[#22332A]/40': servicio.id === servicioNuevo }"
                                     >
                                         <td class="px-5 py-4">
                                             <p
@@ -236,6 +282,10 @@ function duracion(minutos) {
                                             {{ duracion(servicio.duracion_minutos) }}
                                         </td>
 
+                                        <td class="whitespace-nowrap px-5 py-4 text-[#F3ECE0]">
+                                            {{ guaranies(servicio.precio_vigente) }}
+                                        </td>
+
                                         <td class="px-5 py-4">
                                             <StatusBadge :status="servicio.activo ? 'activo' : 'inactivo'" />
                                         </td>
@@ -248,7 +298,8 @@ function duracion(minutos) {
                             <li
                                 v-for="servicio in serviciosPagina"
                                 :key="servicio.id"
-                                class="flex flex-col rounded-xl border border-[#47413B] bg-[#292725] p-4 transition-colors hover:bg-[#302D29]"
+                                class="flex flex-col rounded-xl border bg-[#292725] p-4 transition-colors hover:bg-[#302D29]"
+                                :class="servicio.id === servicioNuevo ? 'border-[#355C43]' : 'border-[#47413B]'"
                             >
                                 <div class="flex items-start justify-between gap-3">
                                     <p
@@ -270,7 +321,7 @@ function duracion(minutos) {
 
                                 <div class="mt-auto pt-3">
                                     <p class="border-t border-[#47413B] pt-3 text-sm text-[#BEB3A6]">
-                                        {{ nombreCategoria(servicio) }} · {{ duracion(servicio.duracion_minutos) }}
+                                        {{ nombreCategoria(servicio) }} · {{ duracion(servicio.duracion_minutos) }} · {{ guaranies(servicio.precio_vigente) }}
                                     </p>
                                 </div>
                             </li>
@@ -279,7 +330,7 @@ function duracion(minutos) {
                 </div>
 
                 <div
-                    v-if="serviciosFiltrados.length"
+                    v-if="!cargando && !errorCarga && serviciosFiltrados.length"
                     class="mt-6 flex flex-col items-center justify-between gap-3 sm:flex-row"
                 >
                     <p class="text-sm text-[#BEB3A6]">

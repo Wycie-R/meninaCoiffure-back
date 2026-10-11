@@ -37,7 +37,7 @@ const navItems = [
         label: 'Servicios',
         items: [
             { label: 'Ver servicios', href: '/servicios' },
-            { label: 'Nuevo servicio', href: null },
+            { label: 'Nuevo servicio', href: '/servicios/crear' },
             { label: 'Categorías', href: null },
         ],
     },
