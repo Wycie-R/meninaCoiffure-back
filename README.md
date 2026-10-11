@@ -1,3 +1,7 @@
+> 🇬🇧 **English summary**
+>
+> Backend and web app for Menina Coiffure, a real hair salon: service booking and payment management. Built with PHP (Laravel) and Vue + Inertia.js + Tailwind, fully containerized with Docker Compose and nginx.
+> 
 # Menina Coiffure - Backend API
 
 Guía para el despliegue del entorno de desarrollo mediante Docker, con la estructura del proyecto en `src/`, permisos de usuario en Linux, la ejecución correcta de seeders y la configuración del frontend con Vue, Inertia.js, Tailwind CSS y Vite.
