@@ -108,13 +108,13 @@ function fechaLocalHoy() {
 const fechaMinima = fechaLocalHoy()
 
 const nombresDias = {
-    1: 'Lun',
-    2: 'Mar',
-    3: 'Mié',
-    4: 'Jue',
-    5: 'Vie',
-    6: 'Sáb',
-    7: 'Dom',
+    1: 'lunes',
+    2: 'martes',
+    3: 'miércoles',
+    4: 'jueves',
+    5: 'viernes',
+    6: 'sábados',
+    7: 'domingos',
 }
 
 const horarioProfesional = computed(() => {
@@ -133,12 +133,12 @@ const horarioProfesional = computed(() => {
     )
 
     const textoDias = consecutivos && dias.length > 1
-        ? `${nombresDias[dias[0]]} a ${nombresDias[dias.at(-1)].toLowerCase()}`
-        : dias.map((d) => nombresDias[d]).join(', ')
+        ? `de ${nombresDias[dias[0]]} a ${nombresDias[dias.at(-1)]}`
+        : `los ${dias.map((d) => nombresDias[d]).join(', ')}`
 
     const { hora_inicio, hora_fin } = profesional.turnos[0]
 
-    return `Atiende ${textoDias} · ${hora_inicio.slice(0, 5)} – ${hora_fin.slice(0, 5)}`
+    return `Atiende ${textoDias}, de ${hora_inicio.slice(0, 5)} a ${hora_fin.slice(0, 5)}`
 })
 
 const duracionTotal = computed(() =>
@@ -338,60 +338,58 @@ function guardar() {
 
 <template>
     <AppLayout>
-        <div class="mx-auto max-w-6xl px-6 py-8">
+        <div class="mx-auto max-w-6xl px-6 py-10">
             <PageHeader
-                seccion="Agenda"
                 titulo="Nueva reserva"
                 descripcion="Agenda una cita eligiendo cliente, profesional, horario y servicios."
-                icono="reservas"
             />
 
             <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
                 <form
-                    class="min-w-0 rounded-xl border border-[#47413B] bg-[#292725]"
+                    class="min-w-0 rounded-[28px] border border-hilo bg-velo"
                     novalidate
                     @submit.prevent="guardar"
                 >
                     <section class="p-5 sm:p-6">
-                        <h2 class="flex items-center gap-3 text-xl font-semibold text-[#F3ECE0]">
-                            <span class="flex h-7 w-7 items-center justify-center rounded-full border border-[#C9A96E] font-serif text-sm lining-nums text-[#E9D2A0]">1</span>
+                        <h2 class="flex items-center gap-3 text-2xl text-perla">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-orquidea font-display text-base text-noche">1</span>
                             Cliente y profesional
                         </h2>
 
                         <div class="mt-5 grid gap-5 sm:grid-cols-2">
                             <div class="min-w-0">
-                                <p class="mb-1.5 text-sm font-medium text-[#F3ECE0]">Cliente</p>
+                                <p class="mb-1.5 text-sm font-medium text-perla">Cliente</p>
                                 <Dropdown
                                     v-model="form.cliente_id"
                                     :options="opcionesClientes"
                                     placeholder="Seleccionar cliente"
                                 />
-                                <p v-if="error('cliente_id')" class="mt-1.5 text-sm text-[#F0A8A8]">
+                                <p v-if="error('cliente_id')" class="mt-1.5 text-sm text-borgona">
                                     {{ error('cliente_id') }}
                                 </p>
                             </div>
 
                             <div class="min-w-0">
-                                <p class="mb-1.5 text-sm font-medium text-[#F3ECE0]">Profesional</p>
+                                <p class="mb-1.5 text-sm font-medium text-perla">Profesional</p>
                                 <Dropdown
                                     v-model="form.personal_id"
                                     :options="opcionesPersonal"
                                     placeholder="Seleccionar profesional"
                                 />
-                                <p v-if="error('personal_id')" class="mt-1.5 text-sm text-[#F0A8A8]">
+                                <p v-if="error('personal_id')" class="mt-1.5 text-sm text-borgona">
                                     {{ error('personal_id') }}
                                 </p>
-                                <p v-else-if="horarioProfesional" class="mt-1.5 flex items-center gap-1.5 text-sm text-[#BEB3A6]">
-                                    <Icono name="pendiente" class="h-4 w-4 text-[#C9A96E]" />
+                                <p v-else-if="horarioProfesional" class="mt-1.5 flex items-center gap-1.5 text-sm text-bruma">
+                                    <Icono name="pendiente" class="h-4 w-4 text-orquidea" />
                                     {{ horarioProfesional }}
                                 </p>
                             </div>
                         </div>
                     </section>
 
-                    <section class="border-t border-[#3D3934] p-5 sm:p-6">
-                        <h2 class="flex items-center gap-3 text-xl font-semibold text-[#F3ECE0]">
-                            <span class="flex h-7 w-7 items-center justify-center rounded-full border border-[#C9A96E] font-serif text-sm lining-nums text-[#E9D2A0]">2</span>
+                    <section class="border-t border-hilo p-5 sm:p-6">
+                        <h2 class="flex items-center gap-3 text-2xl text-perla">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-orquidea font-display text-base text-noche">2</span>
                             Servicios
                         </h2>
 
@@ -402,11 +400,11 @@ function guardar() {
                                 <label
                                     v-for="servicio in serviciosActivos"
                                     :key="servicio.id"
-                                    class="relative flex cursor-pointer items-center gap-3 rounded-lg border p-3.5 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-[#D4C3A3]"
+                                    class="relative flex cursor-pointer items-center gap-3 rounded-lg border p-3.5 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-orquidea"
                                     :class="
                                         form.servicios.includes(servicio.id)
-                                            ? 'border-[#C9A96E] bg-[#403629]'
-                                            : 'border-[#51483F] bg-[#34302B] hover:border-[#8C7961]'
+                                            ? 'border-orquidea bg-orquidea/12'
+                                            : 'border-hilo bg-terciopelo hover:border-hilo-fuerte'
                                     "
                                 >
                                     <input
@@ -420,8 +418,8 @@ function guardar() {
                                         class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors"
                                         :class="
                                             form.servicios.includes(servicio.id)
-                                                ? 'border-[#C9A96E] bg-[#C9A96E] text-[#1C1B1A]'
-                                                : 'border-[#5B5147] text-[#C9A96E]'
+                                                ? 'border-orquidea bg-orquidea text-noche'
+                                                : 'border-hilo-fuerte text-orquidea'
                                         "
                                     >
                                         <Icono
@@ -431,8 +429,8 @@ function guardar() {
                                     </span>
 
                                     <span class="min-w-0 flex-1">
-                                        <span class="block text-sm font-medium text-[#F3ECE0]">{{ servicio.nombre }}</span>
-                                        <span class="mt-0.5 inline-flex items-center gap-1 text-xs text-[#BEB3A6]">
+                                        <span class="block text-sm font-medium text-perla">{{ servicio.nombre }}</span>
+                                        <span class="mt-0.5 inline-flex items-center gap-1 text-xs text-bruma">
                                             <Icono name="pendiente" class="h-3.5 w-3.5" />
                                             {{ servicio.duracion_minutos }} min
                                         </span>
@@ -440,35 +438,35 @@ function guardar() {
                                 </label>
                             </div>
 
-                            <p v-if="error('servicios')" class="mt-2 text-sm text-[#F0A8A8]">
+                            <p v-if="error('servicios')" class="mt-2 text-sm text-borgona">
                                 {{ error('servicios') }}
                             </p>
                         </fieldset>
                     </section>
 
-                    <section class="border-t border-[#3D3934] p-5 sm:p-6">
-                        <h2 class="flex items-center gap-3 text-xl font-semibold text-[#F3ECE0]">
-                            <span class="flex h-7 w-7 items-center justify-center rounded-full border border-[#C9A96E] font-serif text-sm lining-nums text-[#E9D2A0]">3</span>
+                    <section class="border-t border-hilo p-5 sm:p-6">
+                        <h2 class="flex items-center gap-3 text-2xl text-perla">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-orquidea font-display text-base text-noche">3</span>
                             Fecha y horario
                         </h2>
 
                         <div class="mt-5">
                             <div class="flex items-center justify-between gap-3">
-                                <p class="text-sm font-medium text-[#F3ECE0]">Día</p>
+                                <p class="text-sm font-medium text-perla">Día</p>
                                 <div class="flex items-center gap-1">
                                     <button
                                         type="button"
-                                        class="rounded-md p-1.5 text-[#BEB3A6] transition-colors enabled:hover:bg-[#34302B] enabled:hover:text-[#F3ECE0] disabled:opacity-30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3]"
+                                        class="rounded-md p-1.5 text-bruma transition-colors enabled:hover:bg-terciopelo enabled:hover:text-perla disabled:opacity-30 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orquidea"
                                         :disabled="inicioBloque === 0"
                                         aria-label="Días anteriores"
                                         @click="moverBloque(-1)"
                                     >
                                         <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" d="M15 6l-6 6 6 6" /></svg>
                                     </button>
-                                    <span class="min-w-32 text-center font-serif text-base italic lining-nums text-[#E0CDAF]">{{ rangoVisible }}</span>
+                                    <span class="min-w-32 text-center text-sm tabular-nums text-bruma">{{ rangoVisible }}</span>
                                     <button
                                         type="button"
-                                        class="rounded-md p-1.5 text-[#BEB3A6] transition-colors hover:bg-[#34302B] hover:text-[#F3ECE0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3]"
+                                        class="rounded-md p-1.5 text-bruma transition-colors hover:bg-terciopelo hover:text-perla focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orquidea"
                                         aria-label="Días siguientes"
                                         @click="moverBloque(1)"
                                     >
@@ -482,13 +480,13 @@ function guardar() {
                                     v-for="dia in diasVisibles"
                                     :key="dia.iso"
                                     type="button"
-                                    class="relative flex flex-col items-center rounded-lg border py-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3]"
+                                    class="relative flex flex-col items-center rounded-lg border py-2 transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orquidea"
                                     :class="
                                         form.fecha === dia.iso
-                                            ? 'border-[#C9A96E] bg-[#C9A96E] text-[#1C1B1A]'
+                                            ? 'border-orquidea bg-orquidea text-noche'
                                             : dia.disponible
-                                                ? 'border-[#51483F] bg-[#34302B] text-[#F3ECE0] hover:border-[#C9A96E]/70'
-                                                : 'cursor-not-allowed border-[#3D3934] bg-transparent text-[#5B5147]'
+                                                ? 'border-hilo bg-terciopelo text-perla hover:border-orquidea/70'
+                                                : 'cursor-not-allowed border-hilo bg-transparent text-hilo-fuerte'
                                     "
                                     :disabled="!dia.disponible"
                                     :aria-pressed="form.fecha === dia.iso"
@@ -496,41 +494,41 @@ function guardar() {
                                     @click="elegirDia(dia)"
                                 >
                                     <span
-                                        class="text-[0.625rem] font-medium uppercase tracking-wider"
-                                        :class="form.fecha === dia.iso ? 'text-[#1C1B1A]/70' : dia.disponible ? 'text-[#BEB3A6]' : ''"
+                                        class="text-[0.6875rem] font-medium capitalize"
+                                        :class="form.fecha === dia.iso ? 'text-noche/70' : dia.disponible ? 'text-bruma' : ''"
                                     >
                                         {{ dia.semana }}
                                     </span>
-                                    <span class="font-serif text-xl font-semibold leading-tight lining-nums sm:text-2xl">{{ dia.dia }}</span>
+                                    <span class="font-display text-xl leading-tight tabular-nums sm:text-2xl">{{ dia.dia }}</span>
                                     <span
                                         v-if="dia.esHoy"
                                         class="absolute bottom-1 h-1 w-1 rounded-full"
-                                        :class="form.fecha === dia.iso ? 'bg-[#1C1B1A]' : 'bg-[#C9A96E]'"
+                                        :class="form.fecha === dia.iso ? 'bg-noche' : 'bg-orquidea'"
                                         aria-hidden="true"
                                     ></span>
                                 </button>
                             </div>
 
-                            <p v-if="error('fecha')" class="mt-2 text-sm text-[#F0A8A8]">{{ error('fecha') }}</p>
-                            <p v-else-if="profesionalActual" class="mt-2 text-xs text-[#8C7F70]">
+                            <p v-if="error('fecha')" class="mt-2 text-sm text-borgona">{{ error('fecha') }}</p>
+                            <p v-else-if="profesionalActual" class="mt-2 text-xs text-niebla">
                                 Los días apagados son los que {{ profesionalActual.nombre }} no atiende.
                             </p>
                         </div>
 
                         <div class="mt-6">
-                            <p class="text-sm font-medium text-[#F3ECE0]">Horario</p>
+                            <p class="text-sm font-medium text-perla">Horario</p>
 
                             <div
                                 v-if="!form.fecha"
-                                class="mt-2 flex items-center gap-3 rounded-lg border border-dashed border-[#51483F] px-4 py-5 text-sm text-[#8C7F70]"
+                                class="mt-2 flex items-center gap-3 rounded-lg border border-dashed border-hilo px-4 py-5 text-sm text-niebla"
                             >
-                                <Icono name="pendiente" class="h-5 w-5 shrink-0 text-[#5B5147]" />
+                                <Icono name="pendiente" class="h-5 w-5 shrink-0 text-hilo-fuerte" />
                                 Elige un día para ver los horarios disponibles.
                             </div>
 
                             <div
                                 v-else-if="!horarios.length"
-                                class="mt-2 rounded-lg border border-dashed border-[#51483F] px-4 py-5 text-sm text-[#8C7F70]"
+                                class="mt-2 rounded-lg border border-dashed border-hilo px-4 py-5 text-sm text-niebla"
                             >
                                 No hay horarios en los que entren los servicios elegidos ese día.
                             </div>
@@ -538,19 +536,19 @@ function guardar() {
                             <div v-else class="mt-2 space-y-4">
                                 <div v-for="bloque in [{ titulo: 'Mañana', lista: horariosManana }, { titulo: 'Tarde', lista: horariosTarde }]" :key="bloque.titulo">
                                     <template v-if="bloque.lista.length">
-                                        <p class="mb-2 font-serif text-sm italic text-[#8C7F70]">{{ bloque.titulo }}</p>
+                                        <p class="mb-2 text-xs font-medium text-niebla">{{ bloque.titulo }}</p>
                                         <div class="grid grid-cols-4 gap-2 sm:grid-cols-6" role="group" :aria-label="`Horarios de la ${bloque.titulo.toLowerCase()}`">
                                             <button
                                                 v-for="horario in bloque.lista"
                                                 :key="horario.hora"
                                                 type="button"
-                                                class="rounded-lg border py-2 font-serif text-lg font-semibold lining-nums transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3]"
+                                                class="rounded-lg border py-2 font-display text-lg tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orquidea"
                                                 :class="
                                                     form.hora_inicio === horario.hora
-                                                        ? 'border-[#C9A96E] bg-[#C9A96E] text-[#1C1B1A]'
+                                                        ? 'border-orquidea bg-orquidea text-noche'
                                                         : horario.disponible
-                                                            ? 'border-[#51483F] bg-[#34302B] text-[#E0CDAF] hover:border-[#C9A96E]/70 hover:text-[#F3ECE0]'
-                                                            : 'cursor-not-allowed border-[#3D3934] text-[#5B5147] line-through'
+                                                            ? 'border-hilo bg-terciopelo text-perla hover:border-orquidea/70 hover:text-perla'
+                                                            : 'cursor-not-allowed border-hilo text-hilo-fuerte line-through'
                                                 "
                                                 :disabled="!horario.disponible"
                                                 :aria-pressed="form.hora_inicio === horario.hora"
@@ -563,20 +561,20 @@ function guardar() {
                                 </div>
                             </div>
 
-                            <p v-if="error('hora_inicio')" class="mt-2 text-sm text-[#F0A8A8]">{{ error('hora_inicio') }}</p>
+                            <p v-if="error('hora_inicio')" class="mt-2 text-sm text-borgona">{{ error('hora_inicio') }}</p>
 
                             <div
                                 v-if="form.hora_inicio && form.hora_fin"
-                                class="mt-4 flex items-center gap-3 rounded-lg border border-[#867158] bg-[#403629] px-4 py-3 text-sm text-[#E0CDAF]"
+                                class="mt-4 flex items-center gap-3 rounded-lg border border-orquidea/40 bg-orquidea/12 px-4 py-3 text-sm text-perla"
                             >
-                                <Icono name="completada" class="h-5 w-5 shrink-0 text-[#C9A96E]" />
-                                <span class="lining-nums">
-                                    De <strong class="font-semibold text-[#F3ECE0]">{{ form.hora_inicio }}</strong>
-                                    a <strong class="font-semibold text-[#F3ECE0]">{{ form.hora_fin }}</strong>
-                                    · {{ duracionTotal }} min según los servicios
+                                <Icono name="completada" class="h-5 w-5 shrink-0 text-orquidea" />
+                                <span class="tabular-nums">
+                                    De <strong class="font-semibold text-perla">{{ form.hora_inicio }}</strong>
+                                    a <strong class="font-semibold text-perla">{{ form.hora_fin }}</strong>
+                                    ({{ duracionTotal }} min según los servicios)
                                 </span>
                             </div>
-                            <p v-else-if="form.hora_inicio && !duracionTotal" class="mt-3 text-sm text-[#8C7F70]">
+                            <p v-else-if="form.hora_inicio && !duracionTotal" class="mt-3 text-sm text-niebla">
                                 Elige los servicios para calcular la hora de fin.
                             </p>
                         </div>
@@ -585,13 +583,13 @@ function guardar() {
                     <div
                         v-if="avisoSinConexion"
                         role="status"
-                        class="mx-5 mb-5 flex items-start gap-2.5 rounded-lg border border-[#867158] bg-[#403629] px-4 py-3 text-sm text-[#E0CDAF] sm:mx-6"
+                        class="mx-5 mb-5 flex items-start gap-2.5 rounded-lg border border-orquidea/40 bg-orquidea/12 px-4 py-3 text-sm text-perla sm:mx-6"
                     >
-                        <Icono name="alerta" class="mt-0.5 h-4 w-4 shrink-0 text-[#C9A96E]" />
+                        <Icono name="alerta" class="mt-0.5 h-4 w-4 shrink-0 text-orquidea" />
                         El formulario está completo, pero todavía no está conectado al servidor. La reserva no se guardó.
                     </div>
 
-                    <div class="flex flex-col-reverse gap-3 rounded-b-xl border-t border-[#3D3934] bg-[#262321] p-5 sm:flex-row sm:justify-end sm:px-6">
+                    <div class="flex flex-col-reverse gap-3 rounded-b-[28px] border-t border-hilo bg-velo p-5 sm:flex-row sm:justify-end sm:px-6">
                         <Button label="Cancelar" href="/reservas" variant="secondary" class="w-full sm:w-auto" />
                         <Button type="submit" class="w-full sm:w-auto">
                             <Icono name="completada" class="h-4 w-4" />
@@ -601,41 +599,40 @@ function guardar() {
                 </form>
 
                 <aside class="lg:sticky lg:top-24 lg:self-start">
-                    <p class="mb-3 font-serif text-lg italic text-[#BEB3A6]">Resumen de la cita</p>
+                    <p class="mb-3 text-sm font-medium text-bruma">Resumen de la cita</p>
 
-                    <div class="relative overflow-hidden rounded-xl border border-[#867158] bg-gradient-to-br from-[#403629] to-[#2C2723]">
-                        <div class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-[#C9A96E] via-[#E9D2A0] to-[#C9A96E]"></div>
-
+                    <div class="relative overflow-hidden rounded-[28px] bg-orquidea-hondo/35 ring-1 ring-inset ring-orquidea/25">
+                        
                         <div class="p-5">
-                            <p class="text-[0.6875rem] font-medium uppercase tracking-[0.25em] text-[#C9A96E]">Cliente</p>
-                            <p class="mt-1 font-serif text-2xl font-semibold" :class="clienteElegido ? 'text-[#F3ECE0]' : 'text-[#8C7F70]'">
+                            <p class="text-sm text-orquidea-claro">Cliente</p>
+                            <p class="mt-1 font-display text-2xl" :class="clienteElegido ? 'text-perla' : 'text-niebla'">
                                 {{ clienteElegido || 'Sin elegir' }}
                             </p>
 
                             <dl class="mt-4 space-y-3 text-sm">
                                 <div class="flex items-start gap-2.5">
-                                    <Icono name="personal" class="mt-0.5 h-4 w-4 shrink-0 text-[#C9A96E]" />
+                                    <Icono name="personal" class="mt-0.5 h-4 w-4 shrink-0 text-orquidea" />
                                     <div>
                                         <dt class="sr-only">Profesional</dt>
-                                        <dd :class="profesionalElegido ? 'text-[#F3ECE0]' : 'text-[#8C7F70]'">
+                                        <dd :class="profesionalElegido ? 'text-perla' : 'text-niebla'">
                                             {{ profesionalElegido || 'Profesional sin elegir' }}
                                         </dd>
                                     </div>
                                 </div>
                                 <div class="flex items-start gap-2.5">
-                                    <Icono name="reservas" class="mt-0.5 h-4 w-4 shrink-0 text-[#C9A96E]" />
+                                    <Icono name="reservas" class="mt-0.5 h-4 w-4 shrink-0 text-orquidea" />
                                     <div>
                                         <dt class="sr-only">Fecha</dt>
-                                        <dd class="first-letter:uppercase" :class="fechaElegida ? 'text-[#F3ECE0]' : 'text-[#8C7F70]'">
+                                        <dd class="first-letter:uppercase" :class="fechaElegida ? 'text-perla' : 'text-niebla'">
                                             {{ fechaElegida || 'Fecha sin elegir' }}
                                         </dd>
                                     </div>
                                 </div>
                                 <div class="flex items-start gap-2.5">
-                                    <Icono name="pendiente" class="mt-0.5 h-4 w-4 shrink-0 text-[#C9A96E]" />
+                                    <Icono name="pendiente" class="mt-0.5 h-4 w-4 shrink-0 text-orquidea" />
                                     <div>
                                         <dt class="sr-only">Horario</dt>
-                                        <dd class="lining-nums" :class="form.hora_inicio ? 'text-[#F3ECE0]' : 'text-[#8C7F70]'">
+                                        <dd class="tabular-nums" :class="form.hora_inicio ? 'text-perla' : 'text-niebla'">
                                             <template v-if="form.hora_inicio">
                                                 {{ form.hora_inicio }}{{ form.hora_fin ? ` – ${form.hora_fin}` : '' }}
                                             </template>
@@ -646,8 +643,8 @@ function guardar() {
                             </dl>
                         </div>
 
-                        <div class="border-t border-[#5B5147] bg-[#1F1D1B]/40 p-5">
-                            <p class="text-[0.6875rem] font-medium uppercase tracking-[0.25em] text-[#C9A96E]">Servicios</p>
+                        <div class="border-t border-hilo-fuerte bg-noche/40 p-5">
+                            <p class="text-sm text-orquidea-claro">Servicios</p>
 
                             <ul v-if="serviciosElegidos.length" class="mt-3 space-y-2">
                                 <li
@@ -655,15 +652,15 @@ function guardar() {
                                     :key="servicio.id"
                                     class="flex items-baseline justify-between gap-3 text-sm"
                                 >
-                                    <span class="text-[#F3ECE0]">{{ servicio.nombre }}</span>
-                                    <span class="shrink-0 text-xs text-[#BEB3A6]">{{ servicio.duracion_minutos }} min</span>
+                                    <span class="text-perla">{{ servicio.nombre }}</span>
+                                    <span class="shrink-0 text-xs text-bruma">{{ servicio.duracion_minutos }} min</span>
                                 </li>
                             </ul>
-                            <p v-else class="mt-2 font-serif text-base italic text-[#8C7F70]">Todavía no elegiste servicios.</p>
+                            <p v-else class="mt-2 text-sm text-niebla">Todavía no elegiste servicios.</p>
 
-                            <div class="mt-4 flex items-baseline justify-between border-t border-[#5B5147] pt-3">
-                                <span class="text-sm text-[#BEB3A6]">Duración total</span>
-                                <span class="font-serif text-2xl font-semibold lining-nums text-[#F3ECE0]">
+                            <div class="mt-4 flex items-baseline justify-between border-t border-hilo-fuerte pt-3">
+                                <span class="text-sm text-bruma">Duración total</span>
+                                <span class="font-display text-2xl tabular-nums text-perla">
                                     {{ duracionTotal }} <span class="text-base">min</span>
                                 </span>
                             </div>

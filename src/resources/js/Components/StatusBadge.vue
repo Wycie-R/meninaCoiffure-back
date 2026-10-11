@@ -9,30 +9,12 @@ const props = defineProps({
 })
 
 const statuses = {
-    pendiente: {
-        label: 'Pendiente',
-        class: 'border-[#6E5E49] bg-[#403629] text-[#E0CDAF]',
-    },
-    confirmada: {
-        label: 'Confirmada',
-        class: 'border-[#355C43] bg-[#22332A] text-[#9AD9AE]',
-    },
-    completada: {
-        label: 'Completada',
-        class: 'border-[#5B5147] bg-[#3D3934] text-[#F3ECE0]',
-    },
-    cancelada: {
-        label: 'Cancelada',
-        class: 'border-[#6A3A3A] bg-[#3A2626] text-[#F0A8A8]',
-    },
-    activo: {
-        label: 'Activo',
-        class: 'border-[#355C43] bg-[#22332A] text-[#9AD9AE]',
-    },
-    inactivo: {
-        label: 'Inactivo',
-        class: 'border-[#5B5147] bg-transparent text-[#B0A598]',
-    },
+    pendiente: { label: 'Pendiente', tinte: 'bg-miel', class: 'bg-miel/12 text-miel' },
+    confirmada: { label: 'Confirmada', tinte: 'bg-menta', class: 'bg-menta/12 text-menta' },
+    completada: { label: 'Completada', tinte: 'bg-ceniza', class: 'bg-ceniza/12 text-ceniza' },
+    cancelada: { label: 'Cancelada', tinte: 'bg-borgona', class: 'bg-borgona/12 text-borgona' },
+    activo: { label: 'Activo', tinte: 'bg-menta', class: 'bg-menta/12 text-menta' },
+    inactivo: { label: 'Inactivo', tinte: 'bg-niebla', class: 'bg-raso text-niebla' },
 }
 
 const aliases = {
@@ -42,20 +24,21 @@ const aliases = {
     cancelled: 'cancelada',
 }
 
-const fallbackClass = 'border-[#47413B] bg-[#34302B] text-[#BEB3A6]'
+const fallbackClass = 'bg-raso text-bruma'
 
 const current = computed(() => {
     const key = Object.hasOwn(aliases, props.status) ? aliases[props.status] : props.status
     if (Object.hasOwn(statuses, key)) return statuses[key]
-    return { label: props.status || '—', class: fallbackClass }
+    return { label: props.status || '—', tinte: 'bg-niebla', class: fallbackClass }
 })
 </script>
 
 <template>
     <span
-        class="inline-flex items-center whitespace-nowrap rounded-full border px-2.5 py-0.5 text-xs font-medium"
+        class="inline-flex items-center gap-1.5 whitespace-nowrap rounded-full py-0.5 pl-1.5 pr-2.5 text-xs font-medium"
         :class="current.class"
     >
+        <span class="h-3 w-1.5 rounded-full" :class="current.tinte" aria-hidden="true"></span>
         {{ current.label }}
     </span>
 </template>

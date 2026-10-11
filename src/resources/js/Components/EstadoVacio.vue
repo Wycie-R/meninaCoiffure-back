@@ -1,4 +1,5 @@
 <script setup>
+import Monograma from './Monograma.vue'
 import Icono from './Icono.vue'
 
 defineProps({
@@ -10,10 +11,6 @@ defineProps({
         type: String,
         default: '',
     },
-    icono: {
-        type: String,
-        default: 'destello',
-    },
     tono: {
         type: String,
         default: 'normal',
@@ -24,36 +21,20 @@ defineProps({
 
 <template>
     <div
-        class="relative overflow-hidden rounded-xl border px-6 py-14 text-center"
-        :class="tono === 'error' ? 'border-[#6A3A3A] bg-[#3A2626]' : 'border-[#47413B] bg-[#292725]'"
+        class="rounded-3xl border border-dashed px-6 py-14 text-center"
+        :class="tono === 'error' ? 'border-borgona/40 bg-borgona-hondo/40' : 'border-hilo-fuerte bg-velo'"
     >
-        <div class="relative mx-auto flex h-24 w-24 items-center justify-center">
-            <span
-                class="absolute inset-0 rounded-full border"
-                :class="tono === 'error' ? 'border-[#F0A8A8]/20' : 'border-[#C9A96E]/15'"
-            ></span>
-            <span
-                class="absolute inset-3 rounded-full border"
-                :class="tono === 'error' ? 'border-[#F0A8A8]/35' : 'border-[#C9A96E]/35'"
-            ></span>
-            <Icono
-                :name="icono"
-                class="relative h-9 w-9"
-                :class="tono === 'error' ? 'text-[#F0A8A8]' : 'text-[#C9A96E]'"
-            />
-        </div>
+        <Icono v-if="tono === 'error'" name="alerta" class="mx-auto h-10 w-10 text-borgona" />
+        <Monograma v-else :size="56" class="mx-auto opacity-60 grayscale-[35%]" />
 
-        <p
-            class="mt-5 font-serif text-2xl font-semibold"
-            :class="tono === 'error' ? 'text-[#F0A8A8]' : 'text-[#F3ECE0]'"
-        >
+        <h2 class="mt-5 text-2xl" :class="tono === 'error' ? 'text-borgona' : 'text-perla'">
             {{ titulo }}
-        </p>
+        </h2>
 
         <p
             v-if="descripcion"
-            class="mx-auto mt-2 max-w-md text-sm"
-            :class="tono === 'error' ? 'text-[#F0A8A8]/80' : 'text-[#BEB3A6]'"
+            class="mx-auto mt-2 max-w-md text-sm leading-relaxed"
+            :class="tono === 'error' ? 'text-borgona/85' : 'text-bruma'"
         >
             {{ descripcion }}
         </p>

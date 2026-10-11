@@ -28,18 +28,18 @@ const props = defineProps({
 })
 
 const baseClass =
-    'inline-flex items-center justify-center gap-2 rounded-md border px-4 py-2 text-sm font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3] disabled:cursor-not-allowed disabled:opacity-50'
+    'inline-flex items-center justify-center gap-2 rounded-full border px-5 py-2.5 text-sm font-medium transition duration-150 active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orquidea disabled:cursor-not-allowed disabled:opacity-50 disabled:active:scale-100'
 
 const variants = {
-    primary: 'border-transparent bg-[#D4C3A3] text-[#1C1B1A] enabled:hover:bg-[#E0CDAF]',
-    secondary: 'border-[#5B5147] bg-[#34302B] text-[#F3ECE0] enabled:hover:border-[#8C7961] enabled:hover:bg-[#403629]',
-    danger: 'border-[#6A3A3A] bg-[#3A2626] text-[#F0A8A8] enabled:hover:border-[#8A4A4A] enabled:hover:bg-[#472D2D]',
+    primary: 'border-transparent bg-orquidea text-noche enabled:hover:bg-orquidea-claro',
+    secondary: 'border-hilo-fuerte bg-transparent text-perla enabled:hover:border-bruma enabled:hover:bg-raso',
+    danger: 'border-borgona/40 bg-borgona-hondo text-borgona enabled:hover:border-borgona/70',
 }
 
 const linkHover = {
-    primary: 'hover:bg-[#E0CDAF]',
-    secondary: 'hover:border-[#8C7961] hover:bg-[#403629]',
-    danger: 'hover:border-[#8A4A4A] hover:bg-[#472D2D]',
+    primary: 'hover:bg-orquidea-claro',
+    secondary: 'hover:border-bruma hover:bg-raso',
+    danger: 'hover:border-borgona/70',
 }
 
 const variantClass = computed(() => variants[props.variant])

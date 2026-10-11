@@ -67,8 +67,8 @@ onBeforeUnmount(() => {
         <button
             type="button"
             :disabled="disabled"
-            class="flex w-full items-center justify-between gap-2 rounded-md border bg-[#34302B] px-3 py-2 text-left text-sm transition-colors enabled:hover:border-[#9C8A74] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3] disabled:cursor-not-allowed disabled:opacity-50"
-            :class="isOpen ? 'border-[#D4C3A3]' : 'border-[#7A6E61]'"
+            class="flex min-h-11 w-full items-center justify-between gap-2 rounded-xl border bg-terciopelo px-4 py-2.5 text-left text-sm transition-colors enabled:hover:border-hilo-fuerte focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orquidea/15 disabled:cursor-not-allowed disabled:opacity-50"
+            :class="isOpen ? 'border-orquidea ring-4 ring-orquidea/15' : 'border-hilo'"
             aria-haspopup="listbox"
             :aria-expanded="isOpen"
             @click="toggle"
@@ -76,15 +76,15 @@ onBeforeUnmount(() => {
             <span
                 :class="
                     selectedOption
-                        ? 'text-[#F3ECE0]'
-                        : 'text-[#BEB3A6]'
+                        ? 'text-perla'
+                        : 'text-niebla'
                 "
             >
                 {{ selectedOption ? selectedOption.label : placeholder }}
             </span>
 
             <svg
-                class="h-4 w-4 shrink-0 text-[#D4C3A3] transition-transform duration-150"
+                class="h-4 w-4 shrink-0 text-bruma transition-transform duration-200"
                 :class="{ 'rotate-180': isOpen }"
                 viewBox="0 0 20 20"
                 fill="currentColor"
@@ -100,7 +100,7 @@ onBeforeUnmount(() => {
 
         <Transition
             enter-active-class="transition duration-150 ease-out"
-            enter-from-class="opacity-0 -translate-y-1"
+            enter-from-class="opacity-0 -translate-y-1 scale-y-95"
             enter-to-class="opacity-100 translate-y-0"
             leave-active-class="transition duration-100 ease-in"
             leave-from-class="opacity-100 translate-y-0"
@@ -109,11 +109,11 @@ onBeforeUnmount(() => {
             <div
                 v-if="isOpen"
                 role="listbox"
-                class="absolute z-20 mt-1 max-h-60 w-full overflow-auto rounded-lg border border-[#5B5147] bg-[#34302B] py-1 shadow-xl"
+                class="scroll-fino absolute z-20 mt-2 max-h-64 w-full origin-top overflow-auto rounded-xl border border-hilo-fuerte bg-raso p-1.5 shadow-2xl shadow-black/50"
             >
                 <p
                     v-if="!options.length"
-                    class="px-4 py-2 text-sm text-[#BEB3A6]"
+                    class="px-3 py-2 text-sm text-niebla"
                 >
                     Sin opciones
                 </p>
@@ -124,9 +124,9 @@ onBeforeUnmount(() => {
                     type="button"
                     role="option"
                     :aria-selected="option.value === modelValue"
-                    class="flex w-full items-center justify-between gap-2 px-4 py-2 text-left text-sm text-[#F3ECE0] transition-colors hover:bg-[#403629] hover:text-[#E0CDAF] focus-visible:bg-[#403629] focus-visible:outline-none"
+                    class="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm text-perla transition-colors hover:bg-hilo focus-visible:bg-hilo focus-visible:outline-none"
                     :class="{
-                        'bg-[#403629] font-medium text-[#E0CDAF]':
+                        'bg-orquidea/15 font-medium text-orquidea-claro':
                             option.value === modelValue
                     }"
                     @click="select(option)"
@@ -135,7 +135,7 @@ onBeforeUnmount(() => {
 
                     <svg
                         v-if="option.value === modelValue"
-                        class="h-4 w-4 shrink-0 text-[#D4C3A3]"
+                        class="h-4 w-4 shrink-0 text-orquidea"
                         viewBox="0 0 20 20"
                         fill="currentColor"
                         aria-hidden="true"

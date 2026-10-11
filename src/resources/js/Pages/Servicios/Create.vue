@@ -130,47 +130,45 @@ async function guardar() {
 }
 
 const inputClass =
-    'w-full min-w-0 min-h-12 rounded-lg border bg-[#34302B] px-4 py-3 text-sm font-medium text-[#F3ECE0] placeholder:font-normal placeholder:text-[#BEB3A6] shadow-[0_3px_12px_rgba(0,0,0,0.12)] [color-scheme:dark] transition-all duration-150 hover:border-[#9C8A74] focus-visible:border-[#D4C3A3] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#D4C3A3]/30'
+    'w-full min-w-0 min-h-12 rounded-xl border bg-terciopelo px-4 py-3 text-sm text-perla placeholder:text-niebla [color-scheme:dark] transition-colors hover:border-hilo-fuerte focus-visible:border-orquidea focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orquidea/15'
 
 function inputBorder(campo) {
-    return error(campo) ? 'border-[#F19F9F]' : 'border-[#7A6E61]'
+    return error(campo) ? 'border-borgona' : 'border-hilo'
 }
 </script>
 
 <template>
     <AppLayout>
-        <div class="mx-auto max-w-6xl px-6 py-8">
+        <div class="mx-auto max-w-6xl px-6 py-10">
             <PageHeader
-                seccion="Salón"
                 titulo="Nuevo servicio"
                 descripcion="Agrega un servicio al catálogo con su precio y duración."
-                icono="agregar"
             />
 
             <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
                 <form
-                    class="min-w-0 rounded-xl border border-[#47413B] bg-[#292725]"
+                    class="min-w-0 rounded-[28px] border border-hilo bg-velo"
                     novalidate
                     @submit.prevent="guardar"
                 >
                     <div
                         v-if="errorGeneral"
                         role="alert"
-                        class="m-5 mb-0 flex items-start gap-2.5 rounded-lg border border-[#6A3A3A] bg-[#3A2626] px-4 py-3 text-sm text-[#F0A8A8] sm:m-6 sm:mb-0"
+                        class="m-5 mb-0 flex items-start gap-2.5 rounded-lg border border-borgona/40 bg-borgona-hondo px-4 py-3 text-sm text-borgona sm:m-6 sm:mb-0"
                     >
                         <Icono name="alerta" class="mt-0.5 h-4 w-4 shrink-0" />
                         {{ errorGeneral }}
                     </div>
 
                     <section class="p-5 sm:p-6">
-                        <h2 class="flex items-center gap-3 text-xl font-semibold text-[#F3ECE0]">
-                            <span class="flex h-7 w-7 items-center justify-center rounded-full border border-[#C9A96E] font-serif text-sm lining-nums text-[#E9D2A0]">1</span>
+                        <h2 class="flex items-center gap-3 text-2xl text-perla">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-orquidea font-display text-base text-noche">1</span>
                             Datos del servicio
                         </h2>
 
                         <div class="mt-5 grid gap-5 sm:grid-cols-2">
                             <div class="min-w-0">
-                                <label for="nombre" class="mb-1.5 block text-sm font-medium text-[#F3ECE0]">
+                                <label for="nombre" class="mb-1.5 block text-sm font-medium text-perla">
                                     Nombre
                                 </label>
                                 <input
@@ -184,13 +182,13 @@ function inputBorder(campo) {
                                     :class="[inputClass, inputBorder('nombre')]"
                                     @input="limpiarServidor('nombre')"
                                 />
-                                <p v-if="error('nombre')" id="nombre-error" class="mt-1.5 text-sm text-[#F0A8A8]">
+                                <p v-if="error('nombre')" id="nombre-error" class="mt-1.5 text-sm text-borgona">
                                     {{ error('nombre') }}
                                 </p>
                             </div>
 
                             <div class="min-w-0">
-                                <p class="mb-1.5 text-sm font-medium text-[#F3ECE0]">
+                                <p class="mb-1.5 text-sm font-medium text-perla">
                                     Categoría
                                 </p>
                                 <Dropdown
@@ -200,39 +198,39 @@ function inputBorder(campo) {
                                     :disabled="cargandoCategorias"
                                     @update:model-value="limpiarServidor('categoria_id')"
                                 />
-                                <p v-if="error('categoria_id')" class="mt-1.5 text-sm text-[#F0A8A8]">
+                                <p v-if="error('categoria_id')" class="mt-1.5 text-sm text-borgona">
                                     {{ error('categoria_id') }}
                                 </p>
                             </div>
                         </div>
 
                         <div class="mt-5">
-                            <label for="descripcion" class="mb-1.5 block text-sm font-medium text-[#F3ECE0]">
-                                Descripción <span class="font-normal text-[#BEB3A6]">(opcional)</span>
+                            <label for="descripcion" class="mb-1.5 block text-sm font-medium text-perla">
+                                Descripción <span class="font-normal text-bruma">(opcional)</span>
                             </label>
                             <textarea
                                 id="descripcion"
                                 v-model="form.descripcion"
                                 rows="3"
                                 placeholder="Detalle breve que ayude a la recepción a explicar el servicio."
-                                :class="[inputClass, 'border-[#7A6E61] resize-y']"
+                                :class="[inputClass, 'border-hilo resize-y']"
                             />
                         </div>
                     </section>
 
-                    <section class="border-t border-[#3D3934] p-5 sm:p-6">
-                        <h2 class="flex items-center gap-3 text-xl font-semibold text-[#F3ECE0]">
-                            <span class="flex h-7 w-7 items-center justify-center rounded-full border border-[#C9A96E] font-serif text-sm lining-nums text-[#E9D2A0]">2</span>
+                    <section class="border-t border-hilo p-5 sm:p-6">
+                        <h2 class="flex items-center gap-3 text-2xl text-perla">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-orquidea font-display text-base text-noche">2</span>
                             Duración y precio
                         </h2>
 
                         <div class="mt-5 grid gap-5 sm:grid-cols-2">
                             <div class="min-w-0">
-                                <label for="duracion" class="mb-1.5 block text-sm font-medium text-[#F3ECE0]">
+                                <label for="duracion" class="mb-1.5 block text-sm font-medium text-perla">
                                     Duración (minutos)
                                 </label>
                                 <div class="relative">
-                                    <Icono name="pendiente" class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#C9A96E]" />
+                                    <Icono name="pendiente" class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-orquidea" />
                                     <input
                                         id="duracion"
                                         v-model="form.duracion_minutos"
@@ -248,20 +246,20 @@ function inputBorder(campo) {
                                         @input="limpiarServidor('duracion_minutos')"
                                     />
                                 </div>
-                                <p v-if="error('duracion_minutos')" id="duracion-error" class="mt-1.5 text-sm text-[#F0A8A8]">
+                                <p v-if="error('duracion_minutos')" id="duracion-error" class="mt-1.5 text-sm text-borgona">
                                     {{ error('duracion_minutos') }}
                                 </p>
-                                <p v-else-if="duracionTexto" class="mt-1.5 text-sm text-[#BEB3A6]">
+                                <p v-else-if="duracionTexto" class="mt-1.5 text-sm text-bruma">
                                     {{ duracionTexto }}
                                 </p>
                             </div>
 
                             <div class="min-w-0">
-                                <label for="precio" class="mb-1.5 block text-sm font-medium text-[#F3ECE0]">
+                                <label for="precio" class="mb-1.5 block text-sm font-medium text-perla">
                                     Precio
                                 </label>
                                 <div class="relative">
-                                    <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-medium text-[#C9A96E]">
+                                    <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-medium text-orquidea">
                                         Gs.
                                     </span>
                                     <input
@@ -276,43 +274,43 @@ function inputBorder(campo) {
                                         @input="limpiarServidor('precio')"
                                     />
                                 </div>
-                                <p v-if="error('precio')" id="precio-error" class="mt-1.5 text-sm text-[#F0A8A8]">
+                                <p v-if="error('precio')" id="precio-error" class="mt-1.5 text-sm text-borgona">
                                     {{ error('precio') }}
                                 </p>
-                                <p v-else id="precio-ayuda" class="mt-1.5 text-sm text-[#BEB3A6]">
+                                <p v-else id="precio-ayuda" class="mt-1.5 text-sm text-bruma">
                                     Rige desde hoy.
                                 </p>
                             </div>
                         </div>
                     </section>
 
-                    <section class="border-t border-[#3D3934] p-5 sm:p-6">
-                        <h2 class="flex items-center gap-3 text-xl font-semibold text-[#F3ECE0]">
-                            <span class="flex h-7 w-7 items-center justify-center rounded-full border border-[#C9A96E] font-serif text-sm lining-nums text-[#E9D2A0]">3</span>
+                    <section class="border-t border-hilo p-5 sm:p-6">
+                        <h2 class="flex items-center gap-3 text-2xl text-perla">
+                            <span class="flex h-8 w-8 items-center justify-center rounded-full bg-orquidea font-display text-base text-noche">3</span>
                             Disponibilidad
                         </h2>
 
                         <label
                             class="mt-5 flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors"
-                            :class="form.activo ? 'border-[#867158] bg-[#403629]' : 'border-[#5B5147] hover:border-[#8C7961]'"
+                            :class="form.activo ? 'border-orquidea/40 bg-orquidea/12' : 'border-hilo-fuerte hover:border-hilo-fuerte'"
                         >
                             <input
                                 v-model="form.activo"
                                 type="checkbox"
-                                class="mt-0.5 h-4 w-4 shrink-0 accent-[#D4C3A3] [color-scheme:dark]"
+                                class="mt-0.5 h-4 w-4 shrink-0 accent-orquidea [color-scheme:dark]"
                             />
                             <span class="min-w-0">
-                                <span class="block text-sm font-medium text-[#F3ECE0]">
+                                <span class="block text-sm font-medium text-perla">
                                     Disponible para reservas
                                 </span>
-                                <span class="block text-sm text-[#BEB3A6]">
+                                <span class="block text-sm text-bruma">
                                     Si lo desmarcas, el servicio se guarda pero no aparece al crear reservas.
                                 </span>
                             </span>
                         </label>
                     </section>
 
-                    <div class="flex flex-col-reverse gap-3 rounded-b-xl border-t border-[#3D3934] bg-[#262321] p-5 sm:flex-row sm:justify-end sm:px-6">
+                    <div class="flex flex-col-reverse gap-3 rounded-b-[28px] border-t border-hilo bg-velo p-5 sm:flex-row sm:justify-end sm:px-6">
                         <Button label="Cancelar" href="/servicios" variant="secondary" class="w-full sm:w-auto" />
                         <Button type="submit" :disabled="enviando" class="w-full sm:w-auto">
                             <Icono name="completada" class="h-4 w-4" />
@@ -322,34 +320,33 @@ function inputBorder(campo) {
                 </form>
 
                 <aside class="lg:sticky lg:top-24 lg:self-start">
-                    <p class="mb-3 font-serif text-lg italic text-[#BEB3A6]">Así se verá en el catálogo</p>
+                    <p class="mb-3 text-sm font-medium text-bruma">Así se verá en el catálogo</p>
 
-                    <div class="relative overflow-hidden rounded-xl border border-[#867158] bg-gradient-to-br from-[#403629] to-[#2C2723] p-5">
-                        <div class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-[#C9A96E] via-[#E9D2A0] to-[#C9A96E]"></div>
-
+                    <div class="relative overflow-hidden rounded-[28px] bg-orquidea-hondo/35 ring-1 ring-inset ring-orquidea/25 p-5">
+                        
                         <div class="flex items-start justify-between gap-3">
-                            <span class="flex h-12 w-12 items-center justify-center rounded-full border border-[#C9A96E] bg-[#C9A96E]/15 text-[#E9D2A0]">
+                            <span class="flex h-12 w-12 items-center justify-center rounded-full border border-orquidea bg-orquidea/15 text-orquidea-claro">
                                 <Icono name="servicios" class="h-6 w-6" />
                             </span>
                             <StatusBadge :status="form.activo ? 'activo' : 'inactivo'" />
                         </div>
 
-                        <p class="mt-4 font-serif text-2xl font-semibold leading-tight text-[#F3ECE0]">
+                        <p class="mt-4 font-display text-2xl leading-tight text-perla">
                             {{ form.nombre.trim() || 'Nombre del servicio' }}
                         </p>
-                        <p class="mt-1 text-sm" :class="categoriaElegida ? 'text-[#E0CDAF]' : 'text-[#8C7F70]'">
+                        <p class="mt-1 text-sm" :class="categoriaElegida ? 'text-perla' : 'text-niebla'">
                             {{ categoriaElegida || 'Sin categoría' }}
                         </p>
-                        <p v-if="form.descripcion.trim()" class="mt-3 font-serif text-base italic text-[#BEB3A6]">
+                        <p v-if="form.descripcion.trim()" class="mt-3 text-sm text-bruma">
                             {{ form.descripcion.trim() }}
                         </p>
 
-                        <div class="mt-5 flex items-end justify-between gap-3 border-t border-[#5B5147] pt-4">
-                            <span class="inline-flex items-center gap-1.5 text-sm text-[#BEB3A6]">
-                                <Icono name="pendiente" class="h-4 w-4 text-[#C9A96E]" />
+                        <div class="mt-5 flex items-end justify-between gap-3 border-t border-hilo-fuerte pt-4">
+                            <span class="inline-flex items-center gap-1.5 text-sm text-bruma">
+                                <Icono name="pendiente" class="h-4 w-4 text-orquidea" />
                                 {{ duracionVista || '— min' }}
                             </span>
-                            <span class="font-serif text-2xl font-semibold lining-nums text-[#F3ECE0]">
+                            <span class="font-display text-2xl tabular-nums text-perla">
                                 {{ form.precio === '' ? 'Gs. —' : guaranies(form.precio) }}
                             </span>
                         </div>

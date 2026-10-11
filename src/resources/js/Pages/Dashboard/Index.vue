@@ -5,6 +5,8 @@ import AppLayout from '../../Layouts/AppLayout.vue'
 import Button from '../../Components/Button.vue'
 import StatusBadge from '../../Components/StatusBadge.vue'
 import Icono from '../../Components/Icono.vue'
+import PageHeader from '../../Components/PageHeader.vue'
+import EstadoVacio from '../../Components/EstadoVacio.vue'
 import { guaranies } from '../../api'
 
 const personal = [
@@ -171,7 +173,6 @@ const fechaLarga = hoy.toLocaleDateString('es-PY', {
     weekday: 'long',
     day: 'numeric',
     month: 'long',
-    year: 'numeric',
 })
 
 function hora(valor) {
@@ -191,9 +192,6 @@ function iniciales(nombre, apellido) {
     return `${nombre[0] ?? ''}${apellido[0] ?? ''}`.toUpperCase()
 }
 
-const horaActual = new Date().getHours()
-
-const saludo = horaActual < 12 ? 'Buen día' : horaActual < 19 ? 'Buenas tardes' : 'Buenas noches'
 
 const reservasHoy = computed(() =>
     reservas
@@ -209,24 +207,22 @@ function contar(estado) {
     return reservasHoy.value.filter((reserva) => reserva.estado === estado).length
 }
 
-const tarjetas = computed(() => [
-    { clave: 'total', titulo: 'Reservas de hoy', detalle: 'En la agenda del día', icono: 'total', valor: reservasHoy.value.length, destacada: false },
-    { clave: 'pendientes', titulo: 'Pendientes', detalle: 'Esperan confirmación', icono: 'pendiente', valor: contar('pendiente'), destacada: true },
-    { clave: 'completadas', titulo: 'Completadas', detalle: 'Atenciones terminadas', icono: 'completada', valor: contar('completada'), destacada: false },
-    { clave: 'canceladas', titulo: 'Canceladas', detalle: 'No cuentan en el ingreso', icono: 'cancelada', valor: contar('cancelada'), destacada: false },
+const resumenEstados = computed(() => [
+    { estado: 'pendiente', titulo: 'Pendientes', valor: contar('pendiente') },
+    { estado: 'confirmada', titulo: 'Confirmadas', valor: contar('confirmada') },
+    { estado: 'completada', titulo: 'Completadas', valor: contar('completada') },
+    { estado: 'cancelada', titulo: 'Canceladas', valor: contar('cancelada') },
 ])
 
 const resumen = computed(() => {
     const total = reservasHoy.value.length
-    const pendientes = contar('pendiente')
-
     if (!total) return 'Hoy no hay citas en agenda.'
 
-    const citas = total === 1 ? '1 cita' : `${total} citas`
-    if (!pendientes) return `Hoy hay ${citas} en agenda y todas están confirmadas o atendidas.`
+    const pendientes = contar('pendiente')
+    const citas = total === 1 ? 'Una cita' : `${total} citas`
+    if (!pendientes) return `${citas} en agenda, todas confirmadas o atendidas.`
 
-    const esperan = pendientes === 1 ? '1 espera confirmación' : `${pendientes} esperan confirmación`
-    return `Hoy hay ${citas} en agenda y ${esperan}.`
+    return `${citas} en agenda, ${pendientes === 1 ? 'una espera' : `${pendientes} esperan`} confirmación.`
 })
 
 const ingresoEstimado = computed(() =>
@@ -261,11 +257,11 @@ const serviciosDelDia = computed(() => {
     return lista.map((item) => ({ ...item, ancho: Math.round((item.cantidad / maximo) * 100) }))
 })
 
-const colorPunto = {
-    pendiente: 'bg-[#C9A96E] ring-[#C9A96E]/25',
-    confirmada: 'bg-[#9AD9AE] ring-[#9AD9AE]/20',
-    completada: 'bg-[#7A6E61] ring-[#7A6E61]/25',
-    cancelada: 'bg-[#F0A8A8] ring-[#F0A8A8]/20',
+const tintes = {
+    pendiente: 'bg-miel text-noche',
+    confirmada: 'bg-menta text-noche',
+    completada: 'bg-ceniza/80 text-noche',
+    cancelada: 'bg-[repeating-linear-gradient(135deg,var(--color-borgona-hondo)_0_6px,transparent_6px_12px)] text-borgona ring-1 ring-inset ring-borgona/40',
 }
 
 function turnoDeHoy(persona) {
@@ -287,257 +283,232 @@ const personalHoy = computed(() =>
             return {
                 id: persona.id,
                 nombre: `${persona.nombre} ${persona.apellido}`,
+                pila: persona.nombre,
                 iniciales: iniciales(persona.nombre, persona.apellido),
                 horario: `${hora(turno.hora_inicio)} – ${hora(turno.hora_fin)}`,
+                turno,
                 reservas: propias.length,
                 ocupacion: disponibles ? Math.min(100, Math.round((ocupados / disponibles) * 100)) : 0,
             }
         })
 )
+
+const rangoAgenda = computed(() => {
+    const turnos = personalHoy.value.map((persona) => persona.turno)
+    if (!turnos.length) return { inicio: 8 * 60, fin: 18 * 60 }
+
+    return {
+        inicio: Math.floor(Math.min(...turnos.map((t) => minutos(t.hora_inicio))) / 60) * 60,
+        fin: Math.ceil(Math.max(...turnos.map((t) => minutos(t.hora_fin))) / 60) * 60,
+    }
+})
+
+const horasAgenda = computed(() => {
+    const lista = []
+    for (let m = rangoAgenda.value.inicio; m <= rangoAgenda.value.fin; m += 60) lista.push(m)
+    return lista
+})
+
+function posicion(inicio, fin) {
+    const { inicio: desde, fin: hasta } = rangoAgenda.value
+    const total = hasta - desde
+
+    return {
+        left: `${((inicio - desde) / total) * 100}%`,
+        width: `${((fin - inicio) / total) * 100}%`,
+    }
+}
+
+const filasAgenda = computed(() =>
+    personalHoy.value.map((persona, indice) => ({
+        ...persona,
+        fueraDeTurno: [
+            posicion(rangoAgenda.value.inicio, minutos(persona.turno.hora_inicio)),
+            posicion(minutos(persona.turno.hora_fin), rangoAgenda.value.fin),
+        ],
+        bloques: reservasHoy.value
+            .filter((reserva) => reserva.personal_id === persona.id)
+            .map((reserva, orden) => ({
+                reserva,
+                estilo: {
+                    ...posicion(minutos(reserva.hora_inicio), minutos(reserva.hora_fin)),
+                    animationDelay: `${indice * 120 + orden * 70}ms`,
+                },
+            })),
+    }))
+)
+
+const proximas = computed(() =>
+    reservasHoy.value.filter((reserva) => ['pendiente', 'confirmada'].includes(reserva.estado))
+)
+
+function etiquetaHora(minuto) {
+    return `${String(Math.floor(minuto / 60)).padStart(2, '0')}:00`
+}
 </script>
 
 <template>
     <AppLayout>
-        <div class="mx-auto max-w-7xl px-6 py-8">
-            <section class="relative overflow-hidden rounded-2xl border border-[#5B5147] bg-gradient-to-br from-[#3A3128] via-[#2A2622] to-[#1F1D1B] px-6 py-7 sm:px-8 sm:py-9">
-                <div class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-transparent via-[#C9A96E] to-transparent"></div>
+        <div class="mx-auto max-w-7xl px-6 py-10">
+            <PageHeader :titulo="fechaLarga" :descripcion="resumen" class="[&_h1]:first-letter:uppercase">
+                <Button href="/reservas" variant="secondary">Ver todas las reservas</Button>
+                <Button href="/reservas/crear" variant="primary">
+                    <Icono name="agregar" class="h-4 w-4" />
+                    Nueva reserva
+                </Button>
+            </PageHeader>
 
-                <svg
-                    class="pointer-events-none absolute -right-8 top-1/2 h-80 w-80 -translate-y-1/2 text-[#C9A96E]/15"
-                    viewBox="0 0 200 200"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="1.2"
-                    stroke-linecap="round"
-                    aria-hidden="true"
-                >
-                    <path d="M25 160 C 55 110, 45 60, 95 32 S 166 18, 160 78" />
-                    <path d="M40 170 C 70 120, 60 70, 110 40 S 180 30, 170 90" />
-                    <path d="M55 178 C 85 128, 75 78, 125 48 S 190 45, 178 100" />
-                    <path d="M70 186 C 100 136, 90 86, 140 56 S 196 62, 184 110" />
-                    <circle cx="150" cy="150" r="22" />
-                    <circle cx="150" cy="150" r="14" />
-                </svg>
+            <section class="mt-10 rounded-[28px] border border-hilo bg-velo p-5 sm:p-7" aria-labelledby="titulo-sillones">
+                <div class="flex flex-wrap items-baseline justify-between gap-x-6 gap-y-3">
+                    <h2 id="titulo-sillones" class="text-2xl">Sillones de hoy</h2>
 
-                <div class="relative max-w-xl">
-                    <p class="flex items-center gap-2 text-[0.6875rem] font-medium uppercase tracking-[0.3em] text-[#C9A96E]">
-                        <Icono name="destello" class="h-3.5 w-3.5" />
-                        <span class="lining-nums">{{ fechaLarga }}</span>
-                    </p>
+                    <ul class="flex flex-wrap gap-x-5 gap-y-2 text-xs text-bruma">
+                        <li v-for="item in resumenEstados" :key="item.estado" class="flex items-center gap-2">
+                            <span class="h-3 w-1.5 rounded-full" :class="tintes[item.estado]" aria-hidden="true"></span>
+                            {{ item.titulo }}
+                            <span class="tabular-nums text-perla">{{ item.valor }}</span>
+                        </li>
+                    </ul>
+                </div>
 
-                    <h1 class="mt-3 text-4xl font-semibold text-[#F3ECE0] sm:text-5xl">
-                        {{ saludo }}, equipo
-                    </h1>
+                <div v-if="filasAgenda.length" class="scroll-fino -mx-5 mt-6 overflow-x-auto px-5 pb-2 sm:-mx-7 sm:px-7">
+                    <div class="min-w-[760px]">
+                        <div class="relative ml-40 h-6">
+                            <span
+                                v-for="minuto in horasAgenda"
+                                :key="minuto"
+                                class="absolute -translate-x-1/2 text-xs tabular-nums text-niebla"
+                                :style="{ left: posicion(rangoAgenda.inicio, minuto).width }"
+                            >
+                                {{ etiquetaHora(minuto) }}
+                            </span>
+                        </div>
 
-                    <p class="mt-3 font-serif text-xl italic leading-snug text-[#E0CDAF] lining-nums">
-                        {{ resumen }}
-                    </p>
+                        <div
+                            v-for="fila in filasAgenda"
+                            :key="fila.id"
+                            class="flex items-center border-t border-hilo/70 py-3 first-of-type:border-t-0"
+                        >
+                            <div class="flex w-40 shrink-0 items-center gap-3 pr-4">
+                                <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-raso font-display text-base text-orquidea-claro">
+                                    {{ fila.iniciales }}
+                                </span>
+                                <div class="min-w-0">
+                                    <p class="truncate text-sm font-medium">{{ fila.pila }}</p>
+                                    <p class="text-xs tabular-nums text-niebla">{{ fila.horario }}</p>
+                                </div>
+                            </div>
 
-                    <div class="mt-7 flex flex-wrap gap-3">
-                        <Button href="/reservas/crear">
-                            <Icono name="agregar" class="h-4 w-4" />
-                            Nueva reserva
-                        </Button>
-                        <Button href="/reservas" variant="secondary">
-                            <Icono name="reservas" class="h-4 w-4" />
-                            Ver agenda completa
-                        </Button>
+                            <div class="relative h-16 flex-1 rounded-2xl bg-terciopelo">
+                                <span
+                                    v-for="minuto in horasAgenda.slice(1, -1)"
+                                    :key="minuto"
+                                    class="absolute inset-y-2 w-px bg-hilo/60"
+                                    :style="{ left: posicion(rangoAgenda.inicio, minuto).width }"
+                                    aria-hidden="true"
+                                ></span>
+
+                                <span
+                                    v-for="(zona, i) in fila.fueraDeTurno"
+                                    :key="i"
+                                    class="absolute inset-y-0 bg-[repeating-linear-gradient(135deg,var(--color-velo)_0_4px,transparent_4px_9px)]"
+                                    :class="i === 0 ? 'rounded-l-2xl' : 'rounded-r-2xl'"
+                                    :style="zona"
+                                    aria-hidden="true"
+                                ></span>
+
+                                <div
+                                    v-for="bloque in fila.bloques"
+                                    :key="bloque.reserva.id"
+                                    class="absolute inset-y-1.5 origin-left animate-crecer overflow-hidden rounded-xl px-2.5 py-1.5"
+                                    :class="tintes[bloque.reserva.estado]"
+                                    :style="bloque.estilo"
+                                    :title="`${hora(bloque.reserva.hora_inicio)} a ${hora(bloque.reserva.hora_fin)}: ${bloque.reserva.cliente.nombre} ${bloque.reserva.cliente.apellido}, ${nombresServicios(bloque.reserva)}`"
+                                >
+                                    <p class="truncate text-xs font-semibold leading-tight">
+                                        {{ bloque.reserva.cliente.nombre }} {{ bloque.reserva.cliente.apellido[0] }}.
+                                    </p>
+                                    <p class="truncate text-[0.6875rem] leading-tight opacity-80">
+                                        {{ hora(bloque.reserva.hora_inicio) }} {{ nombresServicios(bloque.reserva) }}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
                     </div>
                 </div>
+
+                <EstadoVacio
+                    v-else
+                    class="mt-6"
+                    titulo="Nadie tiene turno hoy"
+                    descripcion="Cuando haya profesionales con turno, sus citas aparecen aquí en una línea de tiempo."
+                />
             </section>
 
-            <div class="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
-                <div
-                    v-for="tarjeta in tarjetas"
-                    :key="tarjeta.clave"
-                    class="relative flex min-w-0 flex-col items-start gap-3 overflow-hidden rounded-xl border p-4 sm:flex-row sm:items-center sm:gap-4 sm:p-5"
-                    :class="tarjeta.destacada ? 'border-[#867158] bg-[#403629]' : 'border-[#47413B] bg-[#292725]'"
-                >
-                    <div
-                        v-if="tarjeta.destacada"
-                        class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-[#C9A96E] via-[#E9D2A0] to-[#C9A96E]"
-                    ></div>
-
-                    <span
-                        class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border"
-                        :class="tarjeta.destacada ? 'border-[#C9A96E] bg-[#C9A96E]/20 text-[#E9D2A0]' : 'border-[#C9A96E]/50 bg-[#C9A96E]/10 text-[#E0CDAF]'"
-                    >
-                        <Icono :name="tarjeta.icono" class="h-6 w-6" />
-                    </span>
-
-                    <div class="min-w-0">
-                        <p class="font-serif text-4xl font-semibold leading-none lining-nums text-[#F3ECE0]">
-                            {{ tarjeta.valor }}
-                        </p>
-                        <p class="mt-1.5 text-xs font-medium uppercase tracking-wide" :class="tarjeta.destacada ? 'text-[#E0CDAF]' : 'text-[#C7BEB3]'">
-                            {{ tarjeta.titulo }}
-                        </p>
-                        <p class="mt-0.5 hidden text-xs text-[#8C7F70] sm:block">
-                            {{ tarjeta.detalle }}
-                        </p>
-                    </div>
-                </div>
-            </div>
-
-            <div class="mt-6 grid gap-6 lg:grid-cols-3">
-                <section class="min-w-0 rounded-xl border border-[#47413B] bg-[#292725] lg:col-span-2">
-                    <div class="flex items-center justify-between gap-4 border-b border-[#47413B] px-4 py-4 sm:px-6">
-                        <h2 class="flex items-center gap-2.5 text-2xl font-semibold text-[#F3ECE0]">
-                            <Icono name="reservas" class="h-5 w-5 text-[#C9A96E]" />
-                            Agenda de hoy
-                        </h2>
-
+            <div class="mt-8 grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
+                <section aria-labelledby="titulo-proximas">
+                    <div class="flex items-baseline justify-between gap-4">
+                        <h2 id="titulo-proximas" class="text-2xl">Por atender</h2>
                         <Link
                             href="/reservas"
-                            class="shrink-0 rounded text-sm text-[#D4C3A3] transition-colors hover:text-[#F3ECE0] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3]"
+                            class="rounded text-sm text-orquidea underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orquidea"
                         >
-                            Ver todas →
+                            Ver agenda
                         </Link>
                     </div>
 
-                    <ol v-if="reservasHoy.length" class="relative mx-4 my-5 border-l border-[#5B5147] sm:mx-6">
-                        <li
-                            v-for="reserva in reservasHoy"
-                            :key="reserva.id"
-                            class="relative mb-3 ml-5 min-w-0 last:mb-0 sm:ml-6"
-                        >
-                            <span
-                                class="absolute -left-[1.61rem] top-[1.1rem] h-3 w-3 rounded-full ring-4 sm:-left-[1.86rem]"
-                                :class="colorPunto[reserva.estado]"
-                                aria-hidden="true"
-                            ></span>
-
-                            <div
-                                class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-[#3D3934] bg-[#2E2B28] px-4 py-3 transition-colors hover:border-[#C9A96E]/50 hover:bg-[#332F2B]"
-                                :class="{ 'opacity-60': reserva.estado === 'cancelada' }"
-                            >
-                                <p class="w-16 font-serif text-xl font-semibold lining-nums tabular-nums text-[#E0CDAF]">
-                                    {{ hora(reserva.hora_inicio) }}
+                    <ol v-if="proximas.length" class="mt-4 divide-y divide-hilo/70 border-y border-hilo/70">
+                        <li v-for="reserva in proximas" :key="reserva.id" class="flex items-center gap-4 py-4">
+                            <p class="w-14 shrink-0 font-display text-2xl tabular-nums">{{ hora(reserva.hora_inicio) }}</p>
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate font-medium">{{ reserva.cliente.nombre }} {{ reserva.cliente.apellido }}</p>
+                                <p class="truncate text-sm text-bruma">
+                                    {{ nombresServicios(reserva) }}, con {{ reserva.personal.nombre }}
                                 </p>
-
-                                <span
-                                    class="hidden h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#403629] text-xs font-semibold text-[#E0CDAF] sm:flex"
-                                    aria-hidden="true"
-                                >
-                                    {{ iniciales(reserva.cliente.nombre, reserva.cliente.apellido) }}
-                                </span>
-
-                                <div class="order-3 w-full min-w-0 sm:order-none sm:w-auto sm:flex-1">
-                                    <p class="truncate text-sm font-medium text-[#F3ECE0]">
-                                        {{ reserva.cliente.nombre }} {{ reserva.cliente.apellido }}
-                                    </p>
-                                    <p class="truncate text-xs text-[#BEB3A6]">
-                                        {{ nombresServicios(reserva) }} · con {{ reserva.personal.nombre }} · hasta {{ hora(reserva.hora_fin) }}
-                                    </p>
-                                </div>
-
-                                <StatusBadge :status="reserva.estado" class="ml-auto sm:ml-0" />
                             </div>
+                            <StatusBadge :status="reserva.estado" />
                         </li>
                     </ol>
 
-                    <div v-else class="px-5 py-14 text-center">
-                        <Icono name="reservas" class="mx-auto h-12 w-12 text-[#5B5147]" />
-                        <p class="mt-3 font-serif text-xl italic text-[#BEB3A6]">
-                            No hay reservas para hoy.
-                        </p>
-                        <Button label="+ Nueva reserva" href="/reservas/crear" variant="secondary" class="mt-4" />
-                    </div>
+                    <p v-else class="mt-4 rounded-2xl bg-velo px-5 py-8 text-center text-sm text-bruma">
+                        No quedan citas por atender hoy.
+                    </p>
                 </section>
 
-                <div class="min-w-0 space-y-6">
-                    <section class="relative overflow-hidden rounded-xl border border-[#867158] bg-gradient-to-br from-[#4A3E2F] to-[#352E26] p-6">
-                        <div class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-[#C9A96E] via-[#E9D2A0] to-[#C9A96E]"></div>
+                <div class="space-y-8">
+                    <section class="rounded-[28px] bg-orquidea-hondo/35 p-6 ring-1 ring-inset ring-orquidea/25" aria-labelledby="titulo-caja">
+                        <h2 id="titulo-caja" class="text-lg text-orquidea-claro">Caja estimada de hoy</h2>
+                        <p class="mt-2 font-display text-[2.75rem] leading-none tabular-nums">{{ guaranies(ingresoEstimado) }}</p>
 
-                        <p class="text-[0.6875rem] font-medium uppercase tracking-[0.25em] text-[#C9A96E]">
-                            Ingreso estimado del día
-                        </p>
-                        <p class="mt-2 font-serif text-4xl font-semibold lining-nums text-[#F3ECE0]">
-                            {{ guaranies(ingresoEstimado) }}
-                        </p>
-
-                        <div class="mt-4 h-1.5 rounded-full bg-[#1C1B1A]/50">
-                            <div
-                                class="h-1.5 rounded-full bg-gradient-to-r from-[#C9A96E] to-[#E9D2A0]"
-                                :style="{ width: `${porcentajeCobrado}%` }"
-                            ></div>
+                        <div
+                            class="mt-5 flex h-2.5 overflow-hidden rounded-full bg-noche/50"
+                            role="img"
+                            :aria-label="`${porcentajeCobrado}% ya atendido`"
+                        >
+                            <div class="h-full rounded-full bg-orquidea" :style="{ width: `${porcentajeCobrado}%` }"></div>
                         </div>
 
-                        <p class="mt-2 text-xs text-[#E0CDAF] lining-nums">
-                            {{ guaranies(ingresoCobrado) }} ya atendido ({{ porcentajeCobrado }}%) · sin contar canceladas
+                        <p class="mt-3 text-sm text-bruma">
+                            {{ guaranies(ingresoCobrado) }} ya atendido. No incluye citas canceladas.
                         </p>
                     </section>
 
-                    <section class="rounded-xl border border-[#51483F] bg-[#34302B]">
-                        <div class="border-b border-[#51483F] px-5 py-4">
-                            <h2 class="flex items-center gap-2.5 text-2xl font-semibold text-[#F3ECE0]">
-                                <Icono name="personal" class="h-5 w-5 text-[#C9A96E]" />
-                                Equipo de hoy
-                            </h2>
-                        </div>
+                    <section aria-labelledby="titulo-pedidos">
+                        <h2 id="titulo-pedidos" class="text-2xl">Lo más pedido</h2>
 
-                        <ul v-if="personalHoy.length" class="space-y-5 px-5 py-5">
-                            <li v-for="persona in personalHoy" :key="persona.id" class="flex items-center gap-3">
-                                <span
-                                    class="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#E9D2A0] to-[#9C7E4C] p-[1.5px]"
-                                    aria-hidden="true"
-                                >
-                                    <span class="flex h-full w-full items-center justify-center rounded-full bg-[#292725] font-serif text-lg font-semibold text-[#E9D2A0]">
-                                        {{ persona.iniciales }}
-                                    </span>
-                                </span>
-
-                                <div class="min-w-0 flex-1">
-                                    <div class="flex items-baseline justify-between gap-2">
-                                        <p class="truncate text-sm font-medium text-[#F3ECE0]">
-                                            {{ persona.nombre }}
-                                        </p>
-                                        <p class="shrink-0 text-xs text-[#E0CDAF] lining-nums">
-                                            {{ persona.reservas }} {{ persona.reservas === 1 ? 'cita' : 'citas' }}
-                                        </p>
-                                    </div>
-
-                                    <p class="text-xs text-[#BEB3A6] lining-nums">
-                                        {{ persona.horario }} · {{ persona.ocupacion }}% ocupado
-                                    </p>
-
-                                    <div class="mt-1.5 h-1 rounded-full bg-[#292725]">
-                                        <div class="h-1 rounded-full bg-[#C9A96E]" :style="{ width: `${persona.ocupacion}%` }"></div>
-                                    </div>
-                                </div>
-                            </li>
-                        </ul>
-
-                        <p v-else class="px-5 py-8 text-center font-serif text-lg italic text-[#BEB3A6]">
-                            Ningún profesional tiene turno hoy.
-                        </p>
-                    </section>
-
-                    <section class="rounded-xl border border-[#47413B] bg-[#292725]">
-                        <div class="border-b border-[#47413B] px-5 py-4">
-                            <h2 class="flex items-center gap-2.5 text-2xl font-semibold text-[#F3ECE0]">
-                                <Icono name="servicios" class="h-5 w-5 text-[#C9A96E]" />
-                                Servicios del día
-                            </h2>
-                        </div>
-
-                        <ul v-if="serviciosDelDia.length" class="space-y-3.5 px-5 py-5">
+                        <ul v-if="serviciosDelDia.length" class="mt-4 space-y-3">
                             <li v-for="servicio in serviciosDelDia" :key="servicio.nombre">
                                 <div class="flex items-baseline justify-between gap-3 text-sm">
-                                    <p class="truncate text-[#F3ECE0]">{{ servicio.nombre }}</p>
-                                    <p class="shrink-0 font-serif text-lg font-semibold lining-nums text-[#E0CDAF]">
-                                        {{ servicio.cantidad }}
-                                    </p>
+                                    <span class="truncate">{{ servicio.nombre }}</span>
+                                    <span class="shrink-0 tabular-nums text-bruma">{{ servicio.cantidad }}</span>
                                 </div>
-                                <div class="mt-1 h-1 rounded-full bg-[#34302B]">
-                                    <div class="h-1 rounded-full bg-[#867158]" :style="{ width: `${servicio.ancho}%` }"></div>
+                                <div class="mt-1.5 h-1.5 rounded-full bg-terciopelo">
+                                    <div class="h-full rounded-full bg-miel/80" :style="{ width: `${servicio.ancho}%` }"></div>
                                 </div>
                             </li>
                         </ul>
 
-                        <p v-else class="px-5 py-8 text-center font-serif text-lg italic text-[#BEB3A6]">
-                            Todavía no hay servicios agendados.
-                        </p>
+                        <p v-else class="mt-4 text-sm text-bruma">Todavía no hay servicios agendados.</p>
                     </section>
                 </div>
             </div>

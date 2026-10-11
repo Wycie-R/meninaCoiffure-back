@@ -41,12 +41,12 @@ function go(link) {
             type="button"
             :disabled="!link.url"
             :aria-current="link.active ? 'page' : undefined"
-            class="min-w-9 items-center justify-center rounded-md border px-3 py-1.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3] disabled:cursor-not-allowed disabled:opacity-40"
+            class="min-w-9 items-center justify-center rounded-full px-3 py-1.5 text-sm tabular-nums transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orquidea disabled:cursor-not-allowed disabled:opacity-35"
             :class="[
                 displayClass(link, index),
                 link.active
-                    ? 'cursor-default border-transparent bg-[#D4C3A3] font-medium text-[#1C1B1A]'
-                    : 'border-[#5B5147] bg-[#292725] text-[#F3ECE0] enabled:hover:border-[#8C7961] enabled:hover:bg-[#34302B]',
+                    ? 'cursor-default bg-orquidea font-medium text-noche'
+                    : 'text-bruma enabled:hover:bg-raso enabled:hover:text-perla',
             ]"
             @click="go(link)"
         >

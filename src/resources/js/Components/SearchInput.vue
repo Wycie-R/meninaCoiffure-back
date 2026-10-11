@@ -20,7 +20,7 @@ const emit = defineEmits(['update:modelValue'])
 <template>
     <div class="relative w-full">
         <svg
-            class="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#BEB3A6]"
+            class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-niebla"
             :class="{ 'opacity-50': disabled }"
             viewBox="0 0 20 20"
             fill="none"
@@ -38,7 +38,7 @@ const emit = defineEmits(['update:modelValue'])
             :placeholder="placeholder"
             :disabled="disabled"
             :aria-label="placeholder"
-            class="w-full rounded-md border border-[#7A6E61] bg-[#34302B] py-2 pl-9 pr-3 text-sm text-[#F3ECE0] placeholder:text-[#BEB3A6] transition-colors enabled:hover:border-[#9C8A74] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3] disabled:cursor-not-allowed disabled:opacity-50"
+            class="w-full rounded-xl border border-hilo bg-terciopelo py-2.5 pl-10 pr-4 text-sm text-perla placeholder:text-niebla transition-colors enabled:hover:border-hilo-fuerte focus-visible:border-orquidea focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-orquidea/15 disabled:cursor-not-allowed disabled:opacity-50"
             @input="emit('update:modelValue', $event.target.value)"
         />
     </div>

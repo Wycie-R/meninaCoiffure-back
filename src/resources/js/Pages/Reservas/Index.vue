@@ -8,6 +8,7 @@ import Pagination from '../../Components/Pagination.vue'
 import PageHeader from '../../Components/PageHeader.vue'
 import EstadoVacio from '../../Components/EstadoVacio.vue'
 import Icono from '../../Components/Icono.vue'
+import { guaranies } from '../../api'
 
 const ana = { id: 1, nombre: 'Ana', apellido: 'Gómez', telefono: '0981111222', email: 'ana.gomez@example.com' }
 const beatriz = { id: 2, nombre: 'Beatriz', apellido: 'López', telefono: '0982333444', email: 'beatriz.lopez@example.com' }
@@ -62,19 +63,26 @@ const reservas = [
     reservaDemo(14, ana, carla, '2026-10-14', '16:00', '17:15', 'pendiente', [corte, nutricion]),
 ]
 
-const porPagina = 6
+const porPagina = 8
 
 const busqueda = ref('')
 const estado = ref('todas')
 const paginaActual = ref(1)
 
 const opcionesEstado = [
-    { label: 'Todas', value: 'todas', punto: 'bg-[#D4C3A3]' },
-    { label: 'Pendientes', value: 'pendiente', punto: 'bg-[#C9A96E]' },
-    { label: 'Confirmadas', value: 'confirmada', punto: 'bg-[#9AD9AE]' },
-    { label: 'Completadas', value: 'completada', punto: 'bg-[#7A6E61]' },
-    { label: 'Canceladas', value: 'cancelada', punto: 'bg-[#F0A8A8]' },
+    { label: 'Todas', value: 'todas', tinte: 'bg-bruma' },
+    { label: 'Pendientes', value: 'pendiente', tinte: 'bg-miel' },
+    { label: 'Confirmadas', value: 'confirmada', tinte: 'bg-menta' },
+    { label: 'Completadas', value: 'completada', tinte: 'bg-ceniza' },
+    { label: 'Canceladas', value: 'cancelada', tinte: 'bg-borgona' },
 ]
+
+const tinteEstado = {
+    pendiente: 'bg-miel',
+    confirmada: 'bg-menta',
+    completada: 'bg-ceniza',
+    cancelada: 'bg-borgona',
+}
 
 function conteo(valor) {
     if (valor === 'todas') return reservas.length
@@ -94,19 +102,26 @@ const reservasFiltradas = computed(() => {
 
     return reservasOrdenadas.filter((reserva) => {
         const coincideEstado = estado.value === 'todas' || reserva.estado === estado.value
-        const nombreCliente = normalizar(`${reserva.cliente.nombre} ${reserva.cliente.apellido}`)
-
-        return coincideEstado && nombreCliente.includes(texto)
+        return coincideEstado && normalizar(nombreCliente(reserva)).includes(texto)
     })
 })
 
-const totalPaginas = computed(() =>
-    Math.max(1, Math.ceil(reservasFiltradas.value.length / porPagina))
-)
+const totalPaginas = computed(() => Math.max(1, Math.ceil(reservasFiltradas.value.length / porPagina)))
 
 const reservasPagina = computed(() => {
     const inicio = (paginaActual.value - 1) * porPagina
     return reservasFiltradas.value.slice(inicio, inicio + porPagina)
+})
+
+const dias = computed(() => {
+    const grupos = new Map()
+
+    for (const reserva of reservasPagina.value) {
+        if (!grupos.has(reserva.fecha)) grupos.set(reserva.fecha, [])
+        grupos.get(reserva.fecha).push(reserva)
+    }
+
+    return [...grupos.entries()].map(([fecha, lista]) => ({ fecha, ...partesFecha(fecha), reservas: lista }))
 })
 
 const links = computed(() => {
@@ -114,37 +129,17 @@ const links = computed(() => {
     const total = totalPaginas.value
     const url = (pagina) => `?page=${pagina}`
 
-    const paginas = Array.from({ length: total }, (_, i) => ({
-        url: url(i + 1),
-        label: String(i + 1),
-        page: i + 1,
-        active: i + 1 === actual,
-    }))
-
     return [
-        {
-            url: actual > 1 ? url(actual - 1) : null,
-            label: '&laquo; Previous',
-            page: actual > 1 ? actual - 1 : null,
-            active: false,
-        },
-        ...paginas,
-        {
-            url: actual < total ? url(actual + 1) : null,
-            label: 'Next &raquo;',
-            page: actual < total ? actual + 1 : null,
-            active: false,
-        },
+        { url: actual > 1 ? url(actual - 1) : null, label: '&laquo; Previous', active: false },
+        ...Array.from({ length: total }, (_, i) => ({ url: url(i + 1), label: String(i + 1), active: i + 1 === actual })),
+        { url: actual < total ? url(actual + 1) : null, label: 'Next &raquo;', active: false },
     ]
 })
 
 const resumen = computed(() => {
-    const total = reservasFiltradas.value.length
-    if (!total) return ''
-
-    const desde = (paginaActual.value - 1) * porPagina + 1
-    const hasta = desde + reservasPagina.value.length - 1
-    return `Mostrando ${desde}–${hasta} de ${total} ${total === 1 ? 'reserva' : 'reservas'}`
+    const pendientes = conteo('pendiente')
+    const proximas = reservas.filter((r) => ['pendiente', 'confirmada'].includes(r.estado)).length
+    return `${proximas} citas por atender, ${pendientes} de ellas sin confirmar.`
 })
 
 watch([busqueda, estado], () => {
@@ -162,213 +157,133 @@ function partesFecha(fecha) {
 
     return {
         dia,
-        mes: objeto.toLocaleDateString('es-PY', { month: 'short' }).replace('.', ''),
         semana: objeto.toLocaleDateString('es-PY', { weekday: 'long' }),
+        mes: objeto.toLocaleDateString('es-PY', { month: 'long' }),
     }
 }
 
-function iniciales(persona) {
-    return `${persona.nombre[0] ?? ''}${persona.apellido[0] ?? ''}`.toUpperCase()
-}
-
-function horario(reserva) {
-    return `${reserva.hora_inicio.slice(0, 5)} – ${reserva.hora_fin.slice(0, 5)}`
+function hora(valor) {
+    return valor.slice(0, 5)
 }
 
 function nombreCliente(reserva) {
     return `${reserva.cliente.nombre} ${reserva.cliente.apellido}`
 }
 
-function nombresServicios(reserva) {
-    return reserva.detalles.map((detalle) => detalle.servicio.nombre).join(', ')
+function totalReserva(reserva) {
+    return reserva.detalles.reduce((total, d) => total + Number(d.precio_aplicado) * d.cantidad, 0)
+}
+
+function limpiarFiltros() {
+    busqueda.value = ''
+    estado.value = 'todas'
 }
 </script>
 
-
 <template>
     <AppLayout>
-        <div class="mx-auto max-w-7xl px-6 py-8">
-            <PageHeader
-                seccion="Agenda"
-                titulo="Reservas"
-                descripcion="Todas las citas del salón, de la más reciente a la más antigua."
-                icono="reservas"
-            >
+        <div class="mx-auto max-w-6xl px-6 py-10">
+            <PageHeader titulo="Agenda de reservas" :descripcion="resumen">
                 <Button href="/reservas/crear">
                     <Icono name="agregar" class="h-4 w-4" />
                     Nueva reserva
                 </Button>
             </PageHeader>
 
-            <div class="mt-6 rounded-xl border border-[#47413B] bg-[#292725] p-4">
-                <div class="flex flex-col gap-4 2xl:flex-row 2xl:items-center">
-                    <div class="sm:max-w-sm 2xl:w-80">
-                        <SearchInput v-model="busqueda" placeholder="Buscar por cliente..." />
-                    </div>
+            <div class="mt-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div class="flex flex-wrap gap-2" role="group" aria-label="Filtrar por estado">
+                    <button
+                        v-for="opcion in opcionesEstado"
+                        :key="opcion.value"
+                        type="button"
+                        class="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orquidea"
+                        :class="
+                            estado === opcion.value
+                                ? 'border-orquidea bg-orquidea/12 text-orquidea-claro'
+                                : 'border-hilo text-bruma hover:border-hilo-fuerte hover:text-perla'
+                        "
+                        :aria-pressed="estado === opcion.value"
+                        @click="estado = opcion.value"
+                    >
+                        <span class="h-3 w-1.5 rounded-full" :class="opcion.tinte" aria-hidden="true"></span>
+                        {{ opcion.label }}
+                        <span class="tabular-nums text-niebla">{{ conteo(opcion.value) }}</span>
+                    </button>
+                </div>
 
-                    <div class="flex flex-wrap gap-2" role="group" aria-label="Filtrar por estado">
-                        <button
-                            v-for="opcion in opcionesEstado"
-                            :key="opcion.value"
-                            type="button"
-                            class="inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3]"
-                            :class="
-                                estado === opcion.value
-                                    ? 'border-[#C9A96E] bg-[#403629] text-[#F3ECE0]'
-                                    : 'border-[#5B5147] bg-[#34302B] text-[#BEB3A6] hover:border-[#8C7961] hover:text-[#F3ECE0]'
-                            "
-                            :aria-pressed="estado === opcion.value"
-                            @click="estado = opcion.value"
-                        >
-                            <span class="h-2 w-2 rounded-full" :class="opcion.punto" aria-hidden="true"></span>
-                            {{ opcion.label }}
-                            <span
-                                class="rounded-full px-1.5 text-xs font-semibold lining-nums"
-                                :class="estado === opcion.value ? 'bg-[#C9A96E] text-[#1C1B1A]' : 'bg-[#292725] text-[#BEB3A6]'"
-                            >
-                                {{ conteo(opcion.value) }}
-                            </span>
-                        </button>
-                    </div>
+                <div class="lg:w-72">
+                    <SearchInput v-model="busqueda" placeholder="Buscar por cliente..." />
                 </div>
             </div>
 
-            <div class="mt-6">
-                <EstadoVacio
-                    v-if="!reservasFiltradas.length"
-                    icono="buscar"
-                    titulo="Sin coincidencias"
-                    descripcion="No hay reservas que coincidan con la búsqueda o el estado seleccionado."
+            <EstadoVacio
+                v-if="!reservasFiltradas.length"
+                class="mt-10"
+                titulo="Ninguna reserva coincide"
+                descripcion="Prueba con otro nombre o vuelve a mostrar todos los estados."
+            >
+                <Button label="Ver todas las reservas" variant="secondary" @click="limpiarFiltros" />
+            </EstadoVacio>
+
+            <div v-else class="mt-10 space-y-10">
+                <section
+                    v-for="dia in dias"
+                    :key="dia.fecha"
+                    class="grid gap-4 md:grid-cols-[8rem_minmax(0,1fr)] md:gap-8"
+                    :aria-label="`${dia.semana} ${dia.dia} de ${dia.mes}`"
                 >
-                    <Button label="Limpiar filtros" variant="secondary" @click="busqueda = ''; estado = 'todas'" />
-                </EstadoVacio>
-
-                <template v-else>
-                    <div class="hidden overflow-x-auto rounded-xl border border-[#47413B] bg-[#292725] lg:block">
-                        <table class="w-full text-left text-sm">
-                            <thead class="border-b border-[#5B5147] bg-gradient-to-r from-[#3A3229] to-[#34302B] text-[#E0CDAF]">
-                                <tr>
-                                    <th scope="col" class="px-5 py-3.5 text-xs font-medium uppercase tracking-[0.15em]">Fecha</th>
-                                    <th scope="col" class="px-5 py-3.5 text-xs font-medium uppercase tracking-[0.15em]">Horario</th>
-                                    <th scope="col" class="px-5 py-3.5 text-xs font-medium uppercase tracking-[0.15em]">Cliente</th>
-                                    <th scope="col" class="px-5 py-3.5 text-xs font-medium uppercase tracking-[0.15em]">Servicios</th>
-                                    <th scope="col" class="px-5 py-3.5 text-xs font-medium uppercase tracking-[0.15em]">Profesional</th>
-                                    <th scope="col" class="px-5 py-3.5 text-xs font-medium uppercase tracking-[0.15em]">Estado</th>
-                                </tr>
-                            </thead>
-
-                            <tbody class="divide-y divide-[#3D3934]">
-                                <tr
-                                    v-for="reserva in reservasPagina"
-                                    :key="reserva.id"
-                                    class="group transition-colors hover:bg-[#2E2B28]"
-                                    :class="{ 'opacity-60': reserva.estado === 'cancelada' }"
-                                >
-                                    <td class="relative whitespace-nowrap px-5 py-4">
-                                        <span class="absolute inset-y-3 left-0 w-0.5 rounded-full bg-[#C9A96E] opacity-0 transition-opacity group-hover:opacity-100"></span>
-                                        <div class="flex items-center gap-3">
-                                            <span class="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-lg border border-[#5B5147] bg-[#1F1D1B]">
-                                                <span class="font-serif text-xl font-semibold leading-none lining-nums text-[#F3ECE0]">
-                                                    {{ partesFecha(reserva.fecha).dia }}
-                                                </span>
-                                                <span class="mt-0.5 text-[0.625rem] font-medium uppercase tracking-wider text-[#C9A96E]">
-                                                    {{ partesFecha(reserva.fecha).mes }}
-                                                </span>
-                                            </span>
-                                            <span class="text-sm capitalize text-[#BEB3A6]">
-                                                {{ partesFecha(reserva.fecha).semana }}
-                                            </span>
-                                        </div>
-                                    </td>
-
-                                    <td class="whitespace-nowrap px-5 py-4 font-serif text-lg font-semibold lining-nums text-[#E0CDAF]">
-                                        {{ horario(reserva) }}
-                                    </td>
-
-                                    <td class="whitespace-nowrap px-5 py-4">
-                                        <div class="flex items-center gap-3">
-                                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#403629] text-xs font-semibold text-[#E0CDAF]">
-                                                {{ iniciales(reserva.cliente) }}
-                                            </span>
-                                            <span class="font-medium text-[#F3ECE0]">{{ nombreCliente(reserva) }}</span>
-                                        </div>
-                                    </td>
-
-                                    <td class="px-5 py-4">
-                                        <div class="flex flex-wrap gap-1.5">
-                                            <span
-                                                v-for="detalle in reserva.detalles"
-                                                :key="detalle.id"
-                                                class="rounded-md border border-[#47413B] bg-[#34302B] px-2 py-0.5 text-xs text-[#E0CDAF]"
-                                            >
-                                                {{ detalle.servicio.nombre }}
-                                            </span>
-                                        </div>
-                                    </td>
-
-                                    <td class="whitespace-nowrap px-5 py-4">
-                                        <div class="flex items-center gap-2 text-[#BEB3A6]">
-                                            <span class="flex h-7 w-7 items-center justify-center rounded-full border border-[#C9A96E]/60 font-serif text-xs font-semibold text-[#E9D2A0]">
-                                                {{ iniciales(reserva.personal) }}
-                                            </span>
-                                            {{ reserva.personal.nombre }}
-                                        </div>
-                                    </td>
-
-                                    <td class="px-5 py-4">
-                                        <StatusBadge :status="reserva.estado" />
-                                    </td>
-                                </tr>
-                            </tbody>
-                        </table>
+                    <div class="flex items-baseline gap-3 md:block">
+                        <p class="font-display text-5xl leading-none tabular-nums">{{ dia.dia }}</p>
+                        <p class="text-sm capitalize text-bruma md:mt-2">{{ dia.semana }}</p>
+                        <p class="text-sm text-niebla">{{ dia.mes }}</p>
                     </div>
 
-                    <ul class="grid gap-3 sm:grid-cols-2 lg:hidden">
+                    <ol class="space-y-2">
                         <li
-                            v-for="reserva in reservasPagina"
+                            v-for="reserva in dia.reservas"
                             :key="reserva.id"
-                            class="flex gap-4 rounded-xl border border-[#47413B] bg-[#292725] p-4 transition-colors hover:border-[#C9A96E]/50"
+                            class="group relative flex flex-wrap items-center gap-x-5 gap-y-2 overflow-hidden rounded-2xl bg-velo py-4 pl-6 pr-4 transition-colors hover:bg-terciopelo"
                             :class="{ 'opacity-60': reserva.estado === 'cancelada' }"
                         >
-                            <span class="flex h-16 w-14 shrink-0 flex-col items-center justify-center rounded-lg border border-[#5B5147] bg-[#1F1D1B]">
-                                <span class="font-serif text-2xl font-semibold leading-none lining-nums text-[#F3ECE0]">
-                                    {{ partesFecha(reserva.fecha).dia }}
-                                </span>
-                                <span class="mt-1 text-[0.625rem] font-medium uppercase tracking-wider text-[#C9A96E]">
-                                    {{ partesFecha(reserva.fecha).mes }}
-                                </span>
-                            </span>
+                            <span class="absolute inset-y-3 left-2 w-1.5 rounded-full" :class="tinteEstado[reserva.estado]" aria-hidden="true"></span>
 
-                            <div class="min-w-0 flex-1">
-                                <div class="flex items-start justify-between gap-2">
-                                    <div>
-                                        <p class="font-serif text-lg font-semibold leading-tight lining-nums text-[#E0CDAF]">
-                                            {{ horario(reserva) }}
-                                        </p>
-                                        <p class="text-xs capitalize text-[#8C7F70]">{{ partesFecha(reserva.fecha).semana }}</p>
-                                    </div>
-                                    <StatusBadge :status="reserva.estado" />
-                                </div>
+                            <p class="w-36 shrink-0 whitespace-nowrap tabular-nums">
+                                <span class="font-display text-2xl">{{ hora(reserva.hora_inicio) }}</span>
+                                <span class="ml-1 text-sm text-niebla">a {{ hora(reserva.hora_fin) }}</span>
+                            </p>
 
-                                <p class="mt-2 text-sm font-medium text-[#F3ECE0]">{{ nombreCliente(reserva) }}</p>
-                                <p class="mt-0.5 text-sm text-[#BEB3A6]">
-                                    {{ nombresServicios(reserva) }} · {{ reserva.personal.nombre }}
+                            <div class="order-3 w-full min-w-0 sm:order-none sm:w-auto sm:flex-1">
+                                <p class="truncate font-medium">{{ nombreCliente(reserva) }}</p>
+                                <p class="truncate text-sm text-bruma">
+                                    {{ reserva.detalles.map((d) => d.servicio.nombre).join(', ') }}
                                 </p>
                             </div>
+
+                            <div class="hidden w-28 shrink-0 items-center gap-2 text-sm text-bruma lg:flex">
+                                <span class="flex h-7 w-7 items-center justify-center rounded-full bg-raso font-display text-xs text-orquidea-claro">
+                                    {{ reserva.personal.nombre[0] }}{{ reserva.personal.apellido[0] }}
+                                </span>
+                                {{ reserva.personal.nombre }}
+                            </div>
+
+                            <p class="hidden w-28 shrink-0 text-right text-sm tabular-nums text-bruma md:block">
+                                {{ guaranies(totalReserva(reserva)) }}
+                            </p>
+
+                            <StatusBadge :status="reserva.estado" class="ml-auto sm:ml-0" />
                         </li>
-                    </ul>
-                </template>
+                    </ol>
+                </section>
             </div>
 
             <div
-                v-if="reservasFiltradas.length"
-                class="mt-6 flex flex-col items-center justify-between gap-3 sm:flex-row"
+                v-if="reservasFiltradas.length && totalPaginas > 1"
+                class="mt-10 flex flex-col items-center justify-between gap-3 border-t border-hilo pt-6 sm:flex-row"
             >
-                <p class="font-serif text-base italic lining-nums text-[#BEB3A6]">
-                    {{ resumen }}
+                <p class="text-sm tabular-nums text-niebla">
+                    Página {{ paginaActual }} de {{ totalPaginas }}, {{ reservasFiltradas.length }} reservas en total
                 </p>
-
-                <Pagination v-if="totalPaginas > 1" :links="links" @navigate="irAPagina" />
+                <Pagination :links="links" @navigate="irAPagina" />
             </div>
         </div>
     </AppLayout>

@@ -78,7 +78,7 @@ onBeforeUnmount(() => {
         >
             <div
                 v-if="show"
-                class="fixed inset-0 z-50 flex items-center justify-center bg-neutral-900/40 p-4"
+                class="fixed inset-0 z-50 flex items-center justify-center bg-noche/75 p-4 backdrop-blur-sm"
                 @click.self="close"
             >
                 <div
@@ -87,7 +87,7 @@ onBeforeUnmount(() => {
                     aria-modal="true"
                     :aria-label="label"
                     tabindex="-1"
-                    class="max-h-full w-full overflow-y-auto rounded-xl border border-beige-200 bg-white p-6 shadow-lg focus:outline-none"
+                    class="scroll-fino max-h-full w-full overflow-y-auto rounded-3xl border border-hilo-fuerte bg-velo p-6 text-perla shadow-2xl shadow-black/60 focus:outline-none"
                     :class="widthClass"
                 >
                     <slot />
