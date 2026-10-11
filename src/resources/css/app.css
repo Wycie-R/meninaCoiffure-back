@@ -1,3 +1,4 @@
+@import url('https://fonts.bunny.net/css?family=cormorant-garamond:500,600,500i&display=swap');
 @import 'tailwindcss';
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
@@ -6,6 +7,7 @@
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-serif: 'Cormorant Garamond', 'Cormorant', Georgia, 'Times New Roman', serif;
 
     --color-beige-50: #FAF7F2;
     --color-beige-100: #F3ECE0;
@@ -13,3 +15,26 @@
     --color-beige-300: #D4C3A3;
 }
 
+@custom-variant bajo (@media (max-height: 820px) and (min-width: 1280px));
+
+@utility scroll-fino {
+    scrollbar-width: thin;
+    scrollbar-color: #5B5147 transparent;
+}
+
+@layer base {
+    html {
+        scrollbar-color: #5B5147 #1C1B1A;
+    }
+
+    h1,
+    h2 {
+        font-family: var(--font-serif);
+        letter-spacing: 0.01em;
+    }
+
+    h1 {
+        font-size: 2rem;
+        line-height: 1.15;
+    }
+}

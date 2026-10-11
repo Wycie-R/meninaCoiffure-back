@@ -6,6 +6,9 @@ import SearchInput from '../../Components/SearchInput.vue'
 import Dropdown from '../../Components/Dropdown.vue'
 import StatusBadge from '../../Components/StatusBadge.vue'
 import Pagination from '../../Components/Pagination.vue'
+import PageHeader from '../../Components/PageHeader.vue'
+import EstadoVacio from '../../Components/EstadoVacio.vue'
+import Icono from '../../Components/Icono.vue'
 import { usePage } from '@inertiajs/vue3'
 import { api, guaranies, duracion } from '../../api'
 
@@ -137,6 +140,27 @@ watch([busqueda, categoria, estado], () => {
     paginaActual.value = 1
 })
 
+const estadisticas = computed(() => {
+    const activos = servicios.value.filter((servicio) => servicio.activo)
+    const promedio = activos.length
+        ? Math.round(activos.reduce((total, servicio) => total + servicio.duracion_minutos, 0) / activos.length)
+        : 0
+    const precios = activos.map((servicio) => Number(servicio.precio_vigente)).filter((precio) => precio > 0)
+
+    return [
+        { clave: 'activos', titulo: 'Servicios activos', valor: `${activos.length} de ${servicios.value.length}`, icono: 'servicios' },
+        { clave: 'categorias', titulo: 'Categorías', valor: String(categorias.value.length), icono: 'etiqueta' },
+        { clave: 'duracion', titulo: 'Duración promedio', valor: promedio ? duracion(promedio) : '—', icono: 'pendiente' },
+        { clave: 'precios', titulo: 'Rango de precios', valor: precios.length ? `${guaranies(Math.min(...precios))} – ${guaranies(Math.max(...precios)).replace('Gs. ', '')}` : '—', icono: 'billete' },
+    ]
+})
+
+function limpiarFiltros() {
+    busqueda.value = ''
+    categoria.value = 'todas'
+    estado.value = 'todos'
+}
+
 function irAPagina(url) {
     const pagina = Number(new URL(url, window.location.origin).searchParams.get('page'))
     if (pagina >= 1 && pagina <= totalPaginas.value) paginaActual.value = pagina
@@ -145,207 +169,218 @@ function irAPagina(url) {
 
 <template>
     <AppLayout>
-        <div class="min-h-[calc(100vh-73px)] bg-[#1C1B1A] lg:min-h-[calc(100vh-69px)]">
-            <div class="mx-auto max-w-7xl px-6 py-8">
-                <div class="flex flex-wrap items-center justify-between gap-4">
-                    <h1 class="text-2xl font-semibold text-[#F3ECE0]">
-                        Servicios
-                    </h1>
+        <div class="mx-auto max-w-7xl px-6 py-8">
+            <PageHeader
+                seccion="Salón"
+                titulo="Servicios"
+                descripcion="El catálogo del salón con su duración y precio vigente."
+                icono="servicios"
+            >
+                <Button href="/servicios/crear">
+                    <Icono name="agregar" class="h-4 w-4" />
+                    Nuevo servicio
+                </Button>
+            </PageHeader>
 
-                                        <Button label="+ Nuevo servicio" href="/servicios/crear" />
-                </div>
-
-                <div
-                    v-if="nombreNuevo"
-                    role="status"
-                    class="mt-6 flex items-start justify-between gap-3 rounded-lg border border-[#355C43] bg-[#22332A] px-4 py-3 text-sm text-[#9AD9AE]"
+            <div
+                v-if="nombreNuevo"
+                role="status"
+                class="mt-6 flex items-center justify-between gap-3 rounded-xl border border-[#355C43] bg-[#22332A] px-4 py-3 text-sm text-[#9AD9AE]"
+            >
+                <p class="flex items-center gap-2.5">
+                    <Icono name="completada" class="h-5 w-5 shrink-0" />
+                    Se creó el servicio «{{ nombreNuevo }}».
+                </p>
+                <button
+                    type="button"
+                    class="shrink-0 rounded px-1 text-[#9AD9AE] hover:text-[#F3ECE0] focus-visible:outline-2 focus-visible:outline-[#9AD9AE]"
+                    aria-label="Cerrar aviso"
+                    @click="servicioNuevo = null"
                 >
-                    <p>Se creó el servicio «{{ nombreNuevo }}».</p>
-                    <button
-                        type="button"
-                        class="shrink-0 rounded px-1 text-[#9AD9AE] hover:text-[#F3ECE0] focus-visible:outline-2 focus-visible:outline-[#9AD9AE]"
-                        aria-label="Cerrar aviso"
-                        @click="servicioNuevo = null"
-                    >
-                        ✕
-                    </button>
-                </div>
+                    ✕
+                </button>
+            </div>
 
+            <div v-if="!cargando && !errorCarga" class="mt-6 grid grid-cols-2 gap-4 lg:grid-cols-4">
                 <div
-                    class="mt-6 grid gap-3 rounded-xl border border-[#47413B] bg-[#292725] p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,24rem)_13rem_13rem]"
+                    v-for="dato in estadisticas"
+                    :key="dato.clave"
+                    class="flex min-w-0 items-center gap-3 rounded-xl border border-[#47413B] bg-[#292725] p-4"
                 >
-                    <div class="sm:col-span-2 lg:col-span-1">
-                        <SearchInput
-                            v-model="busqueda"
-                            placeholder="Buscar por nombre..."
-                        />
+                    <span class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-[#C9A96E]/50 bg-[#C9A96E]/10 text-[#E0CDAF]">
+                        <Icono :name="dato.icono" class="h-5 w-5" />
+                    </span>
+                    <div class="min-w-0">
+                        <p class="truncate font-serif text-xl font-semibold leading-tight lining-nums text-[#F3ECE0]">
+                            {{ dato.valor }}
+                        </p>
+                        <p class="text-xs uppercase tracking-wide text-[#BEB3A6]">{{ dato.titulo }}</p>
                     </div>
+                </div>
+            </div>
 
-                    <Dropdown
-                        v-model="categoria"
-                        :options="opcionesCategoria"
-                    />
-
-                    <Dropdown
-                        v-model="estado"
-                        :options="opcionesEstado"
-                    />
+            <div class="mt-6 grid gap-3 rounded-xl border border-[#47413B] bg-[#292725] p-4 sm:grid-cols-2 lg:grid-cols-[minmax(0,24rem)_13rem_13rem]">
+                <div class="sm:col-span-2 lg:col-span-1">
+                    <SearchInput v-model="busqueda" placeholder="Buscar por nombre..." />
                 </div>
 
-                <div class="mt-6">
-                    <div
-                        v-if="cargando"
-                        class="rounded-xl border border-[#47413B] bg-[#292725] px-5 py-12 text-center"
-                    >
-                        <p class="text-sm text-[#BEB3A6]">
-                            Cargando servicios...
-                        </p>
+                <Dropdown v-model="categoria" :options="opcionesCategoria" />
+
+                <Dropdown v-model="estado" :options="opcionesEstado" />
+            </div>
+
+            <div class="mt-6">
+                <div
+                    v-if="cargando"
+                    class="overflow-hidden rounded-xl border border-[#47413B] bg-[#292725]"
+                    aria-busy="true"
+                    aria-label="Cargando servicios"
+                >
+                    <div class="h-12 border-b border-[#5B5147] bg-[#34302B]"></div>
+                    <div v-for="n in 5" :key="n" class="flex animate-pulse items-center gap-4 border-b border-[#3D3934] px-5 py-5 last:border-b-0">
+                        <span class="h-10 w-10 rounded-full bg-[#34302B]"></span>
+                        <span class="h-3 w-48 rounded bg-[#34302B]"></span>
+                        <span class="ml-auto h-3 w-24 rounded bg-[#34302B]"></span>
+                        <span class="h-3 w-20 rounded bg-[#34302B]"></span>
                     </div>
+                </div>
 
-                    <div
-                        v-else-if="errorCarga"
-                        role="alert"
-                        class="rounded-xl border border-[#6A3A3A] bg-[#3A2626] px-5 py-10 text-center"
-                    >
-                        <p class="text-sm text-[#F0A8A8]">
-                            {{ errorCarga }}
-                        </p>
-                        <Button
-                            label="Reintentar"
-                            variant="secondary"
-                            class="mt-4"
-                            @click="cargar"
-                        />
-                    </div>
+                <EstadoVacio
+                    v-else-if="errorCarga"
+                    tono="error"
+                    icono="alerta"
+                    titulo="No se pudo cargar el catálogo"
+                    :descripcion="errorCarga"
+                    role="alert"
+                >
+                    <Button label="Reintentar" variant="secondary" @click="cargar" />
+                </EstadoVacio>
 
-                    <div
-                        v-else-if="!serviciosFiltrados.length"
-                        class="rounded-xl border border-[#47413B] bg-[#292725] px-5 py-12 text-center"
-                    >
-                        <p class="text-sm text-[#BEB3A6]">
-                            No hay servicios que coincidan con la búsqueda.
-                        </p>
-                    </div>
+                <EstadoVacio
+                    v-else-if="!serviciosFiltrados.length"
+                    icono="buscar"
+                    titulo="Sin coincidencias"
+                    descripcion="No hay servicios que coincidan con la búsqueda o los filtros elegidos."
+                >
+                    <Button label="Limpiar filtros" variant="secondary" @click="limpiarFiltros" />
+                </EstadoVacio>
 
-                    <template v-else>
-                        <div
-                            class="hidden overflow-x-auto rounded-xl border border-[#47413B] bg-[#292725] lg:block"
-                        >
-                            <table class="w-full text-left text-sm">
-                                <thead class="border-b border-[#51483F] bg-[#34302B] text-[#D4C3A3]">
-                                    <tr>
-                                        <th scope="col" class="px-5 py-3 font-medium">
-                                            Servicio
-                                        </th>
-                                        <th scope="col" class="px-5 py-3 font-medium">
-                                            Categoría
-                                        </th>
-                                        <th scope="col" class="px-5 py-3 font-medium">
-                                            Duración
-                                        </th>
-                                        <th scope="col" class="px-5 py-3 font-medium">
-                                            Precio
-                                        </th>
-                                        <th scope="col" class="px-5 py-3 font-medium">
-                                            Estado
-                                        </th>
-                                    </tr>
-                                </thead>
+                <template v-else>
+                    <div class="hidden overflow-x-auto rounded-xl border border-[#47413B] bg-[#292725] lg:block">
+                        <table class="w-full text-left text-sm">
+                            <thead class="border-b border-[#5B5147] bg-gradient-to-r from-[#3A3229] to-[#34302B] text-[#E0CDAF]">
+                                <tr>
+                                    <th scope="col" class="px-5 py-3.5 text-xs font-medium uppercase tracking-[0.15em]">Servicio</th>
+                                    <th scope="col" class="px-5 py-3.5 text-xs font-medium uppercase tracking-[0.15em]">Categoría</th>
+                                    <th scope="col" class="px-5 py-3.5 text-xs font-medium uppercase tracking-[0.15em]">Duración</th>
+                                    <th scope="col" class="px-5 py-3.5 text-right text-xs font-medium uppercase tracking-[0.15em]">Precio</th>
+                                    <th scope="col" class="px-5 py-3.5 text-xs font-medium uppercase tracking-[0.15em]">Estado</th>
+                                </tr>
+                            </thead>
 
-                                <tbody class="divide-y divide-[#47413B]">
-                                    <tr
-                                        v-for="servicio in serviciosPagina"
-                                        :key="servicio.id"
-                                        class="transition-colors hover:bg-[#302D29]"
-                                        :class="{ 'bg-[#22332A]/40': servicio.id === servicioNuevo }"
-                                    >
-                                        <td class="px-5 py-4">
-                                            <p
-                                                class="font-medium"
-                                                :class="servicio.activo ? 'text-[#F3ECE0]' : 'text-[#BEB3A6]'"
-                                            >
-                                                {{ servicio.nombre }}
-                                            </p>
-                                            <p
-                                                v-if="servicio.descripcion"
-                                                class="mt-0.5 text-[#BEB3A6]"
-                                            >
-                                                {{ servicio.descripcion }}
-                                            </p>
-                                        </td>
-
-                                        <td class="whitespace-nowrap px-5 py-4 text-[#BEB3A6]">
-                                            {{ nombreCategoria(servicio) }}
-                                        </td>
-
-                                        <td class="whitespace-nowrap px-5 py-4 text-[#BEB3A6]">
-                                            {{ duracion(servicio.duracion_minutos) }}
-                                        </td>
-
-                                        <td class="whitespace-nowrap px-5 py-4 text-[#F3ECE0]">
-                                            {{ guaranies(servicio.precio_vigente) }}
-                                        </td>
-
-                                        <td class="px-5 py-4">
-                                            <StatusBadge :status="servicio.activo ? 'activo' : 'inactivo'" />
-                                        </td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
-
-                        <ul class="grid gap-3 sm:grid-cols-2 lg:hidden">
-                            <li
-                                v-for="servicio in serviciosPagina"
-                                :key="servicio.id"
-                                class="flex flex-col rounded-xl border bg-[#292725] p-4 transition-colors hover:bg-[#302D29]"
-                                :class="servicio.id === servicioNuevo ? 'border-[#355C43]' : 'border-[#47413B]'"
-                            >
-                                <div class="flex items-start justify-between gap-3">
-                                    <p
-                                        class="text-sm font-medium"
-                                        :class="servicio.activo ? 'text-[#F3ECE0]' : 'text-[#BEB3A6]'"
-                                    >
-                                        {{ servicio.nombre }}
-                                    </p>
-
-                                    <StatusBadge :status="servicio.activo ? 'activo' : 'inactivo'" />
-                                </div>
-
-                                <p
-                                    v-if="servicio.descripcion"
-                                    class="mt-1 text-sm text-[#BEB3A6]"
+                            <tbody class="divide-y divide-[#3D3934]">
+                                <tr
+                                    v-for="servicio in serviciosPagina"
+                                    :key="servicio.id"
+                                    class="group transition-colors hover:bg-[#2E2B28]"
+                                    :class="{ 'bg-[#22332A]/40': servicio.id === servicioNuevo }"
                                 >
-                                    {{ servicio.descripcion }}
-                                </p>
+                                    <td class="relative px-5 py-4">
+                                        <span class="absolute inset-y-3 left-0 w-0.5 rounded-full bg-[#C9A96E] opacity-0 transition-opacity group-hover:opacity-100"></span>
+                                        <div class="flex items-center gap-3">
+                                            <span
+                                                class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border"
+                                                :class="servicio.activo ? 'border-[#C9A96E]/60 bg-[#C9A96E]/10 text-[#E9D2A0]' : 'border-[#5B5147] text-[#8C7F70]'"
+                                            >
+                                                <Icono name="servicios" class="h-[1.125rem] w-[1.125rem]" />
+                                            </span>
+                                            <div class="min-w-0">
+                                                <p class="font-medium" :class="servicio.activo ? 'text-[#F3ECE0]' : 'text-[#BEB3A6]'">
+                                                    {{ servicio.nombre }}
+                                                </p>
+                                                <p v-if="servicio.descripcion" class="mt-0.5 font-serif text-base italic text-[#BEB3A6]">
+                                                    {{ servicio.descripcion }}
+                                                </p>
+                                            </div>
+                                        </div>
+                                    </td>
 
-                                <div class="mt-auto pt-3">
-                                    <p class="border-t border-[#47413B] pt-3 text-sm text-[#BEB3A6]">
-                                        {{ nombreCategoria(servicio) }} · {{ duracion(servicio.duracion_minutos) }} · {{ guaranies(servicio.precio_vigente) }}
+                                    <td class="whitespace-nowrap px-5 py-4">
+                                        <span class="inline-flex items-center gap-1.5 rounded-md border border-[#47413B] bg-[#34302B] px-2 py-0.5 text-xs text-[#E0CDAF]">
+                                            <Icono name="etiqueta" class="h-3.5 w-3.5 text-[#C9A96E]" />
+                                            {{ nombreCategoria(servicio) }}
+                                        </span>
+                                    </td>
+
+                                    <td class="whitespace-nowrap px-5 py-4 text-[#BEB3A6]">
+                                        <span class="inline-flex items-center gap-1.5">
+                                            <Icono name="pendiente" class="h-4 w-4 text-[#8C7F70]" />
+                                            {{ duracion(servicio.duracion_minutos) }}
+                                        </span>
+                                    </td>
+
+                                    <td class="whitespace-nowrap px-5 py-4 text-right font-serif text-lg font-semibold lining-nums text-[#E0CDAF]">
+                                        {{ guaranies(servicio.precio_vigente) }}
+                                    </td>
+
+                                    <td class="px-5 py-4">
+                                        <StatusBadge :status="servicio.activo ? 'activo' : 'inactivo'" />
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <ul class="grid gap-3 sm:grid-cols-2 lg:hidden">
+                        <li
+                            v-for="servicio in serviciosPagina"
+                            :key="servicio.id"
+                            class="flex flex-col rounded-xl border bg-[#292725] p-4 transition-colors hover:border-[#C9A96E]/50"
+                            :class="servicio.id === servicioNuevo ? 'border-[#355C43]' : 'border-[#47413B]'"
+                        >
+                            <div class="flex items-start gap-3">
+                                <span
+                                    class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border"
+                                    :class="servicio.activo ? 'border-[#C9A96E]/60 bg-[#C9A96E]/10 text-[#E9D2A0]' : 'border-[#5B5147] text-[#8C7F70]'"
+                                >
+                                    <Icono name="servicios" class="h-[1.125rem] w-[1.125rem]" />
+                                </span>
+                                <div class="min-w-0 flex-1">
+                                    <div class="flex items-start justify-between gap-2">
+                                        <p class="text-sm font-medium" :class="servicio.activo ? 'text-[#F3ECE0]' : 'text-[#BEB3A6]'">
+                                            {{ servicio.nombre }}
+                                        </p>
+                                        <StatusBadge :status="servicio.activo ? 'activo' : 'inactivo'" />
+                                    </div>
+                                    <p v-if="servicio.descripcion" class="mt-0.5 font-serif text-base italic text-[#BEB3A6]">
+                                        {{ servicio.descripcion }}
                                     </p>
                                 </div>
-                            </li>
-                        </ul>
-                    </template>
-                </div>
+                            </div>
 
-                <div
-                    v-if="!cargando && !errorCarga && serviciosFiltrados.length"
-                    class="mt-6 flex flex-col items-center justify-between gap-3 sm:flex-row"
-                >
-                    <p class="text-sm text-[#BEB3A6]">
-                        {{ resumen }}
-                    </p>
+                            <div class="mt-auto flex items-end justify-between gap-3 pt-4">
+                                <p class="text-xs text-[#BEB3A6]">
+                                    {{ nombreCategoria(servicio) }} · {{ duracion(servicio.duracion_minutos) }}
+                                </p>
+                                <p class="font-serif text-lg font-semibold lining-nums text-[#E0CDAF]">
+                                    {{ guaranies(servicio.precio_vigente) }}
+                                </p>
+                            </div>
+                        </li>
+                    </ul>
+                </template>
+            </div>
 
-                    <Pagination
-                        v-if="totalPaginas > 1"
-                        :links="links"
-                        @navigate="irAPagina"
-                    />
-                </div>
+            <div
+                v-if="!cargando && !errorCarga && serviciosFiltrados.length"
+                class="mt-6 flex flex-col items-center justify-between gap-3 sm:flex-row"
+            >
+                <p class="font-serif text-base italic lining-nums text-[#BEB3A6]">
+                    {{ resumen }}
+                </p>
+
+                <Pagination v-if="totalPaginas > 1" :links="links" @navigate="irAPagina" />
             </div>
         </div>
     </AppLayout>
 </template>
-
-

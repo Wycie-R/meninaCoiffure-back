@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { router } from '@inertiajs/vue3'
 import Button from '../../Components/Button.vue'
+import Monograma from '../../Components/Monograma.vue'
 import { establecerUsuario } from '../../auth'
 
 const form = ref({
@@ -62,13 +63,27 @@ async function ingresar() {
 </script>
 
 <template>
-    <div class="flex min-h-screen items-center justify-center bg-[#1C1B1A] px-6 py-12">
-        <div class="w-full max-w-sm">
-            <div class="text-center">
-                <p class="text-sm font-semibold uppercase tracking-[0.3em] text-[#D4C3A3]">
+    <div class="relative flex min-h-screen items-center justify-center overflow-hidden bg-[#1C1B1A] bg-[radial-gradient(ellipse_at_top,#2E2A25_0%,#1C1B1A_60%)] px-6 py-12">
+        <div class="pointer-events-none absolute left-1/2 top-1/2 h-[42rem] w-[42rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#C9A96E]/10"></div>
+        <div class="pointer-events-none absolute left-1/2 top-1/2 h-[34rem] w-[34rem] -translate-x-1/2 -translate-y-1/2 rounded-full border border-[#C9A96E]/[0.06]"></div>
+
+        <div class="relative w-full max-w-sm">
+            <div class="flex flex-col items-center text-center">
+                <Monograma :size="88" />
+                <p class="mt-5 font-serif text-4xl font-semibold text-[#F3ECE0]">
                     Menina Coiffure
                 </p>
-                <h1 class="mt-6 text-2xl font-semibold text-[#F3ECE0]">
+                <p class="mt-2 text-[0.6875rem] font-medium uppercase tracking-[0.35em] text-[#C9A96E]">
+                    Salón &amp; Estética
+                </p>
+
+                <div class="mt-6 flex w-full items-center gap-3" aria-hidden="true">
+                    <span class="h-px flex-1 bg-gradient-to-r from-transparent to-[#C9A96E]/60"></span>
+                    <span class="h-1.5 w-1.5 rotate-45 bg-[#C9A96E]"></span>
+                    <span class="h-px flex-1 bg-gradient-to-l from-transparent to-[#C9A96E]/60"></span>
+                </div>
+
+                <h1 class="mt-6 font-semibold text-[#F3ECE0]">
                     Iniciar sesión
                 </h1>
                 <p class="mt-2 text-sm text-[#BEB3A6]">
@@ -77,7 +92,7 @@ async function ingresar() {
             </div>
 
             <form
-                class="mt-8 rounded-xl border border-[#47413B] bg-[#292725] p-6"
+                class="mt-8 rounded-xl border border-[#47413B] border-t-2 border-t-[#C9A96E] bg-[#292725] p-6 shadow-2xl shadow-black/40"
                 novalidate
                 @submit.prevent="ingresar"
             >
@@ -153,7 +168,7 @@ async function ingresar() {
                 />
             </form>
 
-            <p class="mt-6 text-center text-xs text-[#BEB3A6]">
+            <p class="mt-6 text-center font-serif text-base italic text-[#BEB3A6]">
                 Centro de estética y peluquería · Villa Elisa
             </p>
         </div>

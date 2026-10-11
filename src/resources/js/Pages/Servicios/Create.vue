@@ -4,7 +4,10 @@ import { router } from '@inertiajs/vue3'
 import AppLayout from '../../Layouts/AppLayout.vue'
 import Button from '../../Components/Button.vue'
 import Dropdown from '../../Components/Dropdown.vue'
-import { api, primerosErrores, duracion } from '../../api'
+import PageHeader from '../../Components/PageHeader.vue'
+import StatusBadge from '../../Components/StatusBadge.vue'
+import Icono from '../../Components/Icono.vue'
+import { api, primerosErrores, duracion, guaranies } from '../../api'
 
 const form = ref({
     nombre: '',
@@ -44,6 +47,15 @@ const precioTexto = computed({
         const digitos = valor.replace(/\D/g, '').slice(0, 10)
         form.value.precio = digitos === '' ? '' : Number(digitos)
     },
+})
+
+const categoriaElegida = computed(
+    () => categorias.value.find((c) => c.id === form.value.categoria_id)?.nombre ?? ''
+)
+
+const duracionVista = computed(() => {
+    const minutos = Number(form.value.duracion_minutos)
+    return form.value.duracion_minutos !== '' && minutos > 0 ? duracion(minutos) : ''
 })
 
 const duracionTexto = computed(() => {
@@ -127,168 +139,222 @@ function inputBorder(campo) {
 
 <template>
     <AppLayout>
-        <div class="min-h-[calc(100vh-73px)] bg-[#1C1B1A] lg:min-h-[calc(100vh-69px)]">
-            <div class="mx-auto max-w-3xl px-6 py-8">
-                <h1 class="text-2xl font-semibold text-[#F3ECE0]">
-                    Nuevo servicio
-                </h1>
+        <div class="mx-auto max-w-6xl px-6 py-8">
+            <PageHeader
+                seccion="Salón"
+                titulo="Nuevo servicio"
+                descripcion="Agrega un servicio al catálogo con su precio y duración."
+                icono="agregar"
+            />
 
+            <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
                 <form
-                    class="mt-6 rounded-xl border border-[#47413B] bg-[#292725] p-5 sm:p-6"
+                    class="min-w-0 rounded-xl border border-[#47413B] bg-[#292725]"
                     novalidate
                     @submit.prevent="guardar"
                 >
                     <div
                         v-if="errorGeneral"
                         role="alert"
-                        class="mb-5 rounded-lg border border-[#6A3A3A] bg-[#3A2626] px-4 py-3 text-sm text-[#F0A8A8]"
+                        class="m-5 mb-0 flex items-start gap-2.5 rounded-lg border border-[#6A3A3A] bg-[#3A2626] px-4 py-3 text-sm text-[#F0A8A8] sm:m-6 sm:mb-0"
                     >
+                        <Icono name="alerta" class="mt-0.5 h-4 w-4 shrink-0" />
                         {{ errorGeneral }}
                     </div>
 
-                    <div class="grid gap-5 sm:grid-cols-2">
-                        <div class="min-w-0">
-                            <label for="nombre" class="mb-1.5 block text-sm font-medium text-[#F3ECE0]">
-                                Nombre
-                            </label>
-                            <input
-                                id="nombre"
-                                v-model="form.nombre"
-                                type="text"
-                                maxlength="255"
-                                placeholder="Ej.: Corte femenino"
-                                :aria-invalid="Boolean(error('nombre'))"
-                                :aria-describedby="error('nombre') ? 'nombre-error' : undefined"
-                                :class="[inputClass, inputBorder('nombre')]"
-                                @input="limpiarServidor('nombre')"
-                            />
-                            <p v-if="error('nombre')" id="nombre-error" class="mt-1.5 text-sm text-[#F0A8A8]">
-                                {{ error('nombre') }}
-                            </p>
-                        </div>
+                    <section class="p-5 sm:p-6">
+                        <h2 class="flex items-center gap-3 text-xl font-semibold text-[#F3ECE0]">
+                            <span class="flex h-7 w-7 items-center justify-center rounded-full border border-[#C9A96E] font-serif text-sm lining-nums text-[#E9D2A0]">1</span>
+                            Datos del servicio
+                        </h2>
 
-                        <div class="min-w-0">
-                            <p class="mb-1.5 text-sm font-medium text-[#F3ECE0]">
-                                Categoría
-                            </p>
-                            <Dropdown
-                                v-model="form.categoria_id"
-                                :options="opcionesCategoria"
-                                :placeholder="cargandoCategorias ? 'Cargando...' : 'Seleccionar categoría'"
-                                :disabled="cargandoCategorias"
-                                @update:model-value="limpiarServidor('categoria_id')"
-                            />
-                            <p v-if="error('categoria_id')" class="mt-1.5 text-sm text-[#F0A8A8]">
-                                {{ error('categoria_id') }}
-                            </p>
-                        </div>
-                    </div>
-
-                    <div class="mt-5 grid gap-5 sm:grid-cols-2">
-                        <div class="min-w-0">
-                            <label for="duracion" class="mb-1.5 block text-sm font-medium text-[#F3ECE0]">
-                                Duración (minutos)
-                            </label>
-                            <input
-                                id="duracion"
-                                v-model="form.duracion_minutos"
-                                type="number"
-                                inputmode="numeric"
-                                min="5"
-                                max="480"
-                                step="5"
-                                placeholder="Ej.: 45"
-                                :aria-invalid="Boolean(error('duracion_minutos'))"
-                                :aria-describedby="error('duracion_minutos') ? 'duracion-error' : undefined"
-                                :class="[inputClass, inputBorder('duracion_minutos')]"
-                                @input="limpiarServidor('duracion_minutos')"
-                            />
-                            <p v-if="error('duracion_minutos')" id="duracion-error" class="mt-1.5 text-sm text-[#F0A8A8]">
-                                {{ error('duracion_minutos') }}
-                            </p>
-                            <p v-else-if="duracionTexto" class="mt-1.5 text-sm text-[#BEB3A6]">
-                                {{ duracionTexto }}
-                            </p>
-                        </div>
-
-                        <div class="min-w-0">
-                            <label for="precio" class="mb-1.5 block text-sm font-medium text-[#F3ECE0]">
-                                Precio
-                            </label>
-                            <div class="relative">
-                                <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-[#BEB3A6]">
-                                    Gs.
-                                </span>
+                        <div class="mt-5 grid gap-5 sm:grid-cols-2">
+                            <div class="min-w-0">
+                                <label for="nombre" class="mb-1.5 block text-sm font-medium text-[#F3ECE0]">
+                                    Nombre
+                                </label>
                                 <input
-                                    id="precio"
-                                    v-model="precioTexto"
+                                    id="nombre"
+                                    v-model="form.nombre"
                                     type="text"
-                                    inputmode="numeric"
-                                    placeholder="70.000"
-                                    :aria-invalid="Boolean(error('precio'))"
-                                    :aria-describedby="error('precio') ? 'precio-error' : 'precio-ayuda'"
-                                    :class="[inputClass, inputBorder('precio'), 'pl-12']"
-                                    @input="limpiarServidor('precio')"
+                                    maxlength="255"
+                                    placeholder="Ej.: Corte femenino"
+                                    :aria-invalid="Boolean(error('nombre'))"
+                                    :aria-describedby="error('nombre') ? 'nombre-error' : undefined"
+                                    :class="[inputClass, inputBorder('nombre')]"
+                                    @input="limpiarServidor('nombre')"
                                 />
+                                <p v-if="error('nombre')" id="nombre-error" class="mt-1.5 text-sm text-[#F0A8A8]">
+                                    {{ error('nombre') }}
+                                </p>
                             </div>
-                            <p v-if="error('precio')" id="precio-error" class="mt-1.5 text-sm text-[#F0A8A8]">
-                                {{ error('precio') }}
-                            </p>
-                            <p v-else id="precio-ayuda" class="mt-1.5 text-sm text-[#BEB3A6]">
-                                Rige desde hoy.
-                            </p>
+
+                            <div class="min-w-0">
+                                <p class="mb-1.5 text-sm font-medium text-[#F3ECE0]">
+                                    Categoría
+                                </p>
+                                <Dropdown
+                                    v-model="form.categoria_id"
+                                    :options="opcionesCategoria"
+                                    :placeholder="cargandoCategorias ? 'Cargando...' : 'Seleccionar categoría'"
+                                    :disabled="cargandoCategorias"
+                                    @update:model-value="limpiarServidor('categoria_id')"
+                                />
+                                <p v-if="error('categoria_id')" class="mt-1.5 text-sm text-[#F0A8A8]">
+                                    {{ error('categoria_id') }}
+                                </p>
+                            </div>
                         </div>
-                    </div>
 
-                    <div class="mt-5">
-                        <label for="descripcion" class="mb-1.5 block text-sm font-medium text-[#F3ECE0]">
-                            Descripción <span class="font-normal text-[#BEB3A6]">(opcional)</span>
+                        <div class="mt-5">
+                            <label for="descripcion" class="mb-1.5 block text-sm font-medium text-[#F3ECE0]">
+                                Descripción <span class="font-normal text-[#BEB3A6]">(opcional)</span>
+                            </label>
+                            <textarea
+                                id="descripcion"
+                                v-model="form.descripcion"
+                                rows="3"
+                                placeholder="Detalle breve que ayude a la recepción a explicar el servicio."
+                                :class="[inputClass, 'border-[#7A6E61] resize-y']"
+                            />
+                        </div>
+                    </section>
+
+                    <section class="border-t border-[#3D3934] p-5 sm:p-6">
+                        <h2 class="flex items-center gap-3 text-xl font-semibold text-[#F3ECE0]">
+                            <span class="flex h-7 w-7 items-center justify-center rounded-full border border-[#C9A96E] font-serif text-sm lining-nums text-[#E9D2A0]">2</span>
+                            Duración y precio
+                        </h2>
+
+                        <div class="mt-5 grid gap-5 sm:grid-cols-2">
+                            <div class="min-w-0">
+                                <label for="duracion" class="mb-1.5 block text-sm font-medium text-[#F3ECE0]">
+                                    Duración (minutos)
+                                </label>
+                                <div class="relative">
+                                    <Icono name="pendiente" class="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-[#C9A96E]" />
+                                    <input
+                                        id="duracion"
+                                        v-model="form.duracion_minutos"
+                                        type="number"
+                                        inputmode="numeric"
+                                        min="5"
+                                        max="480"
+                                        step="5"
+                                        placeholder="Ej.: 45"
+                                        :aria-invalid="Boolean(error('duracion_minutos'))"
+                                        :aria-describedby="error('duracion_minutos') ? 'duracion-error' : undefined"
+                                        :class="[inputClass, inputBorder('duracion_minutos'), 'pl-11']"
+                                        @input="limpiarServidor('duracion_minutos')"
+                                    />
+                                </div>
+                                <p v-if="error('duracion_minutos')" id="duracion-error" class="mt-1.5 text-sm text-[#F0A8A8]">
+                                    {{ error('duracion_minutos') }}
+                                </p>
+                                <p v-else-if="duracionTexto" class="mt-1.5 text-sm text-[#BEB3A6]">
+                                    {{ duracionTexto }}
+                                </p>
+                            </div>
+
+                            <div class="min-w-0">
+                                <label for="precio" class="mb-1.5 block text-sm font-medium text-[#F3ECE0]">
+                                    Precio
+                                </label>
+                                <div class="relative">
+                                    <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm font-medium text-[#C9A96E]">
+                                        Gs.
+                                    </span>
+                                    <input
+                                        id="precio"
+                                        v-model="precioTexto"
+                                        type="text"
+                                        inputmode="numeric"
+                                        placeholder="70.000"
+                                        :aria-invalid="Boolean(error('precio'))"
+                                        :aria-describedby="error('precio') ? 'precio-error' : 'precio-ayuda'"
+                                        :class="[inputClass, inputBorder('precio'), 'pl-12']"
+                                        @input="limpiarServidor('precio')"
+                                    />
+                                </div>
+                                <p v-if="error('precio')" id="precio-error" class="mt-1.5 text-sm text-[#F0A8A8]">
+                                    {{ error('precio') }}
+                                </p>
+                                <p v-else id="precio-ayuda" class="mt-1.5 text-sm text-[#BEB3A6]">
+                                    Rige desde hoy.
+                                </p>
+                            </div>
+                        </div>
+                    </section>
+
+                    <section class="border-t border-[#3D3934] p-5 sm:p-6">
+                        <h2 class="flex items-center gap-3 text-xl font-semibold text-[#F3ECE0]">
+                            <span class="flex h-7 w-7 items-center justify-center rounded-full border border-[#C9A96E] font-serif text-sm lining-nums text-[#E9D2A0]">3</span>
+                            Disponibilidad
+                        </h2>
+
+                        <label
+                            class="mt-5 flex cursor-pointer items-start gap-3 rounded-lg border p-4 transition-colors"
+                            :class="form.activo ? 'border-[#867158] bg-[#403629]' : 'border-[#5B5147] hover:border-[#8C7961]'"
+                        >
+                            <input
+                                v-model="form.activo"
+                                type="checkbox"
+                                class="mt-0.5 h-4 w-4 shrink-0 accent-[#D4C3A3] [color-scheme:dark]"
+                            />
+                            <span class="min-w-0">
+                                <span class="block text-sm font-medium text-[#F3ECE0]">
+                                    Disponible para reservas
+                                </span>
+                                <span class="block text-sm text-[#BEB3A6]">
+                                    Si lo desmarcas, el servicio se guarda pero no aparece al crear reservas.
+                                </span>
+                            </span>
                         </label>
-                        <textarea
-                            id="descripcion"
-                            v-model="form.descripcion"
-                            rows="3"
-                            placeholder="Detalle breve que ayude a la recepción a explicar el servicio."
-                            :class="[inputClass, 'border-[#7A6E61] resize-y']"
-                        />
-                    </div>
+                    </section>
 
-                    <label
-                        class="mt-5 flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors"
-                        :class="form.activo ? 'border-[#8C7961] bg-[#403629]' : 'border-[#5B5147] hover:border-[#8C7961]'"
-                    >
-                        <input
-                            v-model="form.activo"
-                            type="checkbox"
-                            class="mt-0.5 h-4 w-4 shrink-0 accent-[#D4C3A3] [color-scheme:dark]"
-                        />
-                        <span class="min-w-0">
-                            <span class="block text-sm font-medium text-[#F3ECE0]">
-                                Disponible para reservas
-                            </span>
-                            <span class="block text-sm text-[#BEB3A6]">
-                                Si lo desmarcas, el servicio se guarda pero no aparece al crear reservas.
-                            </span>
-                        </span>
-                    </label>
-
-                    <div
-                        class="mt-6 flex flex-col-reverse gap-3 border-t border-[#47413B] pt-5 sm:flex-row sm:justify-end"
-                    >
-                        <Button
-                            label="Cancelar"
-                            href="/servicios"
-                            variant="secondary"
-                            class="w-full sm:w-auto"
-                        />
-                        <Button
-                            :label="enviando ? 'Guardando...' : 'Guardar servicio'"
-                            type="submit"
-                            :disabled="enviando"
-                            class="w-full sm:w-auto"
-                        />
+                    <div class="flex flex-col-reverse gap-3 rounded-b-xl border-t border-[#3D3934] bg-[#262321] p-5 sm:flex-row sm:justify-end sm:px-6">
+                        <Button label="Cancelar" href="/servicios" variant="secondary" class="w-full sm:w-auto" />
+                        <Button type="submit" :disabled="enviando" class="w-full sm:w-auto">
+                            <Icono name="completada" class="h-4 w-4" />
+                            {{ enviando ? 'Guardando...' : 'Guardar servicio' }}
+                        </Button>
                     </div>
                 </form>
+
+                <aside class="lg:sticky lg:top-24 lg:self-start">
+                    <p class="mb-3 font-serif text-lg italic text-[#BEB3A6]">Así se verá en el catálogo</p>
+
+                    <div class="relative overflow-hidden rounded-xl border border-[#867158] bg-gradient-to-br from-[#403629] to-[#2C2723] p-5">
+                        <div class="absolute inset-x-0 top-0 h-0.5 bg-gradient-to-r from-[#C9A96E] via-[#E9D2A0] to-[#C9A96E]"></div>
+
+                        <div class="flex items-start justify-between gap-3">
+                            <span class="flex h-12 w-12 items-center justify-center rounded-full border border-[#C9A96E] bg-[#C9A96E]/15 text-[#E9D2A0]">
+                                <Icono name="servicios" class="h-6 w-6" />
+                            </span>
+                            <StatusBadge :status="form.activo ? 'activo' : 'inactivo'" />
+                        </div>
+
+                        <p class="mt-4 font-serif text-2xl font-semibold leading-tight text-[#F3ECE0]">
+                            {{ form.nombre.trim() || 'Nombre del servicio' }}
+                        </p>
+                        <p class="mt-1 text-sm" :class="categoriaElegida ? 'text-[#E0CDAF]' : 'text-[#8C7F70]'">
+                            {{ categoriaElegida || 'Sin categoría' }}
+                        </p>
+                        <p v-if="form.descripcion.trim()" class="mt-3 font-serif text-base italic text-[#BEB3A6]">
+                            {{ form.descripcion.trim() }}
+                        </p>
+
+                        <div class="mt-5 flex items-end justify-between gap-3 border-t border-[#5B5147] pt-4">
+                            <span class="inline-flex items-center gap-1.5 text-sm text-[#BEB3A6]">
+                                <Icono name="pendiente" class="h-4 w-4 text-[#C9A96E]" />
+                                {{ duracionVista || '— min' }}
+                            </span>
+                            <span class="font-serif text-2xl font-semibold lining-nums text-[#F3ECE0]">
+                                {{ form.precio === '' ? 'Gs. —' : guaranies(form.precio) }}
+                            </span>
+                        </div>
+                    </div>
+                </aside>
             </div>
         </div>
     </AppLayout>

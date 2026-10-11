@@ -1,19 +1,13 @@
-
 <script setup>
 import { ref, computed, watch } from 'vue'
 import AppLayout from '../../Layouts/AppLayout.vue'
 import Button from '../../Components/Button.vue'
 import SearchInput from '../../Components/SearchInput.vue'
-import Dropdown from '../../Components/Dropdown.vue'
 import StatusBadge from '../../Components/StatusBadge.vue'
 import Pagination from '../../Components/Pagination.vue'
-
-// ============================================================
-// DATOS TEMPORALES DE DEMOSTRACIÓN
-// Misma forma que cada elemento de `data` en GET /api/reservas
-// (sin created_at ni updated_at). Clientes, personal, servicios y
-// precios salen del seeder del backend.
-// ============================================================
+import PageHeader from '../../Components/PageHeader.vue'
+import EstadoVacio from '../../Components/EstadoVacio.vue'
+import Icono from '../../Components/Icono.vue'
 
 const ana = { id: 1, nombre: 'Ana', apellido: 'Gómez', telefono: '0981111222', email: 'ana.gomez@example.com' }
 const beatriz = { id: 2, nombre: 'Beatriz', apellido: 'López', telefono: '0982333444', email: 'beatriz.lopez@example.com' }
@@ -68,10 +62,6 @@ const reservas = [
     reservaDemo(14, ana, carla, '2026-10-14', '16:00', '17:15', 'pendiente', [corte, nutricion]),
 ]
 
-// ============================================================
-// BÚSQUEDA, FILTRO Y PAGINACIÓN
-// ============================================================
-
 const porPagina = 6
 
 const busqueda = ref('')
@@ -79,19 +69,22 @@ const estado = ref('todas')
 const paginaActual = ref(1)
 
 const opcionesEstado = [
-    { label: 'Todas', value: 'todas' },
-    { label: 'Pendientes', value: 'pendiente' },
-    { label: 'Confirmadas', value: 'confirmada' },
-    { label: 'Completadas', value: 'completada' },
-    { label: 'Canceladas', value: 'cancelada' },
+    { label: 'Todas', value: 'todas', punto: 'bg-[#D4C3A3]' },
+    { label: 'Pendientes', value: 'pendiente', punto: 'bg-[#C9A96E]' },
+    { label: 'Confirmadas', value: 'confirmada', punto: 'bg-[#9AD9AE]' },
+    { label: 'Completadas', value: 'completada', punto: 'bg-[#7A6E61]' },
+    { label: 'Canceladas', value: 'cancelada', punto: 'bg-[#F0A8A8]' },
 ]
 
-// Minúsculas y sin tildes: "gomez" encuentra "Gómez".
+function conteo(valor) {
+    if (valor === 'todas') return reservas.length
+    return reservas.filter((reserva) => reserva.estado === valor).length
+}
+
 function normalizar(texto) {
     return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
 }
 
-// Más recientes primero; dentro del mismo día, por hora.
 const reservasOrdenadas = [...reservas].sort(
     (a, b) => b.fecha.localeCompare(a.fecha) || a.hora_inicio.localeCompare(b.hora_inicio)
 )
@@ -116,7 +109,6 @@ const reservasPagina = computed(() => {
     return reservasFiltradas.value.slice(inicio, inicio + porPagina)
 })
 
-// Mismo formato que el arreglo `links` del paginador de Laravel.
 const links = computed(() => {
     const actual = paginaActual.value
     const total = totalPaginas.value
@@ -155,31 +147,28 @@ const resumen = computed(() => {
     return `Mostrando ${desde}–${hasta} de ${total} ${total === 1 ? 'reserva' : 'reservas'}`
 })
 
-// Al cambiar la búsqueda o el filtro, se vuelve a la primera página.
 watch([busqueda, estado], () => {
     paginaActual.value = 1
 })
 
-// Pagination emite la URL; de ahí se toma el número de página.
 function irAPagina(url) {
     const pagina = Number(new URL(url, window.location.origin).searchParams.get('page'))
     if (pagina >= 1 && pagina <= totalPaginas.value) paginaActual.value = pagina
 }
 
-// ============================================================
-// FORMATO
-// ============================================================
-
-// Se arma con números para leer la fecha como hora local y no como UTC.
-function fechaCorta(fecha) {
+function partesFecha(fecha) {
     const [anio, mes, dia] = fecha.split('-').map(Number)
+    const objeto = new Date(anio, mes - 1, dia)
 
-    return new Date(anio, mes - 1, dia).toLocaleDateString('es-PY', {
-        weekday: 'short',
-        day: 'numeric',
-        month: 'short',
-        year: 'numeric',
-    })
+    return {
+        dia,
+        mes: objeto.toLocaleDateString('es-PY', { month: 'short' }).replace('.', ''),
+        semana: objeto.toLocaleDateString('es-PY', { weekday: 'long' }),
+    }
+}
+
+function iniciales(persona) {
+    return `${persona.nombre[0] ?? ''}${persona.apellido[0] ?? ''}`.toUpperCase()
 }
 
 function horario(reserva) {
@@ -195,188 +184,192 @@ function nombresServicios(reserva) {
 }
 </script>
 
+
 <template>
     <AppLayout>
-        <div
-            class="min-h-[calc(100vh-73px)] bg-[#1C1B1A] lg:min-h-[calc(100vh-69px)]"
-        >
-            <div class="mx-auto max-w-7xl px-6 py-8">
+        <div class="mx-auto max-w-7xl px-6 py-8">
+            <PageHeader
+                seccion="Agenda"
+                titulo="Reservas"
+                descripcion="Todas las citas del salón, de la más reciente a la más antigua."
+                icono="reservas"
+            >
+                <Button href="/reservas/crear">
+                    <Icono name="agregar" class="h-4 w-4" />
+                    Nueva reserva
+                </Button>
+            </PageHeader>
 
-                <!-- Cabecera -->
-                <div class="flex flex-wrap items-center justify-between gap-4">
-                    <h1 class="text-2xl font-semibold text-[#F3ECE0]">
-                        Reservas
-                    </h1>
-
-                        <Button label="+ Nueva reserva" href="/reservas/crear" />
-                </div>
-
-                <!-- Búsqueda y filtro -->
-                <div
-                    class="mt-6 flex flex-col gap-3 rounded-xl border border-[#47413B] bg-[#292725] p-4 sm:flex-row"
-                >
-                    <div class="sm:max-w-sm sm:flex-1">
-                        <SearchInput
-                            v-model="busqueda"
-                            placeholder="Buscar por cliente..."
-                        />
+            <div class="mt-6 rounded-xl border border-[#47413B] bg-[#292725] p-4">
+                <div class="flex flex-col gap-4 2xl:flex-row 2xl:items-center">
+                    <div class="sm:max-w-sm 2xl:w-80">
+                        <SearchInput v-model="busqueda" placeholder="Buscar por cliente..." />
                     </div>
 
-                    <div class="sm:w-52">
-                        <Dropdown
-                            v-model="estado"
-                            :options="opcionesEstado"
-                        />
-                    </div>
-                </div>
-
-                <!-- Resultados -->
-                <div class="mt-6">
-
-                    <!-- Sin resultados -->
-                    <div
-                        v-if="!reservasFiltradas.length"
-                        class="rounded-xl border border-[#47413B] bg-[#292725] px-5 py-12 text-center"
-                    >
-                        <p class="text-sm text-[#BEB3A6]">
-                            No hay reservas que coincidan con la búsqueda.
-                        </p>
-                    </div>
-
-                    <template v-else>
-
-                        <!-- Tabla de escritorio -->
-                        <div
-                            class="hidden overflow-x-auto rounded-xl border border-[#47413B] bg-[#292725] lg:block"
+                    <div class="flex flex-wrap gap-2" role="group" aria-label="Filtrar por estado">
+                        <button
+                            v-for="opcion in opcionesEstado"
+                            :key="opcion.value"
+                            type="button"
+                            class="inline-flex items-center gap-2 rounded-full border px-3.5 py-1.5 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#D4C3A3]"
+                            :class="
+                                estado === opcion.value
+                                    ? 'border-[#C9A96E] bg-[#403629] text-[#F3ECE0]'
+                                    : 'border-[#5B5147] bg-[#34302B] text-[#BEB3A6] hover:border-[#8C7961] hover:text-[#F3ECE0]'
+                            "
+                            :aria-pressed="estado === opcion.value"
+                            @click="estado = opcion.value"
                         >
-                            <table class="w-full text-left text-sm">
-
-                                <thead
-                                    class="border-b border-[#51483F] bg-[#34302B] text-[#D4C3A3]"
-                                >
-                                    <tr>
-                                        <th scope="col" class="px-5 py-3 font-medium">
-                                            Fecha
-                                        </th>
-                                        <th scope="col" class="px-5 py-3 font-medium">
-                                            Horario
-                                        </th>
-                                        <th scope="col" class="px-5 py-3 font-medium">
-                                            Cliente
-                                        </th>
-                                        <th scope="col" class="px-5 py-3 font-medium">
-                                            Servicios
-                                        </th>
-                                        <th scope="col" class="px-5 py-3 font-medium">
-                                            Profesional
-                                        </th>
-                                        <th scope="col" class="px-5 py-3 font-medium">
-                                            Estado
-                                        </th>
-                                    </tr>
-                                </thead>
-
-                                <tbody class="divide-y divide-[#47413B]">
-                                    <tr
-                                        v-for="reserva in reservasPagina"
-                                        :key="reserva.id"
-                                        class="transition-colors hover:bg-[#302D29]"
-                                    >
-                                        <td
-                                            class="whitespace-nowrap px-5 py-4 text-[#F3ECE0] first-letter:uppercase"
-                                        >
-                                            {{ fechaCorta(reserva.fecha) }}
-                                        </td>
-
-                                        <td
-                                            class="whitespace-nowrap px-5 py-4 text-[#F3ECE0]"
-                                        >
-                                            {{ horario(reserva) }}
-                                        </td>
-
-                                        <td
-                                            class="whitespace-nowrap px-5 py-4 font-medium text-[#F3ECE0]"
-                                        >
-                                            {{ nombreCliente(reserva) }}
-                                        </td>
-
-                                        <td class="px-5 py-4 text-[#BEB3A6]">
-                                            {{ nombresServicios(reserva) }}
-                                        </td>
-
-                                        <td
-                                            class="whitespace-nowrap px-5 py-4 text-[#BEB3A6]"
-                                        >
-                                            {{ reserva.personal.nombre }}
-                                        </td>
-
-                                        <td class="px-5 py-4">
-                                            <StatusBadge :status="reserva.estado" />
-                                        </td>
-                                    </tr>
-                                </tbody>
-
-                            </table>
-                        </div>
-
-                        <!-- Tarjetas de tablet y móvil -->
-                        <ul class="grid gap-3 sm:grid-cols-2 lg:hidden">
-                            <li
-                                v-for="reserva in reservasPagina"
-                                :key="reserva.id"
-                                class="rounded-xl border border-[#47413B] bg-[#292725] p-4 transition-colors hover:bg-[#302D29]"
+                            <span class="h-2 w-2 rounded-full" :class="opcion.punto" aria-hidden="true"></span>
+                            {{ opcion.label }}
+                            <span
+                                class="rounded-full px-1.5 text-xs font-semibold lining-nums"
+                                :class="estado === opcion.value ? 'bg-[#C9A96E] text-[#1C1B1A]' : 'bg-[#292725] text-[#BEB3A6]'"
                             >
-                                <div class="flex items-start justify-between gap-3">
-                                    <div>
-                                        <p
-                                            class="text-sm font-medium text-[#F3ECE0] first-letter:uppercase"
-                                        >
-                                            {{ fechaCorta(reserva.fecha) }}
-                                        </p>
+                                {{ conteo(opcion.value) }}
+                            </span>
+                        </button>
+                    </div>
+                </div>
+            </div>
 
-                                        <p class="text-sm text-[#BEB3A6]">
+            <div class="mt-6">
+                <EstadoVacio
+                    v-if="!reservasFiltradas.length"
+                    icono="buscar"
+                    titulo="Sin coincidencias"
+                    descripcion="No hay reservas que coincidan con la búsqueda o el estado seleccionado."
+                >
+                    <Button label="Limpiar filtros" variant="secondary" @click="busqueda = ''; estado = 'todas'" />
+                </EstadoVacio>
+
+                <template v-else>
+                    <div class="hidden overflow-x-auto rounded-xl border border-[#47413B] bg-[#292725] lg:block">
+                        <table class="w-full text-left text-sm">
+                            <thead class="border-b border-[#5B5147] bg-gradient-to-r from-[#3A3229] to-[#34302B] text-[#E0CDAF]">
+                                <tr>
+                                    <th scope="col" class="px-5 py-3.5 text-xs font-medium uppercase tracking-[0.15em]">Fecha</th>
+                                    <th scope="col" class="px-5 py-3.5 text-xs font-medium uppercase tracking-[0.15em]">Horario</th>
+                                    <th scope="col" class="px-5 py-3.5 text-xs font-medium uppercase tracking-[0.15em]">Cliente</th>
+                                    <th scope="col" class="px-5 py-3.5 text-xs font-medium uppercase tracking-[0.15em]">Servicios</th>
+                                    <th scope="col" class="px-5 py-3.5 text-xs font-medium uppercase tracking-[0.15em]">Profesional</th>
+                                    <th scope="col" class="px-5 py-3.5 text-xs font-medium uppercase tracking-[0.15em]">Estado</th>
+                                </tr>
+                            </thead>
+
+                            <tbody class="divide-y divide-[#3D3934]">
+                                <tr
+                                    v-for="reserva in reservasPagina"
+                                    :key="reserva.id"
+                                    class="group transition-colors hover:bg-[#2E2B28]"
+                                    :class="{ 'opacity-60': reserva.estado === 'cancelada' }"
+                                >
+                                    <td class="relative whitespace-nowrap px-5 py-4">
+                                        <span class="absolute inset-y-3 left-0 w-0.5 rounded-full bg-[#C9A96E] opacity-0 transition-opacity group-hover:opacity-100"></span>
+                                        <div class="flex items-center gap-3">
+                                            <span class="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-lg border border-[#5B5147] bg-[#1F1D1B]">
+                                                <span class="font-serif text-xl font-semibold leading-none lining-nums text-[#F3ECE0]">
+                                                    {{ partesFecha(reserva.fecha).dia }}
+                                                </span>
+                                                <span class="mt-0.5 text-[0.625rem] font-medium uppercase tracking-wider text-[#C9A96E]">
+                                                    {{ partesFecha(reserva.fecha).mes }}
+                                                </span>
+                                            </span>
+                                            <span class="text-sm capitalize text-[#BEB3A6]">
+                                                {{ partesFecha(reserva.fecha).semana }}
+                                            </span>
+                                        </div>
+                                    </td>
+
+                                    <td class="whitespace-nowrap px-5 py-4 font-serif text-lg font-semibold lining-nums text-[#E0CDAF]">
+                                        {{ horario(reserva) }}
+                                    </td>
+
+                                    <td class="whitespace-nowrap px-5 py-4">
+                                        <div class="flex items-center gap-3">
+                                            <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-[#403629] text-xs font-semibold text-[#E0CDAF]">
+                                                {{ iniciales(reserva.cliente) }}
+                                            </span>
+                                            <span class="font-medium text-[#F3ECE0]">{{ nombreCliente(reserva) }}</span>
+                                        </div>
+                                    </td>
+
+                                    <td class="px-5 py-4">
+                                        <div class="flex flex-wrap gap-1.5">
+                                            <span
+                                                v-for="detalle in reserva.detalles"
+                                                :key="detalle.id"
+                                                class="rounded-md border border-[#47413B] bg-[#34302B] px-2 py-0.5 text-xs text-[#E0CDAF]"
+                                            >
+                                                {{ detalle.servicio.nombre }}
+                                            </span>
+                                        </div>
+                                    </td>
+
+                                    <td class="whitespace-nowrap px-5 py-4">
+                                        <div class="flex items-center gap-2 text-[#BEB3A6]">
+                                            <span class="flex h-7 w-7 items-center justify-center rounded-full border border-[#C9A96E]/60 font-serif text-xs font-semibold text-[#E9D2A0]">
+                                                {{ iniciales(reserva.personal) }}
+                                            </span>
+                                            {{ reserva.personal.nombre }}
+                                        </div>
+                                    </td>
+
+                                    <td class="px-5 py-4">
+                                        <StatusBadge :status="reserva.estado" />
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <ul class="grid gap-3 sm:grid-cols-2 lg:hidden">
+                        <li
+                            v-for="reserva in reservasPagina"
+                            :key="reserva.id"
+                            class="flex gap-4 rounded-xl border border-[#47413B] bg-[#292725] p-4 transition-colors hover:border-[#C9A96E]/50"
+                            :class="{ 'opacity-60': reserva.estado === 'cancelada' }"
+                        >
+                            <span class="flex h-16 w-14 shrink-0 flex-col items-center justify-center rounded-lg border border-[#5B5147] bg-[#1F1D1B]">
+                                <span class="font-serif text-2xl font-semibold leading-none lining-nums text-[#F3ECE0]">
+                                    {{ partesFecha(reserva.fecha).dia }}
+                                </span>
+                                <span class="mt-1 text-[0.625rem] font-medium uppercase tracking-wider text-[#C9A96E]">
+                                    {{ partesFecha(reserva.fecha).mes }}
+                                </span>
+                            </span>
+
+                            <div class="min-w-0 flex-1">
+                                <div class="flex items-start justify-between gap-2">
+                                    <div>
+                                        <p class="font-serif text-lg font-semibold leading-tight lining-nums text-[#E0CDAF]">
                                             {{ horario(reserva) }}
                                         </p>
+                                        <p class="text-xs capitalize text-[#8C7F70]">{{ partesFecha(reserva.fecha).semana }}</p>
                                     </div>
-
                                     <StatusBadge :status="reserva.estado" />
                                 </div>
 
-                                <div class="mt-3 border-t border-[#47413B] pt-3">
-                                    <p class="text-sm font-medium text-[#F3ECE0]">
-                                        {{ nombreCliente(reserva) }}
-                                    </p>
+                                <p class="mt-2 text-sm font-medium text-[#F3ECE0]">{{ nombreCliente(reserva) }}</p>
+                                <p class="mt-0.5 text-sm text-[#BEB3A6]">
+                                    {{ nombresServicios(reserva) }} · {{ reserva.personal.nombre }}
+                                </p>
+                            </div>
+                        </li>
+                    </ul>
+                </template>
+            </div>
 
-                                    <p class="mt-1 text-sm text-[#BEB3A6]">
-                                        {{ nombresServicios(reserva) }} ·
-                                        {{ reserva.personal.nombre }}
-                                    </p>
-                                </div>
-                            </li>
-                        </ul>
+            <div
+                v-if="reservasFiltradas.length"
+                class="mt-6 flex flex-col items-center justify-between gap-3 sm:flex-row"
+            >
+                <p class="font-serif text-base italic lining-nums text-[#BEB3A6]">
+                    {{ resumen }}
+                </p>
 
-                    </template>
-                </div>
-
-                <!-- Resumen y paginación -->
-                <div
-                    v-if="reservasFiltradas.length"
-                    class="mt-6 flex flex-col items-center justify-between gap-3 sm:flex-row"
-                >
-                    <p class="text-sm text-[#BEB3A6]">
-                        {{ resumen }}
-                    </p>
-
-                    <Pagination
-                        v-if="totalPaginas > 1"
-                        :links="links"
-                        @navigate="irAPagina"
-                    />
-                </div>
-
+                <Pagination v-if="totalPaginas > 1" :links="links" @navigate="irAPagina" />
             </div>
         </div>
     </AppLayout>
 </template>
-
-
