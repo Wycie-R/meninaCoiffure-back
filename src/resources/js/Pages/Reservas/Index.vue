@@ -1,5 +1,5 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import AppLayout from '../../Layouts/AppLayout.vue'
 import Button from '../../Components/Button.vue'
 import SearchInput from '../../Components/SearchInput.vue'
@@ -8,66 +8,55 @@ import Pagination from '../../Components/Pagination.vue'
 import PageHeader from '../../Components/PageHeader.vue'
 import EstadoVacio from '../../Components/EstadoVacio.vue'
 import Icono from '../../Components/Icono.vue'
-import { guaranies } from '../../formato'
+import Dropdown from '../../Components/Dropdown.vue'
+import Campo from '../../Components/Campo.vue'
+import Aviso from '../../Components/Aviso.vue'
+import PanelReserva from '../../Components/PanelReserva.vue'
+import { aFecha, aISO, guaranies, hora, plural } from '../../formato'
+import { claseEntrada, claseEnfoque } from '../../ui'
+import { useReservas } from '../../reservas'
+import {
+    agruparPorDia,
+    dia as diaDe,
+    filtrarBase,
+    nombreCliente,
+    nombrePersonal,
+    nombresServicios,
+    ordenar,
+    porAtender,
+    sinCerrar,
+    totalReserva,
+} from '../../agenda'
 
-const ana = { id: 1, nombre: 'Ana', apellido: 'Gómez', telefono: '0981111222', email: 'ana.gomez@example.com' }
-const beatriz = { id: 2, nombre: 'Beatriz', apellido: 'López', telefono: '0982333444', email: 'beatriz.lopez@example.com' }
+const { reservas, cargando, cargado, error, cargarReservas } = useReservas()
 
-const carla = { id: 1, nombre: 'Carla', apellido: 'Estilista', telefono: '0971555666', email: 'carla@meninacoiffure.com', fecha_ingreso: '2025-01-15', activo: true }
-const diana = { id: 2, nombre: 'Diana', apellido: 'Colorista', telefono: '0972777888', email: 'diana@meninacoiffure.com', fecha_ingreso: '2025-03-01', activo: true }
+const diasPorPagina = 7
 
-const corte = { id: 1, categoria_id: 1, nombre: 'Corte Femenino', descripcion: null, duracion_minutos: 45, activo: true }
-const nutricion = { id: 2, categoria_id: 1, nombre: 'Baño de Crema / Nutrición', descripcion: null, duracion_minutos: 30, activo: true }
-const coloracion = { id: 3, categoria_id: 2, nombre: 'Coloración Completa', descripcion: null, duracion_minutos: 90, activo: true }
+const ahora = ref(new Date())
+let reloj = null
 
-const precios = { 1: '70000.00', 2: '50000.00', 3: '180000.00' }
+onMounted(() => {
+    cargarReservas({ forzar: true })
+    reloj = setInterval(() => {
+        ahora.value = new Date()
+    }, 30000)
+})
 
-function reservaDemo(id, cliente, personal, fecha, inicio, fin, estado, servicios) {
-    return {
-        id,
-        cliente_id: cliente.id,
-        personal_id: personal.id,
-        fecha,
-        hora_inicio: `${inicio}:00`,
-        hora_fin: `${fin}:00`,
-        estado,
-        descuento_id: null,
-        cliente,
-        personal,
-        detalles: servicios.map((servicio, i) => ({
-            id: id * 10 + i + 1,
-            reserva_id: id,
-            servicio_id: servicio.id,
-            precio_aplicado: precios[servicio.id],
-            cantidad: 1,
-            agregado_en_el_momento: false,
-            servicio,
-        })),
-    }
-}
+onBeforeUnmount(() => clearInterval(reloj))
 
-const reservas = [
-    reservaDemo(1, ana, carla, '2026-09-28', '09:00', '09:45', 'completada', [corte]),
-    reservaDemo(2, beatriz, diana, '2026-09-28', '10:00', '11:30', 'completada', [coloracion]),
-    reservaDemo(3, ana, diana, '2026-09-30', '14:00', '14:30', 'cancelada', [nutricion]),
-    reservaDemo(4, beatriz, carla, '2026-10-01', '11:00', '12:15', 'completada', [corte, nutricion]),
-    reservaDemo(5, ana, carla, '2026-10-02', '15:00', '15:45', 'completada', [corte]),
-    reservaDemo(6, ana, carla, '2026-10-05', '09:00', '09:45', 'completada', [corte]),
-    reservaDemo(7, beatriz, diana, '2026-10-05', '09:30', '11:00', 'completada', [coloracion]),
-    reservaDemo(8, ana, carla, '2026-10-05', '16:30', '17:00', 'cancelada', [nutricion]),
-    reservaDemo(9, beatriz, carla, '2026-10-07', '10:00', '11:15', 'confirmada', [corte, nutricion]),
-    reservaDemo(10, ana, diana, '2026-10-08', '13:00', '14:30', 'confirmada', [coloracion]),
-    reservaDemo(11, beatriz, diana, '2026-10-09', '09:00', '09:30', 'pendiente', [nutricion]),
-    reservaDemo(12, ana, carla, '2026-10-12', '10:00', '10:45', 'pendiente', [corte]),
-    reservaDemo(13, beatriz, diana, '2026-10-13', '14:00', '15:30', 'pendiente', [coloracion]),
-    reservaDemo(14, ana, carla, '2026-10-14', '16:00', '17:15', 'pendiente', [corte, nutricion]),
-]
+const hoy = computed(() => aISO(ahora.value))
+const manana = computed(() => aISO(new Date(ahora.value.getFullYear(), ahora.value.getMonth(), ahora.value.getDate() + 1)))
 
-const porPagina = 8
-
-const busqueda = ref('')
+const vista = ref('proximas')
 const estado = ref('todas')
+const personalId = ref('todos')
+const desde = ref('')
+const hasta = ref('')
+const busqueda = ref('')
 const paginaActual = ref(1)
+const reservaAbierta = ref(null)
+const aviso = ref('')
+const filtrosAbiertos = ref(false)
 
 const opcionesEstado = [
     { label: 'Todas', value: 'todas', tinte: 'bg-bruma' },
@@ -84,44 +73,62 @@ const tinteEstado = {
     cancelada: 'bg-borgona',
 }
 
-function conteo(valor) {
-    if (valor === 'todas') return reservas.length
-    return reservas.filter((reserva) => reserva.estado === valor).length
-}
+const opcionesVista = computed(() => [
+    { label: 'Próximas', value: 'proximas', total: reservas.value.filter((r) => diaDe(r) >= hoy.value).length },
+    { label: 'Pasadas', value: 'pasadas', total: reservas.value.filter((r) => diaDe(r) < hoy.value).length },
+    { label: 'Todas', value: 'todas', total: reservas.value.length },
+])
 
-function normalizar(texto) {
-    return texto.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim()
-}
+const opcionesPersonal = computed(() => {
+    const equipo = new Map()
 
-const reservasOrdenadas = [...reservas].sort(
-    (a, b) => b.fecha.localeCompare(a.fecha) || a.hora_inicio.localeCompare(b.hora_inicio)
-)
-
-const reservasFiltradas = computed(() => {
-    const texto = normalizar(busqueda.value)
-
-    return reservasOrdenadas.filter((reserva) => {
-        const coincideEstado = estado.value === 'todas' || reserva.estado === estado.value
-        return coincideEstado && normalizar(nombreCliente(reserva)).includes(texto)
-    })
-})
-
-const totalPaginas = computed(() => Math.max(1, Math.ceil(reservasFiltradas.value.length / porPagina)))
-
-const reservasPagina = computed(() => {
-    const inicio = (paginaActual.value - 1) * porPagina
-    return reservasFiltradas.value.slice(inicio, inicio + porPagina)
-})
-
-const dias = computed(() => {
-    const grupos = new Map()
-
-    for (const reserva of reservasPagina.value) {
-        if (!grupos.has(reserva.fecha)) grupos.set(reserva.fecha, [])
-        grupos.get(reserva.fecha).push(reserva)
+    for (const reserva of reservas.value) {
+        if (reserva.personal && !equipo.has(reserva.personal_id)) equipo.set(reserva.personal_id, nombrePersonal(reserva))
     }
 
-    return [...grupos.entries()].map(([fecha, lista]) => ({ fecha, ...partesFecha(fecha), reservas: lista }))
+    const ordenado = [...equipo.entries()]
+        .sort((a, b) => a[1].localeCompare(b[1], 'es'))
+        .map(([value, label]) => ({ value, label }))
+
+    return [{ value: 'todos', label: 'Todo el equipo' }, ...ordenado]
+})
+
+const rangoInvalido = computed(() => Boolean(desde.value && hasta.value && desde.value > hasta.value))
+
+const base = computed(() =>
+    filtrarBase(
+        reservas.value,
+        {
+            vista: vista.value,
+            personalId: personalId.value,
+            desde: desde.value,
+            hasta: hasta.value,
+            texto: busqueda.value,
+        },
+        hoy.value
+    )
+)
+
+const filtradas = computed(() => {
+    const lista = estado.value === 'todas' ? base.value : base.value.filter((r) => r.estado === estado.value)
+    return ordenar(lista, vista.value)
+})
+
+function conteo(valor) {
+    if (valor === 'todas') return base.value.length
+    return base.value.filter((reserva) => reserva.estado === valor).length
+}
+
+const diasAgrupados = computed(() => agruparPorDia(filtradas.value))
+const totalPaginas = computed(() => Math.max(1, Math.ceil(diasAgrupados.value.length / diasPorPagina)))
+
+const dias = computed(() => {
+    const inicio = (paginaActual.value - 1) * diasPorPagina
+
+    return diasAgrupados.value.slice(inicio, inicio + diasPorPagina).map((grupo) => ({
+        ...grupo,
+        ...partesFecha(grupo.fecha),
+    }))
 })
 
 const links = computed(() => {
@@ -137,13 +144,58 @@ const links = computed(() => {
 })
 
 const resumen = computed(() => {
-    const pendientes = conteo('pendiente')
-    const proximas = reservas.filter((r) => ['pendiente', 'confirmada'].includes(r.estado)).length
-    return `${proximas} citas por atender, ${pendientes} de ellas sin confirmar.`
+    if (!reservas.value.length) return 'Todavía no hay reservas registradas.'
+
+    const pendientes = reservas.value.filter((r) => porAtender(r, ahora.value))
+    const sinConfirmar = pendientes.filter((r) => r.estado === 'pendiente').length
+    const abiertas = reservas.value.filter((r) => sinCerrar(r, ahora.value)).length
+
+    const partes = []
+
+    if (pendientes.length) {
+        partes.push(
+            `${plural(pendientes.length, 'cita por atender', 'citas por atender')}, ${
+                sinConfirmar ? `${sinConfirmar} de ellas sin confirmar` : 'todas confirmadas'
+            }.`
+        )
+    } else {
+        partes.push('No hay citas por atender.')
+    }
+
+    if (abiertas) partes.push(`${plural(abiertas, 'cita pasada sigue', 'citas pasadas siguen')} sin cerrar.`)
+
+    return partes.join(' ')
 })
 
-watch([busqueda, estado], () => {
+const filtrosSecundarios = computed(
+    () => (personalId.value !== 'todos' ? 1 : 0) + (desde.value || hasta.value ? 1 : 0)
+)
+
+const descripcion = computed(() => {
+    if (!cargado.value && !error.value) return 'Cargando las reservas…'
+    if (error.value && !reservas.value.length) return ''
+    return resumen.value
+})
+
+const hayFiltros = computed(
+    () =>
+        estado.value !== 'todas' ||
+        personalId.value !== 'todos' ||
+        Boolean(desde.value) ||
+        Boolean(hasta.value) ||
+        Boolean(busqueda.value.trim())
+)
+
+watch([vista, estado, personalId, desde, hasta, busqueda], () => {
     paginaActual.value = 1
+})
+
+watch([desde, hasta], ([nuevoDesde, nuevoHasta]) => {
+    if ((nuevoDesde || nuevoHasta) && vista.value !== 'todas') vista.value = 'todas'
+})
+
+watch(totalPaginas, (total) => {
+    if (paginaActual.value > total) paginaActual.value = total
 })
 
 function irAPagina(url) {
@@ -152,139 +204,269 @@ function irAPagina(url) {
 }
 
 function partesFecha(fecha) {
-    const [anio, mes, dia] = fecha.split('-').map(Number)
-    const objeto = new Date(anio, mes - 1, dia)
+    const objeto = aFecha(fecha)
+    const mismoAnio = objeto.getFullYear() === ahora.value.getFullYear()
+    const mes = objeto.toLocaleDateString('es-PY', { month: 'long' })
 
     return {
-        dia,
+        numero: objeto.getDate(),
         semana: objeto.toLocaleDateString('es-PY', { weekday: 'long' }),
-        mes: objeto.toLocaleDateString('es-PY', { month: 'long' }),
+        mes: mismoAnio ? mes : `${mes} ${objeto.getFullYear()}`,
+        relativo: fecha === hoy.value ? 'Hoy' : fecha === manana.value ? 'Mañana' : '',
     }
 }
 
-function hora(valor) {
-    return valor.slice(0, 5)
-}
-
-function nombreCliente(reserva) {
-    return `${reserva.cliente.nombre} ${reserva.cliente.apellido}`
-}
-
-function totalReserva(reserva) {
-    return reserva.detalles.reduce((total, d) => total + Number(d.precio_aplicado) * d.cantidad, 0)
-}
-
 function limpiarFiltros() {
-    busqueda.value = ''
     estado.value = 'todas'
+    personalId.value = 'todos'
+    desde.value = ''
+    hasta.value = ''
+    busqueda.value = ''
+}
+
+function verTodas() {
+    limpiarFiltros()
+    vista.value = 'todas'
+}
+
+function abrir(reserva) {
+    reservaAbierta.value = reserva.id
 }
 </script>
 
 <template>
     <AppLayout>
         <div class="mx-auto max-w-6xl px-6 py-10">
-            <PageHeader titulo="Agenda de reservas" :descripcion="resumen">
+            <PageHeader titulo="Agenda de reservas" :descripcion="descripcion">
+                <Button variant="secondary" :disabled="cargando" @click="cargarReservas({ forzar: true })">
+                    {{ cargando && reservas.length ? 'Actualizando…' : 'Actualizar' }}
+                </Button>
                 <Button href="/reservas/crear">
                     <Icono name="agregar" class="h-4 w-4" />
                     Nueva reserva
                 </Button>
             </PageHeader>
 
-            <div class="mt-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div class="flex flex-wrap gap-2" role="group" aria-label="Filtrar por estado">
-                    <button
-                        v-for="opcion in opcionesEstado"
-                        :key="opcion.value"
-                        type="button"
-                        class="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orquidea"
-                        :class="
-                            estado === opcion.value
-                                ? 'border-orquidea bg-orquidea/12 text-orquidea-claro'
-                                : 'border-hilo text-bruma hover:border-hilo-fuerte hover:text-perla'
-                        "
-                        :aria-pressed="estado === opcion.value"
-                        @click="estado = opcion.value"
-                    >
-                        <span class="h-3 w-1.5 rounded-full" :class="opcion.tinte" aria-hidden="true"></span>
-                        {{ opcion.label }}
-                        <span class="tabular-nums text-niebla">{{ conteo(opcion.value) }}</span>
-                    </button>
+            <template v-if="reservas.length">
+                <div class="mt-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                    <div class="flex w-fit gap-1 rounded-full border border-hilo bg-velo p-1" role="group" aria-label="Elegir qué reservas ver">
+                        <button
+                            v-for="opcion in opcionesVista"
+                            :key="opcion.value"
+                            type="button"
+                            class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm transition-colors"
+                            :class="[
+                                claseEnfoque,
+                                vista === opcion.value ? 'bg-raso text-perla' : 'text-bruma hover:text-perla',
+                            ]"
+                            :aria-pressed="vista === opcion.value"
+                            @click="vista = opcion.value"
+                        >
+                            {{ opcion.label }}
+                            <span class="tabular-nums text-niebla">{{ opcion.total }}</span>
+                        </button>
+                    </div>
+
+                    <div class="lg:w-80">
+                        <SearchInput v-model="busqueda" placeholder="Buscar cliente o servicio..." />
+                    </div>
                 </div>
 
-                <div class="lg:w-72">
-                    <SearchInput v-model="busqueda" placeholder="Buscar por cliente..." />
+                <div class="mt-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="flex flex-wrap gap-2" role="group" aria-label="Filtrar por estado">
+                        <button
+                            v-for="opcion in opcionesEstado"
+                            :key="opcion.value"
+                            type="button"
+                            class="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors"
+                            :class="[
+                                claseEnfoque,
+                                estado === opcion.value
+                                    ? 'border-orquidea bg-orquidea/12 text-orquidea-claro'
+                                    : 'border-hilo text-bruma hover:border-hilo-fuerte hover:text-perla',
+                            ]"
+                            :aria-pressed="estado === opcion.value"
+                            @click="estado = opcion.value"
+                        >
+                            <span class="h-3 w-1.5 rounded-full" :class="opcion.tinte" aria-hidden="true"></span>
+                            {{ opcion.label }}
+                            <span class="tabular-nums text-niebla">{{ conteo(opcion.value) }}</span>
+                        </button>
+                    </div>
+
+                    <div class="flex shrink-0 flex-wrap gap-2">
+                        <Button v-if="hayFiltros" label="Quitar filtros" variant="secondary" @click="limpiarFiltros" />
+                        <Button
+                            variant="secondary"
+                            aria-controls="filtros-adicionales"
+                            :aria-expanded="filtrosAbiertos"
+                            @click="filtrosAbiertos = !filtrosAbiertos"
+                        >
+                            <Icono name="filtros" class="h-4 w-4" />
+                            Más filtros
+                            <span
+                                v-if="filtrosSecundarios"
+                                class="flex h-5 min-w-5 items-center justify-center rounded-full bg-orquidea px-1.5 text-xs font-semibold text-noche"
+                            >
+                                {{ filtrosSecundarios }}
+                            </span>
+                        </Button>
+                    </div>
                 </div>
+
+                <div v-show="filtrosAbiertos" id="filtros-adicionales" class="mt-4 grid gap-4 sm:grid-cols-3 sm:items-start">
+                    <Campo etiqueta="Profesional">
+                        <Dropdown v-model="personalId" :options="opcionesPersonal" placeholder="Todo el equipo" />
+                    </Campo>
+
+                    <Campo etiqueta="Desde" para="filtro-desde">
+                        <input id="filtro-desde" v-model="desde" type="date" :class="claseEntrada(false, true)" />
+                    </Campo>
+
+                    <Campo
+                        etiqueta="Hasta"
+                        para="filtro-hasta"
+                        :error="rangoInvalido ? 'La fecha final no puede ser anterior a la inicial.' : ''"
+                    >
+                        <input id="filtro-hasta" v-model="hasta" type="date" :class="claseEntrada(rangoInvalido, true)" />
+                    </Campo>
+                </div>
+            </template>
+
+            <div v-if="!cargado && !error" class="mt-10 space-y-3" aria-busy="true" aria-label="Cargando las reservas">
+                <div v-for="n in 4" :key="n" class="h-[4.5rem] animate-pulse rounded-2xl bg-velo"></div>
             </div>
 
             <EstadoVacio
-                v-if="!reservasFiltradas.length"
+                v-else-if="error && !reservas.length"
                 class="mt-10"
-                titulo="Ninguna reserva coincide"
-                descripcion="Prueba con otro nombre o vuelve a mostrar todos los estados."
+                tono="error"
+                titulo="No se pudieron cargar las reservas"
+                :descripcion="error"
+                role="alert"
             >
-                <Button label="Ver todas las reservas" variant="secondary" @click="limpiarFiltros" />
+                <Button label="Reintentar" variant="secondary" @click="cargarReservas({ forzar: true })" />
             </EstadoVacio>
 
-            <div v-else class="mt-10 space-y-10">
-                <section
-                    v-for="dia in dias"
-                    :key="dia.fecha"
-                    class="grid gap-4 md:grid-cols-[8rem_minmax(0,1fr)] md:gap-8"
-                    :aria-label="`${dia.semana} ${dia.dia} de ${dia.mes}`"
-                >
-                    <div class="flex items-baseline gap-3 md:block">
-                        <p class="font-display text-5xl leading-none tabular-nums">{{ dia.dia }}</p>
-                        <p class="text-sm capitalize text-bruma md:mt-2">{{ dia.semana }}</p>
-                        <p class="text-sm text-niebla">{{ dia.mes }}</p>
-                    </div>
-
-                    <ol class="space-y-2">
-                        <li
-                            v-for="reserva in dia.reservas"
-                            :key="reserva.id"
-                            class="group relative flex flex-wrap items-center gap-x-5 gap-y-2 overflow-hidden rounded-2xl bg-velo py-4 pl-6 pr-4 transition-colors hover:bg-terciopelo"
-                            :class="{ 'opacity-60': reserva.estado === 'cancelada' }"
-                        >
-                            <span class="absolute inset-y-3 left-2 w-1.5 rounded-full" :class="tinteEstado[reserva.estado]" aria-hidden="true"></span>
-
-                            <p class="w-36 shrink-0 whitespace-nowrap tabular-nums">
-                                <span class="font-display text-2xl">{{ hora(reserva.hora_inicio) }}</span>
-                                <span class="ml-1 text-sm text-niebla">a {{ hora(reserva.hora_fin) }}</span>
-                            </p>
-
-                            <div class="order-3 w-full min-w-0 sm:order-none sm:w-auto sm:flex-1">
-                                <p class="truncate font-medium">{{ nombreCliente(reserva) }}</p>
-                                <p class="truncate text-sm text-bruma">
-                                    {{ reserva.detalles.map((d) => d.servicio.nombre).join(', ') }}
-                                </p>
-                            </div>
-
-                            <div class="hidden w-28 shrink-0 items-center gap-2 text-sm text-bruma lg:flex">
-                                <span class="flex h-7 w-7 items-center justify-center rounded-full bg-raso font-display text-xs text-orquidea-claro">
-                                    {{ reserva.personal.nombre[0] }}{{ reserva.personal.apellido[0] }}
-                                </span>
-                                {{ reserva.personal.nombre }}
-                            </div>
-
-                            <p class="hidden w-28 shrink-0 text-right text-sm tabular-nums text-bruma md:block">
-                                {{ guaranies(totalReserva(reserva)) }}
-                            </p>
-
-                            <StatusBadge :status="reserva.estado" class="ml-auto sm:ml-0" />
-                        </li>
-                    </ol>
-                </section>
-            </div>
-
-            <div
-                v-if="reservasFiltradas.length && totalPaginas > 1"
-                class="mt-10 flex flex-col items-center justify-between gap-3 border-t border-hilo pt-6 sm:flex-row"
+            <EstadoVacio
+                v-else-if="!reservas.length"
+                class="mt-10"
+                titulo="Todavía no hay reservas"
+                descripcion="Cuando se registre la primera cita, va a aparecer aquí agrupada por día."
             >
-                <p class="text-sm tabular-nums text-niebla">
-                    Página {{ paginaActual }} de {{ totalPaginas }}, {{ reservasFiltradas.length }} reservas en total
+                <Button href="/reservas/crear" label="Nueva reserva" />
+            </EstadoVacio>
+
+            <EstadoVacio
+                v-else-if="!filtradas.length"
+                class="mt-10"
+                titulo="Ninguna reserva coincide"
+                :descripcion="
+                    hayFiltros || vista !== 'todas'
+                        ? 'Prueba con otros filtros o muestra todas las reservas.'
+                        : 'No hay reservas para mostrar.'
+                "
+            >
+                <Button label="Ver todas las reservas" variant="secondary" @click="verTodas" />
+            </EstadoVacio>
+
+            <div v-else class="mt-10">
+                <p v-if="error" role="alert" class="mb-6 rounded-xl border border-borgona/40 bg-borgona-hondo px-4 py-3 text-sm text-borgona">
+                    {{ error }} Se muestran los últimos datos cargados.
                 </p>
-                <Pagination :links="links" @navigate="irAPagina" />
+
+                <div class="space-y-10">
+                    <section
+                        v-for="grupo in dias"
+                        :key="grupo.fecha"
+                        class="grid gap-4 md:grid-cols-[8rem_minmax(0,1fr)] md:gap-8"
+                        :aria-label="`${grupo.semana} ${grupo.numero} de ${grupo.mes}`"
+                    >
+                        <div class="flex items-baseline gap-3 md:block">
+                            <p class="font-display text-5xl leading-none tabular-nums">{{ grupo.numero }}</p>
+                            <p class="text-sm capitalize text-bruma md:mt-2">{{ grupo.semana }}</p>
+                            <p class="text-sm text-niebla">{{ grupo.mes }}</p>
+                            <p
+                                v-if="grupo.relativo"
+                                class="rounded-full bg-orquidea/12 px-2.5 py-0.5 text-xs font-medium text-orquidea-claro md:mt-3 md:w-fit"
+                            >
+                                {{ grupo.relativo }}
+                            </p>
+                        </div>
+
+                        <ol class="space-y-2">
+                            <li v-for="reserva in grupo.reservas" :key="reserva.id">
+                                <button
+                                    type="button"
+                                    class="group relative flex w-full flex-wrap items-center gap-x-5 gap-y-2 overflow-hidden rounded-2xl bg-velo py-4 pl-6 pr-4 text-left transition-colors hover:bg-terciopelo"
+                                    :class="[
+                                        claseEnfoque,
+                                        reserva.estado === 'cancelada' ? 'opacity-60' : '',
+                                        reserva.id === reservaAbierta ? 'ring-1 ring-orquidea/50' : '',
+                                    ]"
+                                    :aria-label="`Ver la reserva de ${nombreCliente(reserva)} a las ${hora(reserva.hora_inicio)}`"
+                                    @click="abrir(reserva)"
+                                >
+                                    <span class="absolute inset-y-3 left-2 w-1.5 rounded-full" :class="tinteEstado[reserva.estado]" aria-hidden="true"></span>
+
+                                    <span class="w-36 shrink-0 whitespace-nowrap tabular-nums">
+                                        <span class="block">
+                                            <span class="font-display text-2xl">{{ hora(reserva.hora_inicio) }}</span>
+                                            <span class="ml-1 text-sm text-niebla">a {{ hora(reserva.hora_fin) }}</span>
+                                        </span>
+                                        <span v-if="sinCerrar(reserva, ahora)" class="mt-0.5 flex items-center gap-1 text-xs text-miel">
+                                            <Icono name="alerta" class="h-3.5 w-3.5" />
+                                            Sin cerrar
+                                        </span>
+                                    </span>
+
+                                    <span class="order-3 block w-full min-w-0 sm:order-none sm:w-auto sm:flex-1">
+                                        <span class="block truncate font-medium">{{ nombreCliente(reserva) }}</span>
+                                        <span class="block truncate text-sm text-bruma">
+                                            {{ nombresServicios(reserva).join(', ') || 'Sin servicios' }}
+                                        </span>
+                                    </span>
+
+                                    <span class="hidden w-28 shrink-0 items-center gap-2 text-sm text-bruma lg:flex">
+                                        <span class="flex h-7 w-7 items-center justify-center rounded-full bg-raso font-display text-xs text-orquidea-claro" aria-hidden="true">
+                                            {{ (reserva.personal?.nombre ?? '?')[0] }}{{ (reserva.personal?.apellido ?? '')[0] ?? '' }}
+                                        </span>
+                                        {{ reserva.personal?.nombre ?? 'Sin asignar' }}
+                                    </span>
+
+                                    <span class="hidden w-28 shrink-0 text-right text-sm tabular-nums text-bruma md:block">
+                                        {{ guaranies(totalReserva(reserva)) }}
+                                    </span>
+
+                                    <span class="ml-auto flex w-28 shrink-0 justify-end sm:ml-0">
+                                        <StatusBadge :status="reserva.estado" />
+                                    </span>
+                                </button>
+                            </li>
+                        </ol>
+                    </section>
+                </div>
+
+                <div
+                    v-if="totalPaginas > 1"
+                    class="mt-10 flex flex-col items-center justify-between gap-3 border-t border-hilo pt-6 sm:flex-row"
+                >
+                    <p class="text-sm tabular-nums text-niebla">
+                        Página {{ paginaActual }} de {{ totalPaginas }}, {{ plural(filtradas.length, 'reserva', 'reservas') }} en
+                        {{ plural(diasAgrupados.length, 'día', 'días') }}
+                    </p>
+                    <Pagination :links="links" @navigate="irAPagina" />
+                </div>
             </div>
         </div>
+
+        <PanelReserva
+            :reserva-id="reservaAbierta"
+            :ahora="ahora"
+            @cerrar="reservaAbierta = null"
+            @aviso="aviso = $event"
+        />
+
+        <Aviso :mensaje="aviso" @cerrar="aviso = ''" />
     </AppLayout>
 </template>

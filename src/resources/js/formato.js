@@ -64,3 +64,8 @@ export function iniciales(nombre, apellido = '') {
 export function plural(cantidad, singular, pluralTexto) {
     return `${cantidad} ${cantidad === 1 ? singular : pluralTexto}`
 }
+
+export function capitalizar(texto) {
+    const valor = String(texto ?? '')
+    return valor.charAt(0).toUpperCase() + valor.slice(1)
+}

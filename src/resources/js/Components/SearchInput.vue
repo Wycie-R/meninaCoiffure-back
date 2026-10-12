@@ -1,4 +1,6 @@
 <script setup>
+import { useId } from 'vue'
+
 defineProps({
     modelValue: {
         type: String,
@@ -12,9 +14,14 @@ defineProps({
         type: Boolean,
         default: false,
     },
+    name: {
+        type: String,
+        default: 'buscar',
+    },
 })
 
 const emit = defineEmits(['update:modelValue'])
+const id = useId()
 </script>
 
 <template>
@@ -33,7 +40,10 @@ const emit = defineEmits(['update:modelValue'])
         </svg>
 
         <input
+            :id="id"
+            :name="name"
             type="text"
+            autocomplete="off"
             :value="modelValue"
             :placeholder="placeholder"
             :disabled="disabled"

@@ -85,6 +85,10 @@ const iconos = {
     destello: [
         'M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8z',
     ],
+    filtros: [
+        'M4 7h8M18 7h2M4 17h2M12 17h8',
+        'M15 9.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM9 19.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z',
+    ],
 }
 
 const trazos = computed(() => iconos[props.name] ?? [])
