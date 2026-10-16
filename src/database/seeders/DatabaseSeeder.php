@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
 
@@ -12,12 +11,13 @@ class DatabaseSeeder extends Seeder
 
     /**
      * Seed the application's database.
+     * Los datos de volumen para el benchmark se cargan aparte: db:seed --class=VolumenReservasSeeder
      */
     public function run(): void
     {
         $this->call([
-            AvanceDosSeeder::class,
             SprintUnoDosSeeder::class,
+            ReservasDemoSeeder::class,
         ]);
     }
 }

@@ -7,6 +7,8 @@ services:
     restart: unless-stopped
     volumes:
       - ./src:/var/www
+      # vendor en un volumen Linux: leerlo desde la carpeta de Windows hacía cada petición 1-7 s más lenta
+      - vendor:/var/www/vendor
     working_dir: /var/www
     depends_on:
       db:
@@ -69,3 +71,4 @@ networks:
 volumes:
   db_data:
   portainer_data:
+  vendor:

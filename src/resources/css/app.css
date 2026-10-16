@@ -1,3 +1,4 @@
+@import url('https://fonts.bunny.net/css?family=gloock:400&display=swap');
 @import 'tailwindcss';
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
@@ -6,4 +7,85 @@
 @theme {
     --font-sans: 'Instrument Sans', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
         'Segoe UI Symbol', 'Noto Color Emoji';
+    --font-display: 'Gloock', Georgia, 'Times New Roman', serif;
+
+    --color-noche: #17111c;
+    --color-velo: #1f1825;
+    --color-terciopelo: #282030;
+    --color-raso: #33293c;
+    --color-hilo: #3d3247;
+    --color-hilo-fuerte: #5a4b66;
+    --color-perla: #f6eff4;
+    --color-bruma: #bcaec1;
+    --color-niebla: #8f8096;
+
+    --color-orquidea: #d9a9e9;
+    --color-orquidea-claro: #ecd0f5;
+    --color-orquidea-hondo: #7a4c8f;
+
+    --color-miel: #f2bf70;
+    --color-menta: #8fd5b5;
+    --color-ceniza: #aeb9c7;
+    --color-borgona: #f08ca5;
+    --color-borgona-hondo: #4a2132;
+
+    /* Series de los gráficos: validadas para CVD y contraste sobre velo (#1f1825). */
+    --color-serie-a: #a873c9;
+    --color-serie-b: #c98500;
+
+    --animate-crecer: crecer 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+
+    @keyframes crecer {
+        from {
+            transform: scaleX(0);
+            opacity: 0;
+        }
+        to {
+            transform: scaleX(1);
+            opacity: 1;
+        }
+    }
+}
+
+@custom-variant bajo (@media (max-height: 820px) and (min-width: 1280px));
+
+@utility scroll-fino {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-hilo-fuerte) transparent;
+}
+
+@layer base {
+    html {
+        background-color: var(--color-noche);
+        color: var(--color-perla);
+        scrollbar-color: var(--color-hilo-fuerte) var(--color-noche);
+    }
+
+    h1,
+    h2,
+    h3 {
+        font-family: var(--font-display);
+        font-weight: 400;
+        letter-spacing: -0.01em;
+    }
+
+    h1 {
+        font-size: 2.25rem;
+        line-height: 1.1;
+    }
+
+    ::selection {
+        background-color: var(--color-orquidea-hondo);
+        color: var(--color-perla);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+        animation-duration: 0.01ms !important;
+        animation-delay: 0ms !important;
+        transition-duration: 0.01ms !important;
+    }
 }

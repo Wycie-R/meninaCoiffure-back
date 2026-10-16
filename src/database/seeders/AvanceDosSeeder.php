@@ -2,173 +2,223 @@
 
 namespace Database\Seeders;
 
+use App\Models\CategoriaServicio;
+use App\Models\Cliente;
+use App\Models\Descuento;
+use App\Models\Especialidad;
+use App\Models\HorarioAtencion;
+use App\Models\MetodoPago;
+use App\Models\Personal;
+use App\Models\PrecioServicio;
+use App\Models\Servicio;
+use App\Models\StockRecurso;
 use Illuminate\Database\Seeder;
-use Illuminate\Support\Facades\DB;
-use Carbon\Carbon;
 
+/**
+ * Datos base del salón, alineados con el relevamiento del proyecto de Liderazgo
+ * (AvanceLiderazgo_Menina_Coiffure): peluquería y estética, lunes a viernes de 8 a 17 h,
+ * atención en el local y a domicilio. Los precios son referenciales hasta confirmarlos
+ * con la propietaria.
+ *
+ * Cada registro se busca antes de crearlo, así que el seeder se puede repetir sin duplicar
+ * nada (antes una guarda global sobre las categorías dejaba al personal triplicado).
+ */
 class AvanceDosSeeder extends Seeder
 {
     public function run(): void
     {
-        // Evitar duplicados si ya fue ejecutado previamente
-        if (DB::table('categorias_servicio')->count() > 0) {
+        $this->clientes();
+        $personal = $this->personal();
+        $this->horarioDelLocal();
+        $servicios = $this->catalogo();
+        $this->insumos($servicios);
+
+        Descuento::firstOrCreate(['nombre' => 'Promo Primavera'], ['tipo' => 'porcentaje', 'valor' => 10, 'activo' => true]);
+
+        foreach (['Efectivo', 'Transferencia bancaria', 'Tarjeta de débito o crédito', 'Billetera electrónica'] as $metodo) {
+            MetodoPago::firstOrCreate(['nombre' => $metodo]);
+        }
+
+        $this->especialidades($personal);
+    }
+
+    protected function clientes(): void
+    {
+        Cliente::firstOrCreate(['nombre' => 'Ana', 'apellido' => 'Gómez'], [
+            'telefono' => '0981111222', 'email' => 'ana.gomez@example.com', 'fecha_registro' => now()->toDateString(),
+        ]);
+        Cliente::firstOrCreate(['nombre' => 'Beatriz', 'apellido' => 'López'], [
+            'telefono' => '0982333444', 'email' => 'beatriz.lopez@example.com', 'fecha_registro' => now()->toDateString(),
+        ]);
+    }
+
+    /**
+     * El equipo que atiende con turno: la propietaria (que también presta servicios) y la
+     * estilista y maquilladora. La asistente de salón apoya en el lavacabezas y no recibe reservas.
+     *
+     * @return array<string, Personal>
+     */
+    protected function personal(): array
+    {
+        $equipo = [
+            'monica' => ['Mónica', 'Propietaria', 'monica@meninacoiffure.com', '0984000001', '2018-03-01'],
+            'carla' => ['Carla', 'Estilista', 'carla@meninacoiffure.com', '0971555666', '2025-01-15'],
+        ];
+
+        $personal = [];
+        foreach ($equipo as $clave => [$nombre, $apellido, $email, $telefono, $ingreso]) {
+            $persona = Personal::firstOrCreate(['email' => $email], [
+                'nombre' => $nombre, 'apellido' => $apellido, 'telefono' => $telefono,
+                'fecha_ingreso' => $ingreso, 'activo' => true,
+            ]);
+
+            // Lunes a viernes de 08:00 a 17:00, como el horario del local
+            if (!$persona->turnos()->exists()) {
+                foreach (range(1, 5) as $dia) {
+                    $persona->turnos()->create(['dia_semana' => $dia, 'hora_inicio' => '08:00:00', 'hora_fin' => '17:00:00']);
+                }
+            }
+
+            $personal[$clave] = $persona;
+        }
+
+        return $personal;
+    }
+
+    protected function horarioDelLocal(): void
+    {
+        if (HorarioAtencion::exists()) {
             return;
         }
 
-        // 1. Clientes
-        $cliente1Id = DB::table('clientes')->insertGetId([
-            'nombre' => 'Ana',
-            'apellido' => 'Gómez',
-            'telefono' => '0981111222',
-            'email' => 'ana.gomez@example.com',
-            'fecha_registro' => now()->toDateString(),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        $cliente2Id = DB::table('clientes')->insertGetId([
-            'nombre' => 'Beatriz',
-            'apellido' => 'López',
-            'telefono' => '0982333444',
-            'email' => 'beatriz.lopez@example.com',
-            'fecha_registro' => now()->toDateString(),
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        // 2. Personal
-        $personal1Id = DB::table('personal')->insertGetId([
-            'nombre' => 'Carla',
-            'apellido' => 'Estilista',
-            'telefono' => '0971555666',
-            'email' => 'carla@meninacoiffure.com',
-            'fecha_ingreso' => '2025-01-15',
-            'activo' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        $personal2Id = DB::table('personal')->insertGetId([
-            'nombre' => 'Diana',
-            'apellido' => 'Colorista',
-            'telefono' => '0972777888',
-            'email' => 'diana@meninacoiffure.com',
-            'fecha_ingreso' => '2025-03-01',
-            'activo' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        // 3. Turnos del personal (1=Lunes a 5=Viernes, de 08:00 a 18:00)
         foreach (range(1, 5) as $dia) {
-            DB::table('turnos_personal')->insert([
-                [
-                    'personal_id' => $personal1Id,
-                    'dia_semana' => $dia,
-                    'hora_inicio' => '08:00:00',
-                    'hora_fin' => '18:00:00',
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ],
-                [
-                    'personal_id' => $personal2Id,
-                    'dia_semana' => $dia,
-                    'hora_inicio' => '09:00:00',
-                    'hora_fin' => '17:00:00',
-                    'created_at' => now(),
-                    'updated_at' => now(),
-                ],
+            HorarioAtencion::create(['dia_semana' => $dia, 'hora_apertura' => '08:00:00', 'hora_cierre' => '17:00:00']);
+        }
+    }
+
+    /**
+     * Las dos líneas de servicio del salón: capilar y estética. Los cuatro primeros conservan
+     * el orden de los datos originales porque las pruebas automáticas usan sus identificadores.
+     *
+     * @return array<string, Servicio>
+     */
+    protected function catalogo(): array
+    {
+        $categorias = [];
+        foreach ([
+            'Peluquería' => 'Cortes, lavado, modelado y peinados para damas, caballeros y niños',
+            'Colorimetría' => 'Tintes, mechas, reflejos y balayage',
+            'Tratamientos capilares' => 'Nutrición e hidratación del cabello',
+            'Estética y maquillaje' => 'Depilación, tratamientos faciales básicos y maquillaje social',
+        ] as $nombre => $descripcion) {
+            $categorias[$nombre] = CategoriaServicio::firstOrCreate(['nombre' => $nombre], ['descripcion' => $descripcion]);
+        }
+
+        // [clave, categoría, nombre, minutos, precio en guaraníes, activo]
+        $catalogo = [
+            ['corte_dama', 'Peluquería', 'Corte de dama', 45, 70000, true],
+            ['nutricion', 'Tratamientos capilares', 'Nutrición e hidratación capilar', 30, 50000, true],
+            ['coloracion', 'Colorimetría', 'Coloración completa', 90, 180000, true],
+            ['decoloracion', 'Colorimetría', 'Decoloración Extrema (Descontinuado)', 120, 220000, false],
+            ['corte_caballero', 'Peluquería', 'Corte de caballero', 30, 40000, true],
+            ['corte_ninos', 'Peluquería', 'Corte de niños', 30, 35000, true],
+            ['brushing', 'Peluquería', 'Lavado, secado y modelado', 45, 50000, true],
+            ['peinado_evento', 'Peluquería', 'Peinado para eventos', 60, 120000, true],
+            ['mechas', 'Colorimetría', 'Mechas y reflejos', 120, 250000, true],
+            ['balayage', 'Colorimetría', 'Balayage', 180, 350000, true],
+            ['depilacion_facial', 'Estética y maquillaje', 'Depilación facial', 20, 30000, true],
+            ['depilacion_corporal', 'Estética y maquillaje', 'Depilación corporal', 45, 70000, true],
+            ['limpieza_facial', 'Estética y maquillaje', 'Limpieza facial e hidratación', 60, 120000, true],
+            ['maquillaje', 'Estética y maquillaje', 'Maquillaje social', 60, 150000, true],
+        ];
+
+        $servicios = [];
+        foreach ($catalogo as [$clave, $categoria, $nombre, $minutos, $precio, $activo]) {
+            $servicio = Servicio::firstOrCreate(['nombre' => $nombre], [
+                'categoria_id' => $categorias[$categoria]->id,
+                'duracion_minutos' => $minutos,
+                'activo' => $activo,
+            ]);
+
+            if (!$servicio->precios()->exists()) {
+                PrecioServicio::create([
+                    'servicio_id' => $servicio->id, 'precio' => $precio,
+                    'vigente_desde' => '2026-01-01', 'vigente_hasta' => null,
+                ]);
+            }
+
+            $servicios[$clave] = $servicio;
+        }
+
+        return $servicios;
+    }
+
+    /**
+     * Insumos con su existencia inicial y el consumo estándar por servicio (HU-15 y HU-17).
+     *
+     * @param array<string, Servicio> $servicios
+     */
+    protected function insumos(array $servicios): void
+    {
+        $insumos = [];
+        foreach ([
+            'tinte' => ['Tinte en crema', 'ml', 1200, 300],
+            'oxidante' => ['Oxidante 20 vol.', 'ml', 3000, 1000],
+            'decolorante' => ['Polvo decolorante', 'g', 800, 250],
+            'crema' => ['Crema de tratamiento', 'ml', 2000, 500],
+            'champu' => ['Champú profesional', 'ml', 5000, 1000],
+            'cera' => ['Cera depilatoria', 'g', 1500, 400],
+        ] as $clave => [$nombre, $unidad, $cantidad, $minimo]) {
+            $insumos[$clave] = StockRecurso::firstOrCreate(['nombre' => $nombre], [
+                'unidad_medida' => $unidad, 'cantidad_actual' => $cantidad, 'stock_minimo' => $minimo,
             ]);
         }
 
-        // 4. Categorías
-        $catCorteId = DB::table('categorias_servicio')->insertGetId([
-            'nombre' => 'Corte y Peinado',
-            'descripcion' => 'Servicios de estilismo capilar',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        $consumos = [
+            'coloracion' => ['tinte' => 60, 'oxidante' => 90, 'champu' => 20],
+            'mechas' => ['decolorante' => 40, 'oxidante' => 80, 'champu' => 20],
+            'balayage' => ['decolorante' => 50, 'tinte' => 30, 'oxidante' => 120, 'champu' => 20],
+            'nutricion' => ['crema' => 40, 'champu' => 20],
+            'brushing' => ['champu' => 20],
+            'corte_dama' => ['champu' => 15],
+            'depilacion_facial' => ['cera' => 15],
+            'depilacion_corporal' => ['cera' => 80],
+        ];
 
-        $catColorId = DB::table('categorias_servicio')->insertGetId([
-            'nombre' => 'Coloración',
-            'descripcion' => 'Tintes, mechas y tratamientos de color',
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        foreach ($consumos as $servicio => $recursos) {
+            $servicios[$servicio]->recursos()->syncWithoutDetaching(
+                collect($recursos)->mapWithKeys(fn ($cantidad, $insumo) => [
+                    $insumos[$insumo]->id => ['cantidad_utilizada' => $cantidad],
+                ])->all()
+            );
+        }
+    }
 
-        // 5. Servicios (3 activos y 1 inactivo para probar Regla 3)
-        $srvCorteId = DB::table('servicios')->insertGetId([
-            'categoria_id' => $catCorteId,
-            'nombre' => 'Corte Femenino',
-            'duracion_minutos' => 45,
-            'activo' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+    /**
+     * @param array<string, Personal> $personal
+     */
+    protected function especialidades(array $personal): void
+    {
+        $especialidades = [];
+        foreach ([
+            'Peluquería' => 'Cortes, lavado, modelado y peinados',
+            'Colorimetría' => 'Tintes, mechas, reflejos y balayage',
+            'Peinados para eventos' => 'Peinados sociales y para eventos',
+            'Maquillaje' => 'Maquillaje social y profesional',
+            'Estética' => 'Depilación y tratamientos faciales básicos',
+        ] as $nombre => $descripcion) {
+            $especialidades[$nombre] = Especialidad::firstOrCreate(['nombre' => $nombre], ['descripcion' => $descripcion]);
+        }
 
-        $srvNutricionId = DB::table('servicios')->insertGetId([
-            'categoria_id' => $catCorteId,
-            'nombre' => 'Baño de Crema / Nutrición',
-            'duracion_minutos' => 30,
-            'activo' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        $asignaciones = [
+            'monica' => ['Peluquería', 'Colorimetría', 'Maquillaje', 'Estética'],
+            'carla' => ['Peluquería', 'Peinados para eventos', 'Maquillaje'],
+        ];
 
-        $srvColorId = DB::table('servicios')->insertGetId([
-            'categoria_id' => $catColorId,
-            'nombre' => 'Coloración Completa',
-            'duracion_minutos' => 90,
-            'activo' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        $srvInactivoId = DB::table('servicios')->insertGetId([
-            'categoria_id' => $catColorId,
-            'nombre' => 'Decoloración Extrema (Descontinuado)',
-            'duracion_minutos' => 120,
-            'activo' => false, // Inactivo a propósito
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
-
-        // 6. Precios vigentes (para probar Regla 4: precio congelado)
-        DB::table('precios_servicio')->insert([
-            [
-                'servicio_id' => $srvCorteId,
-                'precio' => 70000.00,
-                'vigente_desde' => '2026-01-01',
-                'vigente_hasta' => null,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'servicio_id' => $srvNutricionId,
-                'precio' => 50000.00,
-                'vigente_desde' => '2026-01-01',
-                'vigente_hasta' => null,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-            [
-                'servicio_id' => $srvColorId,
-                'precio' => 180000.00,
-                'vigente_desde' => '2026-01-01',
-                'vigente_hasta' => null,
-                'created_at' => now(),
-                'updated_at' => now(),
-            ],
-        ]);
-
-        // 7. Descuentos opcionales
-        DB::table('descuentos')->insert([
-            'nombre' => 'Promo Primavera',
-            'tipo' => 'porcentaje',
-            'valor' => 10.00,
-            'activo' => true,
-            'created_at' => now(),
-            'updated_at' => now(),
-        ]);
+        foreach ($asignaciones as $clave => $nombres) {
+            $personal[$clave]->especialidades()->syncWithoutDetaching(
+                collect($nombres)->map(fn ($nombre) => $especialidades[$nombre]->id)->all()
+            );
+        }
     }
 }

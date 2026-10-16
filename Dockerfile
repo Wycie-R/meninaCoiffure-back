@@ -22,6 +22,11 @@ COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www
 
 RUN groupadd -g 1000 laravel && useradd -u 1000 -ms /bin/bash -g laravel laravel
+
+# vendor vive en un volumen de Docker (ver docker-compose.yml); se crea con dueño laravel
+# para que el volumen herede los permisos y composer escriba sin ser root
+RUN mkdir -p /var/www/vendor && chown laravel:laravel /var/www/vendor
+
 USER laravel
 
 EXPOSE 9000

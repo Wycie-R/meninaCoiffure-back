@@ -44,4 +44,23 @@ class User extends Authenticatable
     {
         return $this->role && strtolower($this->role->nombre) === strtolower($rolNombre);
     }
+
+    public function esAdmin(): bool
+    {
+        return $this->hasRole('admin');
+    }
+
+    /**
+     * La administración opera sobre cualquier reserva; un profesional, solo sobre las de su agenda.
+     */
+    public function puedeOperarReserva(Reserva $reserva): bool
+    {
+        if ($this->esAdmin()) {
+            return true;
+        }
+
+        return $this->hasRole('profesional')
+            && $this->personal_id !== null
+            && (int) $reserva->personal_id === (int) $this->personal_id;
+    }
 }

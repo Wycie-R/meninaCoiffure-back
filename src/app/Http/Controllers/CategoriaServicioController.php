@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\CategoriaServicio;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\ValidationException;
 
 class CategoriaServicioController extends Controller
 {
@@ -54,8 +55,22 @@ class CategoriaServicioController extends Controller
         ]);
     }
 
+    /**
+     * Solo se borran categorías vacías: borrar en cascada eliminaba servicios y precios sin aviso,
+     * o fallaba con un 500 si algún servicio ya estaba en una reserva.
+     */
     public function destroy(CategoriaServicio $categorias_servicio): JsonResponse
     {
+        $cantidad = $categorias_servicio->servicios()->count();
+
+        if ($cantidad > 0) {
+            $texto = $cantidad === 1 ? '1 servicio' : "{$cantidad} servicios";
+
+            throw ValidationException::withMessages([
+                'categoria' => ["La categoría tiene {$texto}. Muévelos a otra categoría antes de eliminarla."],
+            ]);
+        }
+
         $categorias_servicio->delete();
 
         return response()->json([
