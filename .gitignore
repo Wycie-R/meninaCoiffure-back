@@ -10,3 +10,23 @@ Thumbs.db
 .idea/
 .vscode/
 *.log
+
+# Asistentes de IA (configuración e instrucciones locales, no se versionan)
+CLAUDE.md
+CLAUDE.local.md
+AGENTS.md
+GEMINI.md
+.claude/
+.cursor/
+.cursorrules
+.cursorignore
+.windsurf/
+.windsurfrules
+.codex/
+.gemini/
+.aider*
+.continue/
+.junie/
+.github/copilot-instructions.md
+.mcp.json
+boost.json

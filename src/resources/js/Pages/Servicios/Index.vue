@@ -18,9 +18,11 @@ import Modal from '../../Components/Modal.vue'
 import { api, primerosErrores, mensajeError } from '../../api'
 import { guaranies, duracion, normalizar, fechaCorta, aISO, hoyISO, plural } from '../../formato'
 import { useCatalogo } from '../../catalogo'
+import { usePermisos } from '../../auth'
 import { claseEntrada, claseEnfoque, ilustracionDe } from '../../ui'
 
 const { servicios, categorias, cargando, error, cargarCatalogo } = useCatalogo()
+const { esAdmin } = usePermisos()
 
 const page = usePage()
 const servicioNuevo = ref(Number(new URL(page.url, window.location.origin).searchParams.get('nuevo')) || null)
@@ -110,6 +112,10 @@ const confirmarDesactivar = ref(false)
 const cambiandoEstado = ref(false)
 const errorEstado = ref('')
 
+const confirmarEliminar = ref(false)
+const eliminando = ref(false)
+const errorEliminar = ref('')
+
 async function abrirServicio(servicio) {
     seleccionado.value = servicio.id
     detalle.value = null
@@ -117,6 +123,7 @@ async function abrirServicio(servicio) {
     erroresDatos.value = {}
     errorPrecio.value = ''
     errorEstado.value = ''
+    errorEliminar.value = ''
     precioNuevo.value = ''
     desde.value = 'hoy'
     await cargarDetalle()
@@ -265,9 +272,7 @@ async function cambiarEstado(activo) {
     cambiandoEstado.value = true
     errorEstado.value = ''
 
-    const respuesta = activo
-        ? await api(`/api/servicios/${seleccionado.value}`, { metodo: 'PUT', datos: { activo: true } })
-        : await api(`/api/servicios/${seleccionado.value}`, { metodo: 'DELETE' })
+    const respuesta = await api(`/api/servicios/${seleccionado.value}`, { metodo: 'PUT', datos: { activo } })
 
     cambiandoEstado.value = false
     confirmarDesactivar.value = false
@@ -281,6 +286,35 @@ async function cambiarEstado(activo) {
     aviso.value = activo ? 'El servicio vuelve a estar disponible para reservas.' : 'Servicio desactivado. Ya no aparece al crear reservas.'
 }
 
+function pedirEliminar() {
+    errorEliminar.value = ''
+    confirmarEliminar.value = true
+}
+
+async function eliminarServicio() {
+    if (eliminando.value) return
+
+    const nombre = detalle.value.nombre
+    eliminando.value = true
+    errorEliminar.value = ''
+
+    const respuesta = await api(`/api/servicios/${seleccionado.value}`, { metodo: 'DELETE' })
+
+    eliminando.value = false
+
+    if (!respuesta.ok) {
+        errorEliminar.value = respuesta.status === 422
+            ? primerosErrores(respuesta.cuerpo).servicio ?? mensajeError(respuesta, 'eliminar el servicio')
+            : mensajeError(respuesta, 'eliminar el servicio')
+        return
+    }
+
+    confirmarEliminar.value = false
+    cerrarPanel()
+    await cargarCatalogo({ forzar: true })
+    aviso.value = `Servicio «${nombre}» eliminado de la carta.`
+}
+
 watch(aviso, (valor) => {
     if (!valor) servicioNuevo.value = null
 })
@@ -290,14 +324,16 @@ watch(aviso, (valor) => {
     <AppLayout>
         <div class="mx-auto max-w-6xl px-6 py-10">
             <PageHeader titulo="Carta de servicios" :descripcion="cargando && !servicios.length ? 'Cargando la carta…' : resumen">
-                <Button href="/categorias" variant="secondary">
-                    <Icono name="etiqueta" class="h-4 w-4" />
-                    Categorías
-                </Button>
-                <Button href="/servicios/crear">
-                    <Icono name="agregar" class="h-4 w-4" />
-                    Nuevo servicio
-                </Button>
+                <template v-if="esAdmin">
+                    <Button href="/categorias" variant="secondary">
+                        <Icono name="etiqueta" class="h-4 w-4" />
+                        Categorías
+                    </Button>
+                    <Button href="/servicios/crear">
+                        <Icono name="agregar" class="h-4 w-4" />
+                        Nuevo servicio
+                    </Button>
+                </template>
             </PageHeader>
 
             <div class="mt-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
@@ -376,7 +412,7 @@ watch(aviso, (valor) => {
                                         servicio.id === servicioNuevo ? 'bg-menta/8 ring-1 ring-inset ring-menta/30' : '',
                                         servicio.id === seleccionado ? 'bg-velo ring-1 ring-inset ring-orquidea/40' : '',
                                     ]"
-                                    :aria-label="`Ver y editar ${servicio.nombre}`"
+                                    :aria-label="`${esAdmin ? 'Ver y editar' : 'Ver'} ${servicio.nombre}`"
                                     @click="abrirServicio(servicio)"
                                 >
                                     <span class="flex items-baseline gap-3">
@@ -424,7 +460,7 @@ watch(aviso, (valor) => {
                         <p class="mt-1 font-display text-4xl tabular-nums">{{ guaranies(detalle.precio_actual) }}</p>
                     </div>
 
-                    <div class="mt-5">
+                    <div v-if="esAdmin" class="mt-5">
                         <Campo etiqueta="Nuevo precio" para="precio-nuevo" :error="errorPrecio">
                             <div class="relative">
                                 <span class="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-sm text-niebla">Gs.</span>
@@ -487,7 +523,26 @@ watch(aviso, (valor) => {
                     </ol>
                 </section>
 
-                <section aria-labelledby="titulo-datos">
+                <section v-if="!esAdmin" aria-labelledby="titulo-datos">
+                    <h3 id="titulo-datos" class="text-xl">Datos del servicio</h3>
+
+                    <dl class="mt-4 grid grid-cols-[6.5rem_minmax(0,1fr)] gap-x-4 gap-y-3 text-sm">
+                        <dt class="text-niebla">Categoría</dt>
+                        <dd class="text-perla">{{ detalle.categoria?.nombre ?? 'Sin categoría' }}</dd>
+                        <dt class="text-niebla">Duración</dt>
+                        <dd class="text-perla">{{ duracion(detalle.duracion_minutos) }}</dd>
+                        <dt class="text-niebla">Descripción</dt>
+                        <dd :class="detalle.descripcion ? 'text-perla' : 'text-niebla'">{{ detalle.descripcion || 'Sin descripción' }}</dd>
+                        <dt class="text-niebla">Estado</dt>
+                        <dd class="text-perla">{{ detalle.activo ? 'Disponible para reservas' : 'Inactivo, no aparece al reservar' }}</dd>
+                    </dl>
+
+                    <p class="mt-5 rounded-xl bg-terciopelo px-4 py-3 text-sm text-bruma">
+                        Los precios y los datos de la carta solo los cambia la administración del salón.
+                    </p>
+                </section>
+
+                <section v-else aria-labelledby="titulo-datos">
                     <h3 id="titulo-datos" class="text-xl">Datos del servicio</h3>
 
                     <form class="mt-4 space-y-5" novalidate @submit.prevent="guardarDatos">
@@ -528,7 +583,7 @@ watch(aviso, (valor) => {
                     </form>
                 </section>
 
-                <section aria-labelledby="titulo-disponibilidad" class="rounded-[24px] border border-hilo p-5">
+                <section v-if="esAdmin" aria-labelledby="titulo-disponibilidad" class="rounded-[24px] border border-hilo p-5">
                     <h3 id="titulo-disponibilidad" class="text-xl">Disponibilidad</h3>
 
                     <div class="mt-2 flex flex-wrap items-center justify-between gap-4">
@@ -555,6 +610,19 @@ watch(aviso, (valor) => {
 
                     <p v-if="errorEstado" role="alert" class="mt-3 text-sm text-borgona">{{ errorEstado }}</p>
                 </section>
+
+                <section v-if="esAdmin" aria-labelledby="titulo-eliminar" class="rounded-[24px] border border-borgona/30 p-5">
+                    <h3 id="titulo-eliminar" class="text-xl">Eliminar servicio</h3>
+
+                    <div class="mt-2 flex flex-wrap items-center justify-between gap-4">
+                        <p class="max-w-xs text-sm text-bruma">
+                            Lo borra de la carta para siempre. Solo es posible si nunca se usó en una reserva; si ya se usó,
+                            desactívalo.
+                        </p>
+
+                        <Button variant="danger" :disabled="eliminando" @click="pedirEliminar">Eliminar</Button>
+                    </div>
+                </section>
             </div>
         </PanelLateral>
 
@@ -567,6 +635,23 @@ watch(aviso, (valor) => {
                 <Button label="Cancelar" variant="secondary" @click="confirmarDesactivar = false" />
                 <Button variant="danger" :disabled="cambiandoEstado" @click="cambiarEstado(false)">
                     {{ cambiandoEstado ? 'Desactivando…' : 'Desactivar servicio' }}
+                </Button>
+            </div>
+        </Modal>
+
+        <Modal :show="confirmarEliminar" label="Confirmar eliminación" max-width="sm" @close="confirmarEliminar = false">
+            <h2 class="text-2xl">¿Eliminar «{{ detalle?.nombre }}»?</h2>
+            <p class="mt-2 text-sm text-bruma">
+                Se borra de la carta junto con su historial de precios y no se puede deshacer. Solo se pueden eliminar
+                servicios que nunca se usaron en una reserva; los que ya se usaron se desactivan para conservar el historial.
+            </p>
+            <p v-if="errorEliminar" role="alert" class="mt-3 rounded-xl border border-borgona/40 bg-borgona-hondo px-4 py-3 text-sm text-borgona">
+                {{ errorEliminar }}
+            </p>
+            <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <Button label="Volver" variant="secondary" @click="confirmarEliminar = false" />
+                <Button variant="danger" :disabled="eliminando" @click="eliminarServicio">
+                    {{ eliminando ? 'Eliminando…' : 'Eliminar servicio' }}
                 </Button>
             </div>
         </Modal>

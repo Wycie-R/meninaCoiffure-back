@@ -2,17 +2,22 @@
 
 namespace Tests\Feature;
 
+use App\Events\ReservaCompletada;
 use App\Models\Cliente;
 use App\Models\DetalleReserva;
 use App\Models\Personal;
 use App\Models\PrecioServicio;
 use App\Models\Reserva;
 use App\Models\Servicio;
+use App\Models\Descuento;
+use App\Models\Role;
 use App\Models\TurnoPersonal;
+use App\Models\User;
 use App\Services\ReservaService;
 use Carbon\Carbon;
 use Database\Seeders\AvanceDosSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Event;
 use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
@@ -25,6 +30,7 @@ class ReservaTest extends TestCase
         parent::setUp();
         // Ejecutar los seeders del módulo para contar con el personal, turnos y servicios base
         $this->seed(AvanceDosSeeder::class);
+        $this->actingAs(User::factory()->create(['rol_id' => Role::firstOrCreate(['nombre' => 'admin'])->id]));
     }
 
     /**
@@ -56,7 +62,7 @@ class ReservaTest extends TestCase
             'fecha' => $fecha,
             'hora_inicio' => '10:00',
             'hora_fin' => '11:00',
-            'servicios' => [1, 2], // 1 = Corte Femenino ($70000), 2 = Nutrición ($50000)
+            'servicios' => [1, 2], // 1 = Corte de dama ($70000), 2 = Nutrición ($50000)
         ];
 
         $response = $this->postJson('/api/reservas', $payload);
@@ -123,7 +129,7 @@ class ReservaTest extends TestCase
         $solapadaResponse->assertStatus(422)
             ->assertJsonValidationErrors(['horario']);
 
-        // 3. Verificar que si es con OTRO personal (Diana = id 2), sí se permite en el mismo horario
+        // 3. Verificar que si es con OTRO personal (Carla = id 2), sí se permite en el mismo horario
         $otroPersonalResponse = $this->postJson('/api/reservas', [
             'cliente_id' => 2,
             'personal_id' => 2,
@@ -447,5 +453,321 @@ class ReservaTest extends TestCase
         $response = $this->deleteJson("/api/reservas/{$reservaPasada->id}");
         $response->assertStatus(422)
             ->assertJsonValidationErrors(['estado']);
+    }
+
+    /**
+     * Helper: payload mínimo válido para el próximo lunes con Carla.
+     */
+    protected function payload(array $cambios = []): array
+    {
+        return [
+            'cliente_id' => 1,
+            'personal_id' => 1,
+            'fecha' => $this->obtenerProximoLunes(),
+            'hora_inicio' => '10:00',
+            'hora_fin' => '11:00',
+            'servicios' => [1],
+            ...$cambios,
+        ];
+    }
+
+    /**
+     * Helper: reserva insertada directamente (por ejemplo, en el pasado).
+     */
+    protected function reservaDirecta(string $fecha, string $estado = 'pendiente'): Reserva
+    {
+        return Reserva::create([
+            'cliente_id' => 1,
+            'personal_id' => 1,
+            'fecha' => $fecha,
+            'hora_inicio' => '10:00:00',
+            'hora_fin' => '11:00:00',
+            'estado' => $estado,
+        ]);
+    }
+
+    /**
+     * HU-14: Reserva a domicilio exige dirección; en el salón no se guarda dirección.
+     */
+    public function test_reserva_a_domicilio_exige_direccion(): void
+    {
+        $this->postJson('/api/reservas', $this->payload(['a_domicilio' => true]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['direccion_domicilio']);
+
+        $direccion = 'Calle Ejemplo 123 c/ Las Palmeras, Villa Elisa';
+        $creada = $this->postJson('/api/reservas', $this->payload(['a_domicilio' => true, 'direccion_domicilio' => $direccion]))
+            ->assertStatus(201)
+            ->assertJsonPath('data.a_domicilio', true)
+            ->assertJsonPath('data.direccion_domicilio', $direccion);
+
+        $this->assertDatabaseHas('reservas', ['id' => $creada->json('data.id'), 'a_domicilio' => true, 'direccion_domicilio' => $direccion]);
+
+        $enSalon = $this->postJson('/api/reservas', $this->payload([
+            'hora_inicio' => '14:00',
+            'hora_fin' => '15:00',
+            'direccion_domicilio' => 'No debería guardarse',
+        ]))->assertStatus(201)
+            ->assertJsonPath('data.a_domicilio', false)
+            ->assertJsonPath('data.direccion_domicilio', null);
+
+        $this->assertDatabaseHas('reservas', ['id' => $enSalon->json('data.id'), 'direccion_domicilio' => null]);
+    }
+
+    /**
+     * Transiciones de estado: completar o marcar no asistida solo tras el inicio; los estados finales no cambian.
+     */
+    public function test_transiciones_de_estado_respetan_el_momento_de_la_cita(): void
+    {
+        $futura = $this->postJson('/api/reservas', $this->payload())->assertStatus(201)->json('data.id');
+
+        $this->putJson("/api/reservas/{$futura}", ['estado' => 'completada'])
+            ->assertStatus(422)->assertJsonValidationErrors(['estado']);
+        $this->putJson("/api/reservas/{$futura}", ['estado' => 'no_asistio'])
+            ->assertStatus(422)->assertJsonValidationErrors(['estado']);
+        $this->putJson("/api/reservas/{$futura}", ['estado' => 'confirmada'])
+            ->assertStatus(200)->assertJsonPath('data.estado', 'confirmada');
+        $this->putJson("/api/reservas/{$futura}", ['estado' => 'pendiente'])
+            ->assertStatus(422)->assertJsonValidationErrors(['estado']);
+
+        $ausente = $this->reservaDirecta(Carbon::yesterday()->toDateString());
+        $this->putJson("/api/reservas/{$ausente->id}", ['estado' => 'cancelada'])
+            ->assertStatus(422)->assertJsonValidationErrors(['estado']);
+        $this->putJson("/api/reservas/{$ausente->id}", ['estado' => 'no_asistio'])
+            ->assertStatus(200)->assertJsonPath('data.estado', 'no_asistio');
+        $this->putJson("/api/reservas/{$ausente->id}", ['estado' => 'completada'])
+            ->assertStatus(422)->assertJsonValidationErrors(['estado']);
+
+        $atendida = $this->reservaDirecta(Carbon::yesterday()->subDay()->toDateString());
+        $this->putJson("/api/reservas/{$atendida->id}", ['estado' => 'completada'])
+            ->assertStatus(200)->assertJsonPath('data.estado', 'completada');
+    }
+
+    /**
+     * Una reserva nueva no puede nacer completada ni cancelada.
+     */
+    public function test_reserva_nueva_solo_nace_pendiente_o_confirmada(): void
+    {
+        $this->postJson('/api/reservas', $this->payload(['estado' => 'completada']))
+            ->assertStatus(422)->assertJsonValidationErrors(['estado']);
+
+        $this->postJson('/api/reservas', $this->payload(['estado' => 'confirmada']))
+            ->assertStatus(201)->assertJsonPath('data.estado', 'confirmada');
+    }
+
+    /**
+     * No se reserva con personal inactivo ni en un horario que ya pasó.
+     */
+    public function test_rechaza_personal_inactivo_y_horario_pasado(): void
+    {
+        Personal::where('id', 2)->update(['activo' => false]);
+
+        $this->postJson('/api/reservas', $this->payload(['personal_id' => 2]))
+            ->assertStatus(422)->assertJsonValidationErrors(['personal_id']);
+
+        // Lunes a las 10:00: las 09:00 ya pasaron; las 09:45 entran en la tolerancia para quien llega sin turno
+        $lunes = $this->obtenerProximoLunes();
+        $this->travelTo(Carbon::parse("{$lunes} 10:00"));
+
+        $respuesta = $this->postJson('/api/reservas', $this->payload([
+            'fecha' => $lunes,
+            'hora_inicio' => '09:00',
+            'hora_fin' => '09:45',
+        ]))->assertStatus(422)->assertJsonValidationErrors(['horario']);
+
+        $this->assertStringContainsString('ya pasó', $respuesta->json('errors.horario.0'));
+
+        $this->postJson('/api/reservas', $this->payload([
+            'fecha' => $lunes,
+            'hora_inicio' => '09:45',
+            'hora_fin' => '10:30',
+        ]))->assertStatus(201);
+    }
+
+    /**
+     * HU-14: el traslado de una cita a domicilio también ocupa la agenda del profesional.
+     */
+    public function test_traslado_a_domicilio_ocupa_la_agenda(): void
+    {
+        $this->postJson('/api/reservas', $this->payload([
+            'hora_inicio' => '10:00',
+            'hora_fin' => '11:00',
+            'a_domicilio' => true,
+            'direccion_domicilio' => 'Calle Ejemplo 123, Villa Elisa',
+            'minutos_traslado' => 30,
+        ]))->assertStatus(201)->assertJsonPath('data.minutos_traslado', 30);
+
+        // 11:15 cae dentro de la vuelta del traslado (hasta las 11:30)
+        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '11:15', 'hora_fin' => '12:00']))
+            ->assertStatus(422)->assertJsonValidationErrors(['horario']);
+
+        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '11:30', 'hora_fin' => '12:15']))
+            ->assertStatus(201);
+
+        // En el salón el traslado se ignora
+        $this->postJson('/api/reservas', $this->payload([
+            'personal_id' => 2, 'minutos_traslado' => 45,
+        ]))->assertStatus(201)->assertJsonPath('data.minutos_traslado', 0);
+    }
+
+    /**
+     * Regla 2 (local): en el salón la cita debe caber en el horario del local; a domicilio, no.
+     */
+    public function test_horario_del_local_aplica_solo_en_el_salon(): void
+    {
+        TurnoPersonal::where('personal_id', 1)->where('dia_semana', 1)->update(['hora_fin' => '19:00:00']);
+
+        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '17:30', 'hora_fin' => '18:15']))
+            ->assertStatus(422)->assertJsonValidationErrors(['horario']);
+
+        $this->postJson('/api/reservas', $this->payload([
+            'hora_inicio' => '17:30',
+            'hora_fin' => '18:15',
+            'a_domicilio' => true,
+            'direccion_domicilio' => 'Calle Ejemplo 123, Villa Elisa',
+        ]))->assertStatus(201);
+    }
+
+    /**
+     * HU-06: un profesional solo ve y opera sobre su propia agenda.
+     */
+    public function test_profesional_opera_solo_sobre_su_agenda(): void
+    {
+        $deMonica = $this->postJson('/api/reservas', $this->payload())->assertStatus(201)->json('data.id');
+        $deCarla = $this->postJson('/api/reservas', $this->payload(['personal_id' => 2]))->assertStatus(201)->json('data.id');
+
+        $carla = User::factory()->create([
+            'rol_id' => Role::firstOrCreate(['nombre' => 'profesional'])->id,
+            'personal_id' => 2,
+        ]);
+        $this->actingAs($carla);
+
+        $this->getJson('/api/reservas')->assertStatus(200)->assertJsonCount(1, 'data')->assertJsonPath('data.0.id', $deCarla);
+        $this->getJson("/api/reservas/{$deMonica}")->assertStatus(403);
+        $this->putJson("/api/reservas/{$deMonica}", ['estado' => 'confirmada'])->assertStatus(403);
+        $this->putJson("/api/reservas/{$deCarla}", ['estado' => 'confirmada'])->assertStatus(200);
+        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '15:00', 'hora_fin' => '16:00']))->assertStatus(403);
+        $this->postJson('/api/reservas', $this->payload(['personal_id' => 2, 'hora_inicio' => '15:00', 'hora_fin' => '16:00']))->assertStatus(201);
+    }
+
+    /**
+     * HU-13 y HU-16: completar una reserva emite ReservaCompletada con las notas de la atención.
+     */
+    public function test_completar_reserva_emite_evento_con_notas(): void
+    {
+        Event::fake([ReservaCompletada::class]);
+        $reserva = $this->reservaDirecta(Carbon::yesterday()->toDateString());
+
+        $this->putJson("/api/reservas/{$reserva->id}", ['estado' => 'completada', 'notas' => 'Tinte 6.3, quedó conforme'])
+            ->assertStatus(200);
+
+        Event::assertDispatched(ReservaCompletada::class, fn ($evento) => $evento->reserva->id === $reserva->id
+            && $evento->notas === 'Tinte 6.3, quedó conforme');
+    }
+
+    /**
+     * HU-02: disponibilidad de un profesional en una fecha.
+     */
+    public function test_disponibilidad_marca_horarios_ocupados(): void
+    {
+        $lunes = $this->obtenerProximoLunes();
+        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '10:00', 'hora_fin' => '11:00']))->assertStatus(201);
+
+        $horarios = collect(
+            $this->getJson("/api/disponibilidad?personal_id=1&fecha={$lunes}&duracion_minutos=60")
+                ->assertStatus(200)
+                ->assertJsonPath('data.franjas.0', ['08:00', '17:00'])
+                ->json('data.horarios')
+        )->keyBy('hora');
+
+        $this->assertTrue($horarios['08:00']['disponible']);
+        $this->assertSame('ocupado', $horarios['09:30']['motivo']);
+        $this->assertSame('ocupado', $horarios['10:30']['motivo']);
+        $this->assertTrue($horarios['11:00']['disponible']);
+        $this->assertTrue($horarios['16:00']['disponible']);
+        $this->assertArrayNotHasKey('16:30', $horarios->all()); // no entra una hora antes del cierre
+    }
+
+    /**
+     * Regla 2: una cita puede ocupar dos franjas contiguas del mismo día.
+     */
+    public function test_cita_en_franjas_contiguas_del_turno(): void
+    {
+        TurnoPersonal::where('personal_id', 1)->where('dia_semana', 1)->delete();
+        TurnoPersonal::create(['personal_id' => 1, 'dia_semana' => 1, 'hora_inicio' => '08:00:00', 'hora_fin' => '12:00:00']);
+        TurnoPersonal::create(['personal_id' => 1, 'dia_semana' => 1, 'hora_inicio' => '12:00:00', 'hora_fin' => '14:00:00']);
+
+        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '11:30', 'hora_fin' => '12:30']))
+            ->assertStatus(201);
+
+        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '13:30', 'hora_fin' => '14:30']))
+            ->assertStatus(422)->assertJsonValidationErrors(['horario']);
+    }
+
+    /**
+     * Listado con filtros, tope de per_page y montos con descuento.
+     */
+    public function test_listado_filtra_y_calcula_totales_con_descuento(): void
+    {
+        $descuento = Descuento::first(); // Promo Primavera: 10 %
+
+        $creada = $this->postJson('/api/reservas', $this->payload(['servicios' => [1, 2], 'descuento_id' => $descuento->id]))
+            ->assertStatus(201)
+            ->assertJsonPath('data.descuento.nombre', 'Promo Primavera');
+
+        $this->assertEquals(120000, $creada->json('data.subtotal'));
+        $this->assertEquals(12000, $creada->json('data.monto_descuento'));
+        $this->assertEquals(108000, $creada->json('data.total'));
+
+        $this->postJson('/api/reservas', $this->payload(['personal_id' => 2]))->assertStatus(201);
+
+        $this->getJson('/api/reservas?personal_id=2')
+            ->assertStatus(200)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.personal_id', 2);
+
+        $lunes = $this->obtenerProximoLunes();
+        $this->getJson("/api/reservas?fecha_desde={$lunes}&fecha_hasta={$lunes}&estado=pendiente")
+            ->assertStatus(200)->assertJsonCount(2, 'data');
+
+        $this->getJson('/api/reservas?per_page=500')
+            ->assertStatus(422)->assertJsonValidationErrors(['per_page']);
+    }
+
+    /**
+     * HU-07: No se desactiva personal con citas por atender.
+     */
+    public function test_no_se_desactiva_personal_con_reservas_futuras(): void
+    {
+        $id = $this->postJson('/api/reservas', $this->payload())->assertStatus(201)->json('data.id');
+
+        $this->deleteJson('/api/personal/1')->assertStatus(422)->assertJsonValidationErrors(['activo']);
+        $this->putJson('/api/personal/1', ['activo' => false])->assertStatus(422)->assertJsonValidationErrors(['activo']);
+
+        $this->deleteJson("/api/reservas/{$id}")->assertStatus(200);
+        $this->deleteJson('/api/personal/1')->assertStatus(200);
+        $this->assertDatabaseHas('personal', ['id' => 1, 'activo' => false]);
+    }
+
+    /**
+     * Clientes: alta, búsqueda y borrado protegido si tiene reservas.
+     */
+    public function test_gestion_de_clientes(): void
+    {
+        $this->postJson('/api/clientes', ['nombre' => 'Camila'])
+            ->assertStatus(422)->assertJsonValidationErrors(['apellido']);
+
+        $nueva = $this->postJson('/api/clientes', ['nombre' => 'Camila', 'apellido' => 'Benítez', 'telefono' => '0983555666'])
+            ->assertStatus(201)
+            ->assertJsonPath('data.nombre', 'Camila');
+
+        $this->getJson('/api/clientes?buscar=camila ben')
+            ->assertStatus(200)
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.apellido', 'Benítez');
+
+        $this->postJson('/api/reservas', $this->payload())->assertStatus(201); // cliente 1 queda con reserva
+        $this->deleteJson('/api/clientes/1')->assertStatus(422)->assertJsonValidationErrors(['cliente']);
+        $this->deleteJson('/api/clientes/' . $nueva->json('data.id'))->assertStatus(200);
     }
 }

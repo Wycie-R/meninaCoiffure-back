@@ -1,6 +1,15 @@
-import { aFecha, aMinutos, hoyISO, normalizar } from './formato'
+import { aFecha, aMinutos, duracion, hoyISO, normalizar } from './formato'
 
 export const ESTADOS_ACTIVOS = ['pendiente', 'confirmada']
+export const ESTADOS_DESCARTADOS = ['cancelada', 'no_asistio']
+
+export function descartada(reserva) {
+    return ESTADOS_DESCARTADOS.includes(reserva.estado)
+}
+
+export function aDomicilio(reserva) {
+    return Boolean(reserva.a_domicilio)
+}
 
 export function dia(reserva) {
     return String(reserva.fecha).slice(0, 10)
@@ -23,6 +32,56 @@ export function totalReserva(reserva) {
         (total, detalle) => total + Number(detalle.precio_aplicado) * Number(detalle.cantidad ?? 1),
         0
     )
+}
+
+function numero(valor) {
+    if (valor === null || valor === undefined || valor === '') return null
+    const convertido = Number(valor)
+    return Number.isFinite(convertido) ? convertido : null
+}
+
+function descuentoCalculado(descuento, subtotal) {
+    if (!descuento) return 0
+    const valor = Number(descuento.valor) || 0
+    if (descuento.tipo === 'porcentaje') return Math.round((subtotal * valor) / 100)
+    return Math.min(valor, subtotal)
+}
+
+export function montosReserva(reserva) {
+    const subtotal = numero(reserva.subtotal) ?? totalReserva(reserva)
+    const descuento = numero(reserva.monto_descuento) ?? descuentoCalculado(reserva.descuento, subtotal)
+    const total = numero(reserva.total) ?? Math.max(0, subtotal - descuento)
+
+    return { subtotal, descuento, total }
+}
+
+// Pagado y saldo vienen del servidor; si el saldo quedó viejo (por ejemplo, al
+// agregar un servicio) se recalcula con el total hasta traer la reserva actualizada.
+export function pagosReserva(reserva) {
+    const pagado = numero(reserva.pagado)
+    const saldo = numero(reserva.saldo)
+    if (pagado === null && saldo === null) return null
+    return {
+        pagado: pagado ?? 0,
+        saldo: saldo ?? Math.max(0, montosReserva(reserva).total - (pagado ?? 0)),
+    }
+}
+
+export function minutosTraslado(reserva) {
+    if (!aDomicilio(reserva)) return 0
+    return Math.max(0, Number(reserva.minutos_traslado) || 0)
+}
+
+export function textoTraslado(reserva) {
+    const minutos = minutosTraslado(reserva)
+    return minutos ? `Traslado: ${duracion(minutos)} antes y después` : ''
+}
+
+export function etiquetaDescuento(reserva) {
+    const descuento = reserva.descuento
+    if (!descuento) return 'Descuento'
+    const detalle = descuento.tipo === 'porcentaje' ? ` (${Number(descuento.valor)} %)` : ''
+    return `${descuento.nombre ?? 'Descuento'}${detalle}`
 }
 
 export function minutosReserva(reserva) {
@@ -58,8 +117,8 @@ export function porAtender(reserva, ahora = new Date()) {
 export function accionesDe(reserva, ahora = new Date()) {
     const empezo = yaEmpezo(reserva, ahora)
 
-    if (reserva.estado === 'pendiente') return empezo ? ['completar'] : ['confirmar', 'cancelar']
-    if (reserva.estado === 'confirmada') return empezo ? ['completar'] : ['cancelar']
+    if (reserva.estado === 'pendiente') return empezo ? ['completar', 'no_asistio'] : ['confirmar', 'cancelar']
+    if (reserva.estado === 'confirmada') return empezo ? ['completar', 'no_asistio'] : ['cancelar']
     return []
 }
 
@@ -70,7 +129,10 @@ export function admiteServicios(reserva) {
 export function notaAcciones(reserva, ahora = new Date()) {
     if (reserva.estado === 'completada') return 'La reserva está completada y ya no se puede modificar.'
     if (reserva.estado === 'cancelada') return 'La reserva está cancelada y no se puede reactivar.'
-    if (yaEmpezo(reserva, ahora)) return 'La cita ya empezó, así que ya no se puede cancelar. Cuando termine puedes completarla.'
+    if (reserva.estado === 'no_asistio') return 'Quedó registrado que no asistió a la cita. Este estado ya no se puede cambiar.'
+    if (yaEmpezo(reserva, ahora)) {
+        return 'La cita ya empezó, así que ya no se puede cancelar. Puedes completarla o, si no vino, marcar que no asistió.'
+    }
     if (reserva.estado === 'confirmada') return 'Podrás completarla desde la hora de inicio de la cita.'
     return ''
 }

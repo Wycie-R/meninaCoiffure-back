@@ -16,6 +16,7 @@ import EditorTurnos from '../../Components/EditorTurnos.vue'
 import { api, primerosErrores, mensajeError } from '../../api'
 import { aMinutos, duracion, fechaCorta, hoyISO, iniciales, normalizar, plural } from '../../formato'
 import { usePersonal } from '../../personal'
+import { usePermisos } from '../../auth'
 import { claseEntrada, claseEnfoque } from '../../ui'
 import {
     DIAS,
@@ -26,9 +27,11 @@ import {
     validarSemana,
     semanaTieneErrores,
     erroresVacios,
+    erroresTurnosDesdeServidor,
 } from '../../turnos'
 
 const { personal, cargando, error, cargarPersonal } = usePersonal()
+const { esAdmin } = usePermisos()
 
 onMounted(() => cargarPersonal())
 
@@ -64,7 +67,8 @@ const resumen = computed(() => {
     const total = personal.value.length
     if (!total) return 'Todavía no hay profesionales en el equipo.'
     const activos = personal.value.filter((p) => p.activo).length
-    return `${plural(activos, 'profesional activo', 'profesionales activos')} de ${total}. Toca a cada persona para ver o cambiar sus datos y su horario.`
+    const accion = esAdmin.value ? 'ver o cambiar sus datos y su horario' : 'ver sus datos y su horario'
+    return `${plural(activos, 'profesional activo', 'profesionales activos')} de ${total}. Toca a cada persona para ${accion}.`
 })
 
 function descripcionDias(persona) {
@@ -125,6 +129,7 @@ watch(semana, () => {
 })
 
 function abrirNuevo() {
+    if (!esAdmin.value) return
     form.value = { nombre: '', apellido: '', telefono: '', email: '', fecha_ingreso: hoyISO() }
     erroresDatos.value = {}
     semana.value = semanaPorDefecto()
@@ -215,14 +220,20 @@ async function guardarHorario() {
     if (semanaTieneErrores(erroresSemana.value)) return
 
     guardandoHorario.value = true
+    const turnos = turnosDesdeSemana(semana.value)
     const respuesta = await api(`/api/personal/${persona.value.id}/turnos`, {
         metodo: 'POST',
-        datos: { turnos: turnosDesdeSemana(semana.value) },
+        datos: { turnos },
     })
     guardandoHorario.value = false
 
     if (!respuesta.ok) {
-        erroresSemana.value = { general: mensajeError(respuesta, 'guardar el horario'), dias: {} }
+        const delServidor = respuesta.status === 422
+            ? erroresTurnosDesdeServidor(primerosErrores(respuesta.cuerpo), turnos)
+            : erroresVacios()
+        erroresSemana.value = semanaTieneErrores(delServidor)
+            ? delServidor
+            : { general: mensajeError(respuesta, 'guardar el horario'), dias: {} }
         return
     }
 
@@ -237,18 +248,20 @@ async function registrar() {
     if (Object.keys(erroresDatos.value).length || semanaTieneErrores(erroresSemana.value)) return
 
     guardandoNuevo.value = true
+    const turnos = turnosDesdeSemana(semana.value)
     const respuesta = await api('/api/personal', {
         metodo: 'POST',
-        datos: { ...cargaUtilDatos(), activo: true, turnos: turnosDesdeSemana(semana.value) },
+        datos: { ...cargaUtilDatos(), activo: true, turnos },
     })
     guardandoNuevo.value = false
 
     if (!respuesta.ok) {
         if (respuesta.status === 422) {
             const errores = primerosErrores(respuesta.cuerpo)
-            const claveTurno = Object.keys(errores).find((clave) => clave.startsWith('turnos'))
+            const deTurnos = Object.fromEntries(Object.entries(errores).filter(([clave]) => clave.startsWith('turnos')))
             erroresDatos.value = Object.fromEntries(Object.entries(errores).filter(([clave]) => !clave.startsWith('turnos')))
-            if (claveTurno) erroresSemana.value = { general: errores[claveTurno], dias: {} }
+            erroresSemana.value = erroresTurnosDesdeServidor(deTurnos, turnos)
+            if (!Object.keys(errores).length) erroresDatos.value = { general: mensajeError(respuesta, 'registrar al profesional') }
         } else {
             erroresDatos.value = { general: mensajeError(respuesta, 'registrar al profesional') }
         }
@@ -275,7 +288,10 @@ async function cambiarEstado(activo) {
     confirmarDesactivar.value = false
 
     if (!respuesta.ok) {
-        errorEstado.value = mensajeError(respuesta, activo ? 'reactivar al profesional' : 'desactivar al profesional')
+        const accion = activo ? 'reactivar al profesional' : 'desactivar al profesional'
+        errorEstado.value = respuesta.status === 422
+            ? primerosErrores(respuesta.cuerpo).activo ?? mensajeError(respuesta, accion)
+            : mensajeError(respuesta, accion)
         return
     }
 
@@ -294,7 +310,7 @@ watch(aviso, (valor) => {
     <AppLayout>
         <div class="mx-auto max-w-6xl px-6 py-10">
             <PageHeader titulo="Equipo" :descripcion="cargando && !personal.length ? 'Cargando al equipo…' : resumen">
-                <Button @click="abrirNuevo">
+                <Button v-if="esAdmin" @click="abrirNuevo">
                     <Icono name="agregar" class="h-4 w-4" />
                     Nuevo profesional
                 </Button>
@@ -327,7 +343,7 @@ watch(aviso, (valor) => {
                     titulo="Todavía no hay profesionales"
                     descripcion="Registra a la primera persona del equipo para poder agendar reservas con esa persona."
                 >
-                    <Button label="Nuevo profesional" @click="abrirNuevo" />
+                    <Button v-if="esAdmin" label="Nuevo profesional" @click="abrirNuevo" />
                 </EstadoVacio>
 
                 <EstadoVacio
@@ -348,7 +364,7 @@ watch(aviso, (valor) => {
                                 p.id === destacado ? 'border-menta/40 bg-menta/8' : '',
                                 p.id === modo ? 'border-orquidea/50' : '',
                             ]"
-                            :aria-label="`Ver y editar a ${p.nombreCompleto}`"
+                            :aria-label="`${esAdmin ? 'Ver y editar' : 'Ver'} a ${p.nombreCompleto}`"
                             @click="abrirPersona(p)"
                         >
                             <span class="flex items-start gap-4">
@@ -404,41 +420,47 @@ watch(aviso, (valor) => {
             @cerrar="cerrarPanel"
         >
             <div v-if="esNuevo || persona" class="space-y-10">
+                <p v-if="!esAdmin" class="rounded-xl bg-terciopelo px-4 py-3 text-sm text-bruma">
+                    Solo la administración del salón puede cambiar los datos y los horarios del equipo.
+                </p>
+
                 <section aria-labelledby="titulo-datos">
                     <h3 id="titulo-datos" class="text-xl">Datos</h3>
 
-                    <form class="mt-4 space-y-5" novalidate @submit.prevent="esNuevo ? registrar() : guardarDatos()">
-                        <p v-if="erroresDatos.general" role="alert" class="rounded-xl border border-borgona/40 bg-borgona-hondo px-4 py-3 text-sm text-borgona">
-                            {{ erroresDatos.general }}
-                        </p>
+                    <form class="mt-4" novalidate @submit.prevent="esNuevo ? registrar() : guardarDatos()">
+                        <fieldset :disabled="!esAdmin" class="min-w-0 space-y-5">
+                            <p v-if="erroresDatos.general" role="alert" class="rounded-xl border border-borgona/40 bg-borgona-hondo px-4 py-3 text-sm text-borgona">
+                                {{ erroresDatos.general }}
+                            </p>
 
-                        <div class="grid gap-5 sm:grid-cols-2">
-                            <Campo etiqueta="Nombre" para="personal-nombre" :error="erroresDatos.nombre">
-                                <input id="personal-nombre" v-model="form.nombre" type="text" maxlength="255" autocomplete="off" :class="claseEntrada(Boolean(erroresDatos.nombre))" @input="limpiarError('nombre')" />
+                            <div class="grid gap-5 sm:grid-cols-2">
+                                <Campo etiqueta="Nombre" para="personal-nombre" :error="erroresDatos.nombre">
+                                    <input id="personal-nombre" v-model="form.nombre" type="text" maxlength="255" autocomplete="off" :class="claseEntrada(Boolean(erroresDatos.nombre))" @input="limpiarError('nombre')" />
+                                </Campo>
+
+                                <Campo etiqueta="Apellido" para="personal-apellido" :error="erroresDatos.apellido">
+                                    <input id="personal-apellido" v-model="form.apellido" type="text" maxlength="255" autocomplete="off" :class="claseEntrada(Boolean(erroresDatos.apellido))" @input="limpiarError('apellido')" />
+                                </Campo>
+                            </div>
+
+                            <div class="grid gap-5 sm:grid-cols-2">
+                                <Campo etiqueta="Teléfono" para="personal-telefono" :error="erroresDatos.telefono" opcional>
+                                    <input id="personal-telefono" v-model="form.telefono" type="tel" inputmode="tel" maxlength="50" autocomplete="off" :class="claseEntrada(Boolean(erroresDatos.telefono))" @input="limpiarError('telefono')" />
+                                </Campo>
+
+                                <Campo etiqueta="Fecha de ingreso" para="personal-ingreso" :error="erroresDatos.fecha_ingreso">
+                                    <input id="personal-ingreso" v-model="form.fecha_ingreso" type="date" :class="claseEntrada(Boolean(erroresDatos.fecha_ingreso))" @input="limpiarError('fecha_ingreso')" />
+                                </Campo>
+                            </div>
+
+                            <Campo etiqueta="Correo electrónico" para="personal-email" :error="erroresDatos.email" opcional>
+                                <input id="personal-email" v-model="form.email" type="email" inputmode="email" maxlength="255" autocomplete="off" :class="claseEntrada(Boolean(erroresDatos.email))" @input="limpiarError('email')" />
                             </Campo>
 
-                            <Campo etiqueta="Apellido" para="personal-apellido" :error="erroresDatos.apellido">
-                                <input id="personal-apellido" v-model="form.apellido" type="text" maxlength="255" autocomplete="off" :class="claseEntrada(Boolean(erroresDatos.apellido))" @input="limpiarError('apellido')" />
-                            </Campo>
-                        </div>
-
-                        <div class="grid gap-5 sm:grid-cols-2">
-                            <Campo etiqueta="Teléfono" para="personal-telefono" :error="erroresDatos.telefono" opcional>
-                                <input id="personal-telefono" v-model="form.telefono" type="tel" inputmode="tel" maxlength="50" autocomplete="off" :class="claseEntrada(Boolean(erroresDatos.telefono))" @input="limpiarError('telefono')" />
-                            </Campo>
-
-                            <Campo etiqueta="Fecha de ingreso" para="personal-ingreso" :error="erroresDatos.fecha_ingreso">
-                                <input id="personal-ingreso" v-model="form.fecha_ingreso" type="date" :class="claseEntrada(Boolean(erroresDatos.fecha_ingreso))" @input="limpiarError('fecha_ingreso')" />
-                            </Campo>
-                        </div>
-
-                        <Campo etiqueta="Correo electrónico" para="personal-email" :error="erroresDatos.email" opcional>
-                            <input id="personal-email" v-model="form.email" type="email" inputmode="email" maxlength="255" autocomplete="off" :class="claseEntrada(Boolean(erroresDatos.email))" @input="limpiarError('email')" />
-                        </Campo>
-
-                        <Button v-if="!esNuevo" type="submit" :disabled="guardandoDatos || !cambiosDatos">
-                            {{ guardandoDatos ? 'Guardando…' : 'Guardar datos' }}
-                        </Button>
+                            <Button v-if="!esNuevo && esAdmin" type="submit" :disabled="guardandoDatos || !cambiosDatos">
+                                {{ guardandoDatos ? 'Guardando…' : 'Guardar datos' }}
+                            </Button>
+                        </fieldset>
                     </form>
                 </section>
 
@@ -449,21 +471,24 @@ watch(aviso, (valor) => {
                         Punto de partida: lunes a viernes de 09:00 a 18:00. Ajusta lo que necesites.
                     </p>
 
-                    <EditorTurnos v-model="semana" :errores="erroresSemana" class="mt-4" />
+                    <fieldset :disabled="!esAdmin" class="mt-4 min-w-0">
+                        <legend class="sr-only">Horario semanal</legend>
+                        <EditorTurnos v-model="semana" :errores="erroresSemana" />
+                    </fieldset>
 
-                    <Button v-if="!esNuevo" class="mt-5" :disabled="guardandoHorario || !cambiosHorario" @click="guardarHorario">
+                    <Button v-if="!esNuevo && esAdmin" class="mt-5" :disabled="guardandoHorario || !cambiosHorario" @click="guardarHorario">
                         {{ guardandoHorario ? 'Guardando…' : 'Guardar horario' }}
                     </Button>
                 </section>
 
-                <section v-if="!esNuevo" aria-labelledby="titulo-disponibilidad" class="rounded-[24px] border border-hilo p-5">
+                <section v-if="!esNuevo && esAdmin" aria-labelledby="titulo-disponibilidad" class="rounded-[24px] border border-hilo p-5">
                     <h3 id="titulo-disponibilidad" class="text-xl">Disponibilidad</h3>
 
                     <div class="mt-2 flex flex-wrap items-center justify-between gap-4">
                         <p class="max-w-xs text-sm text-bruma">
                             {{
                                 persona.activo
-                                    ? 'Este perfil aparece al crear reservas. Si lo desactivas, las reservas actuales y el horario se conservan.'
+                                    ? 'Este perfil aparece al crear reservas. Para desactivarlo no debe tener citas próximas pendientes o confirmadas; el historial y el horario se conservan.'
                                     : 'Este perfil no aparece al crear reservas. Puedes reactivarlo cuando quieras.'
                             }}
                         </p>
@@ -493,7 +518,8 @@ watch(aviso, (valor) => {
         <Modal :show="confirmarDesactivar" label="Confirmar desactivación" max-width="sm" @close="confirmarDesactivar = false">
             <h2 class="text-2xl">¿Desactivar el perfil de {{ persona?.nombre }} {{ persona?.apellido }}?</h2>
             <p class="mt-2 text-sm text-bruma">
-                Dejará de aparecer al crear reservas. Las reservas actuales se mantienen igual y el horario queda guardado por si reactivas el perfil.
+                Dejará de aparecer al crear reservas. Si tiene citas próximas pendientes o confirmadas, primero hay que
+                cancelarlas. El historial y el horario quedan guardados por si reactivas el perfil.
             </p>
             <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <Button label="Cancelar" variant="secondary" @click="confirmarDesactivar = false" />

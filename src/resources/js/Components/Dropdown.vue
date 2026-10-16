@@ -1,6 +1,7 @@
 
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { normalizar } from '../formato'
 
 const props = defineProps({
     modelValue: {
@@ -19,6 +20,14 @@ const props = defineProps({
         type: Boolean,
         default: false,
     },
+    buscable: {
+        type: Boolean,
+        default: false,
+    },
+    textoBusqueda: {
+        type: String,
+        default: 'Buscar…',
+    },
 })
 
 const emit = defineEmits(['update:modelValue'])
@@ -26,10 +35,16 @@ const emit = defineEmits(['update:modelValue'])
 const isOpen = ref(false)
 const root = ref(null)
 const lista = ref(null)
+const campoBusqueda = ref(null)
+const busqueda = ref('')
 
 watch(isOpen, async (abierto) => {
-    if (!abierto) return
+    if (!abierto) {
+        busqueda.value = ''
+        return
+    }
     await nextTick()
+    if (props.buscable) campoBusqueda.value?.focus()
     const seleccionada = lista.value?.querySelector('[aria-selected="true"]')
     if (!seleccionada) return
     lista.value.scrollTop = seleccionada.offsetTop - (lista.value.clientHeight - seleccionada.offsetHeight) / 2
@@ -38,6 +53,12 @@ watch(isOpen, async (abierto) => {
 const selectedOption = computed(() =>
     props.options.find((option) => option.value === props.modelValue)
 )
+
+const visibles = computed(() => {
+    const texto = normalizar(busqueda.value)
+    if (!props.buscable || !texto) return props.options
+    return props.options.filter((option) => normalizar(`${option.label} ${option.detalle ?? ''}`).includes(texto))
+})
 
 function toggle() {
     if (!props.disabled) isOpen.value = !isOpen.value
@@ -50,6 +71,14 @@ function close() {
 function select(option) {
     emit('update:modelValue', option.value)
     close()
+}
+
+function elegirPrimera() {
+    if (visibles.value.length) select(visibles.value[0])
+}
+
+function enfocarPrimera() {
+    lista.value?.querySelector('[role="option"]')?.focus()
 }
 
 function handleClickOutside(event) {
@@ -83,6 +112,7 @@ onBeforeUnmount(() => {
             @click="toggle"
         >
             <span
+                class="min-w-0 truncate"
                 :class="
                     selectedOption
                         ? 'text-perla'
@@ -117,49 +147,69 @@ onBeforeUnmount(() => {
         >
             <div
                 v-if="isOpen"
-                ref="lista"
-                role="listbox"
-                class="scroll-fino absolute z-20 mt-2 max-h-64 w-full origin-top overflow-auto rounded-xl border border-hilo-fuerte bg-raso p-1.5 shadow-2xl shadow-black/50"
+                class="absolute z-20 mt-2 w-full origin-top overflow-hidden rounded-xl border border-hilo-fuerte bg-raso shadow-2xl shadow-black/50"
             >
-                <p
-                    v-if="!options.length"
-                    class="px-3 py-2 text-sm text-niebla"
-                >
-                    Sin opciones
-                </p>
+                <div v-if="buscable" class="border-b border-hilo p-1.5">
+                    <input
+                        ref="campoBusqueda"
+                        v-model="busqueda"
+                        type="text"
+                        autocomplete="off"
+                        :placeholder="textoBusqueda"
+                        :aria-label="textoBusqueda"
+                        class="w-full rounded-lg border border-hilo bg-terciopelo px-3 py-2 text-sm text-perla placeholder:text-niebla focus-visible:border-orquidea focus-visible:outline-none"
+                        @keydown.enter.prevent="elegirPrimera"
+                        @keydown.down.prevent="enfocarPrimera"
+                    />
+                </div>
 
-                <button
-                    v-for="option in options"
-                    :key="option.value"
-                    type="button"
-                    role="option"
-                    :aria-selected="option.value === modelValue"
-                    class="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm text-perla transition-colors hover:bg-hilo focus-visible:bg-hilo focus-visible:outline-none"
-                    :class="{
-                        'bg-orquidea/15 font-medium text-orquidea-claro':
-                            option.value === modelValue
-                    }"
-                    @click="select(option)"
+                <div
+                    ref="lista"
+                    role="listbox"
+                    class="scroll-fino relative max-h-64 overflow-auto p-1.5"
                 >
-                    {{ option.label }}
-
-                    <svg
-                        v-if="option.value === modelValue"
-                        class="h-4 w-4 shrink-0 text-orquidea"
-                        viewBox="0 0 20 20"
-                        fill="currentColor"
-                        aria-hidden="true"
+                    <p
+                        v-if="!visibles.length"
+                        class="px-3 py-2 text-sm text-niebla"
                     >
-                        <path
-                            fill-rule="evenodd"
-                            d="M16.7 5.3a1 1 0 010 1.4l-7.5 7.5a1 1 0 01-1.4 0L3.3 9.7a1 1 0 011.4-1.4l3.8 3.8 6.8-6.8a1 1 0 011.4 0z"
-                            clip-rule="evenodd"
-                        />
-                    </svg>
-                </button>
+                        {{ options.length ? 'Sin resultados' : 'Sin opciones' }}
+                    </p>
+
+                    <button
+                        v-for="option in visibles"
+                        :key="option.value"
+                        type="button"
+                        role="option"
+                        :aria-selected="option.value === modelValue"
+                        class="flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm text-perla transition-colors hover:bg-hilo focus-visible:bg-hilo focus-visible:outline-none"
+                        :class="{
+                            'bg-orquidea/15 font-medium text-orquidea-claro':
+                                option.value === modelValue
+                        }"
+                        @click="select(option)"
+                    >
+                        <span class="min-w-0">
+                            <span class="block">{{ option.label }}</span>
+                            <span v-if="option.detalle" class="block truncate text-xs font-normal text-niebla">{{ option.detalle }}</span>
+                        </span>
+
+                        <svg
+                            v-if="option.value === modelValue"
+                            class="h-4 w-4 shrink-0 text-orquidea"
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                            aria-hidden="true"
+                        >
+                            <path
+                                fill-rule="evenodd"
+                                d="M16.7 5.3a1 1 0 010 1.4l-7.5 7.5a1 1 0 01-1.4 0L3.3 9.7a1 1 0 011.4-1.4l3.8 3.8 6.8-6.8a1 1 0 011.4 0z"
+                                clip-rule="evenodd"
+                            />
+                        </svg>
+                    </button>
+                </div>
             </div>
         </Transition>
     </div>
 </template>
-
 

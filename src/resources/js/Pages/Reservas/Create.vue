@@ -1,204 +1,167 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { router } from '@inertiajs/vue3'
 import AppLayout from '../../Layouts/AppLayout.vue'
 import Button from '../../Components/Button.vue'
 import Dropdown from '../../Components/Dropdown.vue'
 import PageHeader from '../../Components/PageHeader.vue'
 import Icono from '../../Components/Icono.vue'
+import Campo from '../../Components/Campo.vue'
+import Aviso from '../../Components/Aviso.vue'
+import { api, mensajeError, primerosErrores } from '../../api'
+import { aHora, aISO, aMinutos, duracion, fechaLarga, guaranies, hora } from '../../formato'
+import { claseEntrada, claseEnfoque } from '../../ui'
+import { useClientes, crearCliente } from '../../clientes'
+import { usePersonal } from '../../personal'
+import { useCatalogo } from '../../catalogo'
+import { crearReserva } from '../../reservas'
+import { usePermisos } from '../../auth'
+import { diaSemanaDe, franjasUnidas, nombreDia, resumenHorario, textoFranjas } from '../../turnos'
 
-const clientes = [
-    { id: 1, nombre: 'Ana', apellido: 'Gómez' },
-    { id: 2, nombre: 'Beatriz', apellido: 'López' },
-]
+const {
+    clientes,
+    cargando: cargandoClientes,
+    cargado: clientesCargados,
+    error: errorClientes,
+    cargarClientes,
+} = useClientes()
+const {
+    personal,
+    cargando: cargandoPersonal,
+    cargado: personalCargado,
+    error: errorPersonal,
+    cargarPersonal,
+} = usePersonal()
+const {
+    servicios,
+    cargado: catalogoCargado,
+    error: errorCatalogo,
+    cargarCatalogo,
+} = useCatalogo()
+const { esProfesional, personalPropio } = usePermisos()
 
-const personal = [
-    {
-        id: 1,
-        nombre: 'Carla',
-        apellido: 'Estilista',
-        activo: true,
-        turnos: [1, 2, 3, 4, 5].map((dia) => ({
-            dia_semana: dia,
-            hora_inicio: '08:00:00',
-            hora_fin: '18:00:00',
-        })),
-    },
-    {
-        id: 2,
-        nombre: 'Diana',
-        apellido: 'Colorista',
-        activo: true,
-        turnos: [1, 2, 3, 4, 5].map((dia) => ({
-            dia_semana: dia,
-            hora_inicio: '09:00:00',
-            hora_fin: '17:00:00',
-        })),
-    },
-]
+const ahora = ref(new Date())
+let reloj = null
 
-const servicios = [
-    {
-        id: 1,
-        categoria_id: 1,
-        nombre: 'Corte Femenino',
-        descripcion: null,
-        duracion_minutos: 45,
-        activo: true,
-    },
-    {
-        id: 2,
-        categoria_id: 1,
-        nombre: 'Baño de Crema / Nutrición',
-        descripcion: null,
-        duracion_minutos: 30,
-        activo: true,
-    },
-    {
-        id: 3,
-        categoria_id: 2,
-        nombre: 'Coloración Completa',
-        descripcion: null,
-        duracion_minutos: 90,
-        activo: true,
-    },
-    {
-        id: 4,
-        categoria_id: 2,
-        nombre: 'Decoloración Extrema (Descontinuado)',
-        descripcion: null,
-        duracion_minutos: 120,
-        activo: false,
-    },
-]
+onMounted(() => {
+    cargarClientes({ forzar: true })
+    cargarPersonal({ forzar: true })
+    cargarCatalogo({ forzar: true })
+    reloj = setInterval(() => {
+        ahora.value = new Date()
+    }, 30000)
+})
+
+onBeforeUnmount(() => clearInterval(reloj))
+
+const hoy = computed(() => aISO(ahora.value))
 
 const form = ref({
     cliente_id: null,
     personal_id: null,
     fecha: '',
     hora_inicio: '',
-    hora_fin: '',
     servicios: [],
+    a_domicilio: false,
+    direccion_domicilio: '',
+    minutos_traslado: 0,
 })
 
+const formulario = ref(null)
 const intentoGuardar = ref(false)
-const avisoSinConexion = ref(false)
+const guardando = ref(false)
+const erroresServidor = ref({})
+const errorGeneral = ref('')
+const aviso = ref('')
 
-const opcionesClientes = clientes.map((c) => ({
-    label: `${c.nombre} ${c.apellido}`,
-    value: c.id,
-}))
+function porNombre(a, b) {
+    return a.nombre.localeCompare(b.nombre, 'es') || a.apellido.localeCompare(b.apellido, 'es')
+}
 
-const opcionesPersonal = personal
-    .filter((p) => p.activo)
-    .map((p) => ({
-        label: `${p.nombre} ${p.apellido}`,
-        value: p.id,
+const opcionesClientes = computed(() =>
+    clientes.value.map((c) => ({
+        value: c.id,
+        label: `${c.nombre} ${c.apellido}`.trim(),
+        detalle: [c.telefono, c.email].filter(Boolean).join(' · '),
     }))
+)
 
-const serviciosActivos = servicios.filter((s) => s.activo)
+// Un profesional solo agenda en su propia ficha; si el equipo no cargó, alcanza con la del usuario.
+const personalActivo = computed(() => {
+    if (esProfesional.value) {
+        const propio = personalPropio.value
+        if (!propio) return []
+        return [personal.value.find((p) => p.id === propio.id) ?? propio]
+    }
 
-function fechaLocalHoy() {
-    const hoy = new Date()
-    const mes = String(hoy.getMonth() + 1).padStart(2, '0')
-    const dia = String(hoy.getDate()).padStart(2, '0')
-
-    return `${hoy.getFullYear()}-${mes}-${dia}`
-}
-
-const fechaMinima = fechaLocalHoy()
-
-const nombresDias = {
-    1: 'lunes',
-    2: 'martes',
-    3: 'miércoles',
-    4: 'jueves',
-    5: 'viernes',
-    6: 'sábados',
-    7: 'domingos',
-}
-
-const horarioProfesional = computed(() => {
-    const profesional = personal.find(
-        (p) => p.id === form.value.personal_id
-    )
-
-    if (!profesional || !profesional.turnos.length) return ''
-
-    const dias = profesional.turnos
-        .map((t) => t.dia_semana)
-        .sort((a, b) => a - b)
-
-    const consecutivos = dias.every(
-        (dia, i) => i === 0 || dia === dias[i - 1] + 1
-    )
-
-    const textoDias = consecutivos && dias.length > 1
-        ? `de ${nombresDias[dias[0]]} a ${nombresDias[dias.at(-1)]}`
-        : `los ${dias.map((d) => nombresDias[d]).join(', ')}`
-
-    const { hora_inicio, hora_fin } = profesional.turnos[0]
-
-    return `Atiende ${textoDias}, de ${hora_inicio.slice(0, 5)} a ${hora_fin.slice(0, 5)}`
+    return personal.value.filter((p) => p.activo).sort(porNombre)
 })
 
-const duracionTotal = computed(() =>
-    serviciosActivos
-        .filter((s) => form.value.servicios.includes(s.id))
-        .reduce((total, s) => total + s.duracion_minutos, 0)
+const opcionesPersonal = computed(() =>
+    personalActivo.value.map((p) => ({
+        value: p.id,
+        label: `${p.nombre} ${p.apellido}`,
+        detalle: p.turnos === undefined || p.turnos.length ? '' : 'Sin horario asignado',
+    }))
+)
+
+function precioDe(servicio) {
+    if (servicio.precio_vigente === null || servicio.precio_vigente === undefined || servicio.precio_vigente === '') return null
+    return Number(servicio.precio_vigente)
+}
+
+const serviciosActivos = computed(() =>
+    servicios.value.filter((s) => s.activo).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
 )
 
 const serviciosElegidos = computed(() =>
-    serviciosActivos.filter((s) => form.value.servicios.includes(s.id))
+    serviciosActivos.value.filter((s) => form.value.servicios.includes(s.id))
 )
 
+const duracionTotal = computed(() =>
+    serviciosElegidos.value.reduce((total, s) => total + Number(s.duracion_minutos), 0)
+)
+
+const totalEstimado = computed(() =>
+    serviciosElegidos.value.reduce((total, s) => total + (precioDe(s) ?? 0), 0)
+)
+
+const faltaPrecio = computed(() => serviciosElegidos.value.some((s) => precioDe(s) === null))
+
 const clienteElegido = computed(() => {
-    const cliente = clientes.find((c) => c.id === form.value.cliente_id)
+    const cliente = clientes.value.find((c) => c.id === form.value.cliente_id)
     return cliente ? `${cliente.nombre} ${cliente.apellido}` : ''
 })
 
-const profesionalElegido = computed(() => {
-    const profesional = personal.find((p) => p.id === form.value.personal_id)
-    return profesional ? `${profesional.nombre} ${profesional.apellido}` : ''
-})
+const profesionalActual = computed(() => personalActivo.value.find((p) => p.id === form.value.personal_id) ?? null)
 
-const fechaElegida = computed(() => {
-    if (!form.value.fecha) return ''
-    const [anio, mes, dia] = form.value.fecha.split('-').map(Number)
+const profesionalElegido = computed(() =>
+    profesionalActual.value ? `${profesionalActual.value.nombre} ${profesionalActual.value.apellido}` : ''
+)
 
-    return new Date(anio, mes - 1, dia).toLocaleDateString('es-PY', {
-        weekday: 'long',
-        day: 'numeric',
-        month: 'long',
-    })
-})
+const turnosProfesional = computed(() => profesionalActual.value?.turnos ?? [])
 
-function aMinutos(hora) {
-    const [h, m] = hora.slice(0, 5).split(':').map(Number)
-    return h * 60 + m
-}
+const horarioProfesional = computed(() => (profesionalActual.value ? resumenHorario(turnosProfesional.value) : ''))
 
-function aHora(minutos) {
-    return `${String(Math.floor(minutos / 60)).padStart(2, '0')}:${String(minutos % 60).padStart(2, '0')}`
-}
+const fechaElegida = computed(() => (form.value.fecha ? fechaLarga(form.value.fecha) : ''))
 
-function aISO(fecha) {
-    const mes = String(fecha.getMonth() + 1).padStart(2, '0')
-    const dia = String(fecha.getDate()).padStart(2, '0')
-    return `${fecha.getFullYear()}-${mes}-${dia}`
-}
-
-const profesionalActual = computed(() => personal.find((p) => p.id === form.value.personal_id) ?? null)
+const horaFin = computed(() =>
+    form.value.hora_inicio && duracionTotal.value ? aHora(aMinutos(form.value.hora_inicio) + duracionTotal.value) : ''
+)
 
 const inicioBloque = ref(0)
 const diasPorBloque = 14
 
+function atiende(diaIso) {
+    if (!profesionalActual.value || profesionalActual.value.turnos === undefined) return true
+    return franjasUnidas(turnosProfesional.value, diaIso).length > 0
+}
+
 const diasVisibles = computed(() => {
-    const hoy = new Date()
+    const base = ahora.value
 
     return Array.from({ length: diasPorBloque }, (_, i) => {
-        const fecha = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + inicioBloque.value + i)
-        const diaIso = fecha.getDay() || 7
-        const atiende = !profesionalActual.value || profesionalActual.value.turnos.some((t) => t.dia_semana === diaIso)
+        const fecha = new Date(base.getFullYear(), base.getMonth(), base.getDate() + inicioBloque.value + i)
 
         return {
             iso: aISO(fecha),
@@ -206,7 +169,7 @@ const diasVisibles = computed(() => {
             dia: fecha.getDate(),
             mes: fecha.toLocaleDateString('es-PY', { month: 'short' }).replace('.', ''),
             esHoy: inicioBloque.value + i === 0,
-            disponible: atiende,
+            disponible: atiende(fecha.getDay() || 7),
         }
     })
 })
@@ -221,64 +184,188 @@ function moverBloque(direccion) {
     inicioBloque.value = Math.max(0, inicioBloque.value + direccion * diasPorBloque)
 }
 
-function elegirDia(dia) {
-    if (!dia.disponible) return
-    form.value.fecha = dia.iso
+const disponibilidad = ref(null)
+const revisando = ref(false)
+const errorAgenda = ref('')
+let consultaAgenda = 0
+let controlador = null
+let espera = null
+let diaConsultado = ''
+
+const MOTIVOS = {
+    ocupado: 'ocupado',
+    pasado: 'ya pasó',
+    local_cerrado: 'el local está cerrado',
 }
 
-const turnoDelDia = computed(() => {
-    if (!form.value.fecha) return null
+function claveDia() {
+    return `${form.value.personal_id}|${form.value.fecha}`
+}
 
-    const [anio, mes, dia] = form.value.fecha.split('-').map(Number)
-    const diaIso = new Date(anio, mes - 1, dia).getDay() || 7
+function urlDisponibilidad() {
+    const f = form.value
+    const parametros = new URLSearchParams({ personal_id: f.personal_id, fecha: f.fecha, intervalo: 30 })
 
-    if (!profesionalActual.value) return { hora_inicio: '08:00', hora_fin: '18:00' }
-    return profesionalActual.value.turnos.find((t) => t.dia_semana === diaIso) ?? null
+    if (f.servicios.length) for (const id of f.servicios) parametros.append('servicios[]', id)
+    else parametros.set('duracion_minutos', 30)
+
+    if (f.a_domicilio) {
+        parametros.set('a_domicilio', 1)
+        parametros.set('minutos_traslado', f.minutos_traslado)
+    }
+
+    return `/api/disponibilidad?${parametros}`
+}
+
+// La API es la única fuente de los horarios libres: considera turnos, otras
+// reservas con sus traslados, el horario del local y la tolerancia de 30 minutos.
+async function revisarAgenda({ silenciosa = false } = {}) {
+    clearTimeout(espera)
+    controlador?.abort()
+    const turno = ++consultaAgenda
+
+    if (!form.value.personal_id || !form.value.fecha) {
+        disponibilidad.value = null
+        diaConsultado = ''
+        revisando.value = false
+        errorAgenda.value = ''
+        return
+    }
+
+    if (claveDia() !== diaConsultado) disponibilidad.value = null
+    diaConsultado = claveDia()
+    if (!silenciosa) revisando.value = true
+    controlador = new AbortController()
+
+    const respuesta = await api(urlDisponibilidad(), { senal: controlador.signal })
+    if (turno !== consultaAgenda) return
+
+    revisando.value = false
+    controlador = null
+
+    if (!respuesta.ok) {
+        if (silenciosa) return
+        errorAgenda.value =
+            respuesta.status === 422
+                ? Object.values(primerosErrores(respuesta.cuerpo))[0] ?? mensajeError(respuesta, 'revisar los horarios libres')
+                : mensajeError(respuesta, 'revisar los horarios libres')
+        disponibilidad.value = null
+        return
+    }
+
+    errorAgenda.value = ''
+    disponibilidad.value = respuesta.cuerpo?.data ?? null
+}
+
+// Al cambiar rápido de día o de servicios se espera un momento y se cancela el pedido anterior.
+function programarRevision() {
+    clearTimeout(espera)
+    controlador?.abort()
+    consultaAgenda++
+
+    if (!form.value.personal_id || !form.value.fecha) {
+        revisarAgenda()
+        return
+    }
+
+    if (claveDia() !== diaConsultado) {
+        disponibilidad.value = null
+        errorAgenda.value = ''
+    }
+
+    revisando.value = true
+    espera = setTimeout(revisarAgenda, 250)
+}
+
+const franjasDelDia = computed(() => {
+    if (!form.value.fecha || !profesionalActual.value) return []
+
+    const delServidor = disponibilidad.value?.franjas
+    if (Array.isArray(delServidor) && delServidor.length) {
+        return delServidor
+            .map((franja) => (Array.isArray(franja) ? franja : [franja.inicio ?? franja.hora_inicio, franja.fin ?? franja.hora_fin]))
+            .map(([desde, hasta]) => ({ inicio: aMinutos(desde), fin: aMinutos(hasta) }))
+    }
+
+    return franjasUnidas(turnosProfesional.value, diaSemanaDe(form.value.fecha))
+})
+
+const textoDia = computed(() => {
+    if (!franjasDelDia.value.length) return ''
+    const dia = nombreDia(diaSemanaDe(form.value.fecha))
+    const quien = esProfesional.value ? 'atiendes' : `${profesionalActual.value.nombre} atiende`
+    return `El ${dia} ${quien} ${textoFranjas(franjasDelDia.value)}.`
 })
 
 const horarios = computed(() => {
-    const turno = turnoDelDia.value
-    if (!turno) return []
+    const lista = disponibilidad.value?.horarios ?? []
+    const esHoy = form.value.fecha === hoy.value
+    const minutosAhora = ahora.value.getHours() * 60 + ahora.value.getMinutes()
 
-    const inicio = aMinutos(turno.hora_inicio)
-    const fin = aMinutos(turno.hora_fin)
-    const necesario = duracionTotal.value || 30
-    const ahora = new Date()
-    const esHoy = form.value.fecha === fechaMinima
-    const minutosAhora = ahora.getHours() * 60 + ahora.getMinutes()
-    const lista = []
+    return lista.map((h) => {
+        const minuto = aMinutos(h.hora)
+        const disponible = Boolean(h.disponible)
 
-    for (let minuto = inicio; minuto + necesario <= fin; minuto += 30) {
-        lista.push({
-            hora: aHora(minuto),
-            disponible: !esHoy || minuto > minutosAhora,
+        return {
+            hora: hora(h.hora),
+            disponible,
+            motivo: disponible ? '' : MOTIVOS[h.motivo] ?? 'no disponible',
+            // Clientes que llegan sin turno: la API deja reservar hasta 30 minutos después del inicio.
+            ahora: disponible && esHoy && minuto <= minutosAhora,
             tarde: minuto >= 13 * 60,
-        })
-    }
-
-    return lista
+        }
+    })
 })
+
+function etiquetaHorario(horario) {
+    if (horario.motivo) return `${horario.hora}, ${horario.motivo}`
+    if (horario.ahora) return `${horario.hora}, ahora: para quien llega sin turno`
+    return horario.hora
+}
 
 const horariosManana = computed(() => horarios.value.filter((h) => !h.tarde))
 const horariosTarde = computed(() => horarios.value.filter((h) => h.tarde))
+const sinHorariosLibres = computed(() => horarios.value.length > 0 && !horarios.value.some((h) => h.disponible))
+const sinTurnoEseDia = computed(() => Boolean(disponibilidad.value) && !franjasDelDia.value.length && !horarios.value.length)
+
+const opcionesTraslado = [0, 15, 30, 45, 60].map((minutos) => ({
+    valor: minutos,
+    etiqueta: minutos ? `${minutos} min` : 'Sin traslado',
+}))
+
+const textoTraslado = computed(() =>
+    form.value.minutos_traslado ? `Traslado: ${duracion(form.value.minutos_traslado)} antes y después` : 'Sin tiempo de traslado'
+)
+
+const bloqueAgenda = computed(() => {
+    const traslado = form.value.a_domicilio ? form.value.minutos_traslado : 0
+    if (!traslado || !form.value.hora_inicio || !horaFin.value) return ''
+    const desde = aHora(Math.max(0, aMinutos(form.value.hora_inicio) - traslado))
+    const hasta = aHora(aMinutos(horaFin.value) + traslado)
+    return `Con el traslado, la agenda queda ocupada de ${desde} a ${hasta}.`
+})
+
+const horarioDescartado = ref(false)
+
+function limpiarServidor(...campos) {
+    if (!campos.some((campo) => erroresServidor.value[campo])) return
+    erroresServidor.value = Object.fromEntries(
+        Object.entries(erroresServidor.value).filter(([campo]) => !campos.includes(campo))
+    )
+}
+
+function elegirDia(dia) {
+    if (!dia.disponible) return
+    form.value.fecha = dia.iso
+    limpiarServidor('fecha', 'horario')
+}
 
 function elegirHora(horario) {
     if (!horario.disponible) return
     form.value.hora_inicio = horario.hora
+    horarioDescartado.value = false
+    limpiarServidor('horario')
 }
-
-watch([() => form.value.hora_inicio, duracionTotal], ([inicio, minutos]) => {
-    form.value.hora_fin = inicio && minutos ? aHora(aMinutos(inicio) + minutos) : ''
-})
-
-watch([() => form.value.personal_id, () => form.value.fecha], () => {
-    if (form.value.fecha && !turnoDelDia.value) {
-        form.value.fecha = ''
-    }
-    if (form.value.hora_inicio && !horarios.value.some((h) => h.hora === form.value.hora_inicio && h.disponible)) {
-        form.value.hora_inicio = ''
-    }
-})
 
 function alternarServicio(id) {
     const lista = form.value.servicios
@@ -286,7 +373,85 @@ function alternarServicio(id) {
     form.value.servicios = lista.includes(id)
         ? lista.filter((s) => s !== id)
         : [...lista, id]
+
+    limpiarServidor('servicios', 'horario')
 }
+
+watch(
+    () => (esProfesional.value ? personalPropio.value?.id ?? null : undefined),
+    (id) => {
+        if (id !== undefined && id !== null) form.value.personal_id = id
+    },
+    { immediate: true }
+)
+
+watch(personalActivo, (lista) => {
+    if (form.value.personal_id !== null && personalCargado.value && !lista.some((p) => p.id === form.value.personal_id)) {
+        form.value.personal_id = null
+    }
+})
+
+watch(serviciosActivos, (lista) => {
+    if (!catalogoCargado.value) return
+    const vigentes = form.value.servicios.filter((id) => lista.some((s) => s.id === id))
+    if (vigentes.length !== form.value.servicios.length) form.value.servicios = vigentes
+})
+
+watch(
+    () => form.value.personal_id,
+    () => {
+        limpiarServidor('personal_id', 'horario')
+        if (form.value.fecha && !atiende(diaSemanaDe(form.value.fecha))) form.value.fecha = ''
+    }
+)
+
+watch(
+    () =>
+        [
+            form.value.personal_id,
+            form.value.fecha,
+            [...form.value.servicios].sort((a, b) => a - b).join(','),
+            form.value.a_domicilio ? `domicilio:${form.value.minutos_traslado}` : 'salon',
+        ].join('|'),
+    programarRevision
+)
+
+// Hoy los horarios cambian con la hora: se refrescan en silencio con el reloj.
+watch(ahora, () => {
+    if (form.value.fecha && form.value.fecha === hoy.value && !revisando.value) revisarAgenda({ silenciosa: true })
+})
+
+onBeforeUnmount(() => {
+    clearTimeout(espera)
+    controlador?.abort()
+})
+
+watch([horarios, revisando], () => {
+    if (revisando.value || !disponibilidad.value || !form.value.hora_inicio) return
+    if (horarios.value.some((h) => h.hora === form.value.hora_inicio && h.disponible)) return
+
+    form.value.hora_inicio = ''
+    horarioDescartado.value = true
+})
+
+watch(
+    () => form.value.cliente_id,
+    () => limpiarServidor('cliente_id')
+)
+
+watch(
+    () => [form.value.a_domicilio, form.value.direccion_domicilio],
+    () => limpiarServidor('direccion_domicilio')
+)
+
+watch(
+    () => [form.value.a_domicilio, form.value.minutos_traslado],
+    () => limpiarServidor('minutos_traslado', 'horario')
+)
+
+watch(form, () => {
+    errorGeneral.value = ''
+}, { deep: true })
 
 const errores = computed(() => {
     const f = form.value
@@ -294,46 +459,166 @@ const errores = computed(() => {
 
     if (!f.cliente_id) e.cliente_id = 'Selecciona un cliente.'
     if (!f.personal_id) e.personal_id = 'Selecciona un profesional.'
+    if (!f.servicios.length) e.servicios = 'Selecciona al menos un servicio.'
 
     if (!f.fecha) {
         e.fecha = 'Elige el día de la cita.'
-    } else if (f.fecha < fechaMinima) {
+    } else if (f.fecha < hoy.value) {
         e.fecha = 'La fecha no puede ser anterior a hoy.'
     }
 
-    if (!f.hora_inicio) e.hora_inicio = 'Elige un horario.'
+    if (!f.hora_inicio) e.horario = 'Elige un horario.'
 
-    if (!f.servicios.length) {
-        e.servicios = 'Selecciona al menos un servicio.'
+    if (f.a_domicilio && !f.direccion_domicilio.trim()) {
+        e.direccion_domicilio = 'Indica la dirección y una referencia para llegar.'
     }
 
     return e
 })
 
 function error(campo) {
-    return intentoGuardar.value ? errores.value[campo] : ''
+    return erroresServidor.value[campo] || (intentoGuardar.value ? errores.value[campo] ?? '' : '')
 }
 
-const payload = computed(() => ({
-    cliente_id: form.value.cliente_id,
-    personal_id: form.value.personal_id,
-    fecha: form.value.fecha,
-    hora_inicio: form.value.hora_inicio,
-    hora_fin: form.value.hora_fin,
-    servicios: [...form.value.servicios],
-}))
+const GRUPOS_ERROR = {
+    cliente_id: 'cliente_id',
+    personal_id: 'personal_id',
+    fecha: 'fecha',
+    hora_inicio: 'horario',
+    hora_fin: 'horario',
+    horario: 'horario',
+    servicios: 'servicios',
+    servicio_id: 'servicios',
+    precio: 'servicios',
+    a_domicilio: 'direccion_domicilio',
+    direccion_domicilio: 'direccion_domicilio',
+    minutos_traslado: 'minutos_traslado',
+}
 
-watch(payload, () => {
-    avisoSinConexion.value = false
-})
+async function mostrarPrimerError() {
+    await nextTick()
+    formulario.value?.querySelector('[data-error]')?.scrollIntoView({ block: 'center', behavior: 'smooth' })
+}
 
-function guardar() {
+function cargaUtil() {
+    const f = form.value
+
+    return {
+        cliente_id: f.cliente_id,
+        personal_id: f.personal_id,
+        fecha: f.fecha,
+        hora_inicio: f.hora_inicio,
+        hora_fin: horaFin.value,
+        servicios: [...f.servicios],
+        a_domicilio: f.a_domicilio,
+        direccion_domicilio: f.a_domicilio ? f.direccion_domicilio.trim() : null,
+        ...(f.a_domicilio ? { minutos_traslado: f.minutos_traslado } : {}),
+    }
+}
+
+async function guardar() {
+    if (guardando.value) return
+
     intentoGuardar.value = true
+    errorGeneral.value = ''
 
-    if (Object.keys(errores.value).length) return
+    if (Object.keys(errores.value).length) {
+        mostrarPrimerError()
+        return
+    }
 
-    avisoSinConexion.value = true
+    guardando.value = true
+    const respuesta = await crearReserva(cargaUtil())
+
+    if (respuesta.ok) {
+        const id = respuesta.cuerpo?.data?.id
+        router.visit(id ? `/reservas?nueva=${id}` : '/reservas')
+        return
+    }
+
+    guardando.value = false
+
+    if (respuesta.status === 422) {
+        const porGrupo = {}
+        const sueltos = []
+
+        for (const [clave, mensaje] of Object.entries(primerosErrores(respuesta.cuerpo))) {
+            const grupo = GRUPOS_ERROR[clave.split('.')[0]]
+            if (grupo) porGrupo[grupo] ??= mensaje
+            else sueltos.push(mensaje)
+        }
+
+        erroresServidor.value = porGrupo
+        if (sueltos.length) errorGeneral.value = sueltos[0]
+        else if (!Object.keys(porGrupo).length) errorGeneral.value = mensajeError(respuesta, 'guardar la reserva')
+        if (porGrupo.horario) revisarAgenda()
+    } else {
+        errorGeneral.value = mensajeError(respuesta, 'guardar la reserva')
+    }
+
+    mostrarPrimerError()
 }
+
+const nuevoCliente = ref(null)
+const erroresCliente = ref({})
+const guardandoCliente = ref(false)
+
+async function abrirNuevoCliente() {
+    nuevoCliente.value = { nombre: '', apellido: '', telefono: '' }
+    erroresCliente.value = {}
+    await nextTick()
+    document.getElementById('cliente-nombre')?.focus()
+}
+
+function cerrarNuevoCliente() {
+    nuevoCliente.value = null
+    erroresCliente.value = {}
+}
+
+async function guardarCliente() {
+    if (guardandoCliente.value) return
+
+    const datos = {
+        nombre: nuevoCliente.value.nombre.trim(),
+        apellido: nuevoCliente.value.apellido.trim(),
+        telefono: nuevoCliente.value.telefono.trim() || null,
+    }
+
+    const e = {}
+    if (!datos.nombre) e.nombre = 'Indica el nombre.'
+    if (!datos.apellido) e.apellido = 'Indica el apellido.'
+    erroresCliente.value = e
+    if (Object.keys(e).length) return
+
+    guardandoCliente.value = true
+    const respuesta = await crearCliente(datos)
+    guardandoCliente.value = false
+
+    if (!respuesta.ok) {
+        if (respuesta.status === 422) {
+            const recibidos = primerosErrores(respuesta.cuerpo)
+            const propios = ['nombre', 'apellido', 'telefono']
+            const otro = Object.entries(recibidos).find(([clave]) => !propios.includes(clave))
+            erroresCliente.value = {
+                ...Object.fromEntries(Object.entries(recibidos).filter(([clave]) => propios.includes(clave))),
+                general: otro?.[1] ?? '',
+            }
+        } else {
+            erroresCliente.value = { general: mensajeError(respuesta, 'registrar al cliente') }
+        }
+        return
+    }
+
+    const nuevo = respuesta.cuerpo.data
+    form.value.cliente_id = nuevo.id
+    cerrarNuevoCliente()
+    aviso.value = `Se registró a ${nuevo.nombre} ${nuevo.apellido} como cliente.`
+}
+
+const lugares = [
+    { valor: false, titulo: 'En el salón', descripcion: 'La cita se atiende en el local.', icono: 'servicios' },
+    { valor: true, titulo: 'A domicilio', descripcion: 'El profesional va a la casa del cliente.', icono: 'casa' },
+]
 </script>
 
 <template>
@@ -346,6 +631,7 @@ function guardar() {
 
             <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
                 <form
+                    ref="formulario"
                     class="min-w-0 rounded-[28px] border border-hilo bg-velo"
                     novalidate
                     @submit.prevent="guardar"
@@ -362,11 +648,31 @@ function guardar() {
                                 <Dropdown
                                     v-model="form.cliente_id"
                                     :options="opcionesClientes"
-                                    placeholder="Seleccionar cliente"
+                                    :placeholder="!clientesCargados && cargandoClientes ? 'Cargando clientes…' : 'Seleccionar cliente'"
+                                    :disabled="!clientesCargados && cargandoClientes"
+                                    buscable
+                                    texto-busqueda="Buscar por nombre o teléfono…"
                                 />
-                                <p v-if="error('cliente_id')" class="mt-1.5 text-sm text-borgona">
+                                <p v-if="error('cliente_id')" data-error role="alert" class="mt-1.5 text-sm text-borgona">
                                     {{ error('cliente_id') }}
                                 </p>
+                                <p v-else-if="errorClientes && !clientes.length" role="alert" class="mt-1.5 text-sm text-borgona">
+                                    {{ errorClientes }}
+                                    <button type="button" class="rounded underline underline-offset-4" :class="claseEnfoque" @click="cargarClientes({ forzar: true })">
+                                        Reintentar
+                                    </button>
+                                </p>
+
+                                <button
+                                    v-if="!nuevoCliente"
+                                    type="button"
+                                    class="mt-2 inline-flex items-center gap-1.5 rounded-full px-1 py-1 text-sm text-orquidea transition-colors hover:text-orquidea-claro"
+                                    :class="claseEnfoque"
+                                    @click="abrirNuevoCliente"
+                                >
+                                    <Icono name="agregar" class="h-4 w-4" />
+                                    Registrar cliente nuevo
+                                </button>
                             </div>
 
                             <div class="min-w-0">
@@ -374,17 +680,184 @@ function guardar() {
                                 <Dropdown
                                     v-model="form.personal_id"
                                     :options="opcionesPersonal"
-                                    placeholder="Seleccionar profesional"
+                                    :placeholder="!personalCargado && cargandoPersonal ? 'Cargando equipo…' : 'Seleccionar profesional'"
+                                    :disabled="esProfesional || (!personalCargado && cargandoPersonal)"
                                 />
-                                <p v-if="error('personal_id')" class="mt-1.5 text-sm text-borgona">
+                                <p v-if="esProfesional" class="mt-1.5 text-sm text-niebla">La cita queda en tu agenda.</p>
+                                <p v-if="error('personal_id')" data-error role="alert" class="mt-1.5 text-sm text-borgona">
                                     {{ error('personal_id') }}
                                 </p>
-                                <p v-else-if="horarioProfesional" class="mt-1.5 flex items-center gap-1.5 text-sm text-bruma">
-                                    <Icono name="pendiente" class="h-4 w-4 text-orquidea" />
+                                <p v-else-if="errorPersonal && !personal.length && !esProfesional" role="alert" class="mt-1.5 text-sm text-borgona">
+                                    {{ errorPersonal }}
+                                    <button type="button" class="rounded underline underline-offset-4" :class="claseEnfoque" @click="cargarPersonal({ forzar: true })">
+                                        Reintentar
+                                    </button>
+                                </p>
+                                <p v-else-if="personalCargado && !personalActivo.length && !esProfesional" class="mt-1.5 text-sm text-niebla">
+                                    No hay profesionales activos. Agrega o reactiva a alguien en Equipo.
+                                </p>
+                                <p v-else-if="horarioProfesional" class="mt-1.5 flex items-start gap-1.5 text-sm text-bruma">
+                                    <Icono name="pendiente" class="mt-0.5 h-4 w-4 shrink-0 text-orquidea" />
                                     {{ horarioProfesional }}
+                                </p>
+                                <p v-else-if="profesionalActual && profesionalActual.turnos !== undefined" class="mt-1.5 flex items-start gap-1.5 text-sm text-miel">
+                                    <Icono name="alerta" class="mt-0.5 h-4 w-4 shrink-0" />
+                                    {{ profesionalActual.nombre }} todavía no tiene horario asignado. Se lo puedes cargar en Equipo.
                                 </p>
                             </div>
                         </div>
+
+                        <div v-if="nuevoCliente" class="mt-5 rounded-2xl border border-hilo bg-noche/30 p-4 sm:p-5" role="group" aria-labelledby="titulo-cliente-nuevo">
+                            <div class="flex items-center justify-between gap-3">
+                                <h3 id="titulo-cliente-nuevo" class="text-lg text-perla">Cliente nuevo</h3>
+                                <button
+                                    type="button"
+                                    class="rounded-full p-1.5 text-bruma transition-colors hover:bg-raso hover:text-perla"
+                                    :class="claseEnfoque"
+                                    aria-label="Cerrar el registro de cliente"
+                                    @click="cerrarNuevoCliente"
+                                >
+                                    <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" aria-hidden="true">
+                                        <path stroke-linecap="round" d="M6 6l12 12M18 6L6 18" />
+                                    </svg>
+                                </button>
+                            </div>
+
+                            <p v-if="erroresCliente.general" role="alert" class="mt-3 rounded-xl border border-borgona/40 bg-borgona-hondo px-4 py-3 text-sm text-borgona">
+                                {{ erroresCliente.general }}
+                            </p>
+
+                            <div class="mt-4 grid gap-4 sm:grid-cols-3">
+                                <Campo etiqueta="Nombre" para="cliente-nombre" :error="erroresCliente.nombre">
+                                    <input
+                                        id="cliente-nombre"
+                                        v-model="nuevoCliente.nombre"
+                                        type="text"
+                                        maxlength="255"
+                                        autocomplete="off"
+                                        :class="claseEntrada(Boolean(erroresCliente.nombre), true)"
+                                        @keydown.enter.prevent="guardarCliente"
+                                    />
+                                </Campo>
+                                <Campo etiqueta="Apellido" para="cliente-apellido" :error="erroresCliente.apellido">
+                                    <input
+                                        id="cliente-apellido"
+                                        v-model="nuevoCliente.apellido"
+                                        type="text"
+                                        maxlength="255"
+                                        autocomplete="off"
+                                        :class="claseEntrada(Boolean(erroresCliente.apellido), true)"
+                                        @keydown.enter.prevent="guardarCliente"
+                                    />
+                                </Campo>
+                                <Campo etiqueta="Teléfono" para="cliente-telefono" :error="erroresCliente.telefono" opcional>
+                                    <input
+                                        id="cliente-telefono"
+                                        v-model="nuevoCliente.telefono"
+                                        type="tel"
+                                        inputmode="tel"
+                                        maxlength="50"
+                                        autocomplete="off"
+                                        :class="claseEntrada(Boolean(erroresCliente.telefono), true)"
+                                        @keydown.enter.prevent="guardarCliente"
+                                    />
+                                </Campo>
+                            </div>
+
+                            <div class="mt-4 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                                <Button label="Cancelar" variant="secondary" @click="cerrarNuevoCliente" />
+                                <Button :disabled="guardandoCliente" @click="guardarCliente">
+                                    {{ guardandoCliente ? 'Guardando…' : 'Guardar y elegir' }}
+                                </Button>
+                            </div>
+                        </div>
+
+                        <fieldset class="mt-6">
+                            <legend class="mb-1.5 text-sm font-medium text-perla">Lugar de atención</legend>
+
+                            <div class="grid gap-3 sm:grid-cols-2">
+                                <label
+                                    v-for="lugar in lugares"
+                                    :key="lugar.titulo"
+                                    class="flex cursor-pointer items-center gap-3 rounded-lg border p-3.5 transition-colors has-[:focus-visible]:outline-2 has-[:focus-visible]:outline-offset-2 has-[:focus-visible]:outline-orquidea"
+                                    :class="
+                                        form.a_domicilio === lugar.valor
+                                            ? 'border-orquidea bg-orquidea/12'
+                                            : 'border-hilo bg-terciopelo hover:border-hilo-fuerte'
+                                    "
+                                >
+                                    <input
+                                        v-model="form.a_domicilio"
+                                        type="radio"
+                                        name="lugar"
+                                        class="sr-only"
+                                        :value="lugar.valor"
+                                    />
+                                    <span
+                                        class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border transition-colors"
+                                        :class="
+                                            form.a_domicilio === lugar.valor
+                                                ? 'border-orquidea bg-orquidea text-noche'
+                                                : 'border-hilo-fuerte text-orquidea'
+                                        "
+                                    >
+                                        <Icono :name="lugar.icono" class="h-5 w-5" />
+                                    </span>
+                                    <span class="min-w-0">
+                                        <span class="block text-sm font-medium text-perla">{{ lugar.titulo }}</span>
+                                        <span class="mt-0.5 block text-xs text-bruma">{{ lugar.descripcion }}</span>
+                                    </span>
+                                </label>
+                            </div>
+
+                            <div v-if="form.a_domicilio" class="mt-4">
+                                <label for="reserva-direccion" class="mb-1.5 block text-sm font-medium text-perla">Dirección</label>
+                                <textarea
+                                    id="reserva-direccion"
+                                    v-model="form.direccion_domicilio"
+                                    rows="2"
+                                    maxlength="255"
+                                    placeholder="Ej.: Calle Las Palmeras 123, barrio San Miguel. Portón verde frente a la plaza."
+                                    :class="[claseEntrada(Boolean(error('direccion_domicilio'))), 'resize-y']"
+                                    :aria-invalid="Boolean(error('direccion_domicilio'))"
+                                    :aria-describedby="error('direccion_domicilio') ? 'reserva-direccion-error' : 'reserva-direccion-ayuda'"
+                                ></textarea>
+                                <p v-if="error('direccion_domicilio')" id="reserva-direccion-error" data-error role="alert" class="mt-1.5 text-sm text-borgona">
+                                    {{ error('direccion_domicilio') }}
+                                </p>
+                                <p v-else id="reserva-direccion-ayuda" class="mt-1.5 text-sm text-niebla">
+                                    Incluye calle, número o barrio y una referencia para llegar.
+                                </p>
+                            </div>
+
+                            <div v-if="form.a_domicilio" class="mt-4">
+                                <p id="reserva-traslado" class="mb-1.5 text-sm font-medium text-perla">Tiempo de traslado</p>
+                                <div class="flex flex-wrap gap-2" role="group" aria-labelledby="reserva-traslado" aria-describedby="reserva-traslado-ayuda">
+                                    <button
+                                        v-for="opcion in opcionesTraslado"
+                                        :key="opcion.valor"
+                                        type="button"
+                                        class="rounded-full border px-3.5 py-1.5 text-sm tabular-nums transition-colors"
+                                        :class="[
+                                            claseEnfoque,
+                                            form.minutos_traslado === opcion.valor
+                                                ? 'border-orquidea bg-orquidea/12 text-orquidea-claro'
+                                                : 'border-hilo text-bruma hover:border-hilo-fuerte hover:text-perla',
+                                        ]"
+                                        :aria-pressed="form.minutos_traslado === opcion.valor"
+                                        @click="form.minutos_traslado = opcion.valor"
+                                    >
+                                        {{ opcion.etiqueta }}
+                                    </button>
+                                </div>
+                                <p v-if="error('minutos_traslado')" data-error role="alert" class="mt-1.5 text-sm text-borgona">
+                                    {{ error('minutos_traslado') }}
+                                </p>
+                                <p v-else id="reserva-traslado-ayuda" class="mt-1.5 text-sm text-niebla">
+                                    Se reserva antes y después de la cita para ir y volver; en ese tiempo no se agendan otras citas.
+                                </p>
+                            </div>
+                        </fieldset>
                     </section>
 
                     <section class="border-t border-hilo p-5 sm:p-6">
@@ -396,7 +869,22 @@ function guardar() {
                         <fieldset class="mt-5">
                             <legend class="sr-only">Servicios de la reserva</legend>
 
-                            <div class="grid gap-3 sm:grid-cols-2">
+                            <div v-if="!catalogoCargado && !errorCatalogo" class="grid gap-3 sm:grid-cols-2" aria-busy="true" aria-label="Cargando servicios">
+                                <div v-for="n in 4" :key="n" class="h-[4.25rem] animate-pulse rounded-lg bg-terciopelo"></div>
+                            </div>
+
+                            <p v-else-if="errorCatalogo && !servicios.length" role="alert" class="text-sm text-borgona">
+                                {{ errorCatalogo }}
+                                <button type="button" class="rounded underline underline-offset-4" :class="claseEnfoque" @click="cargarCatalogo({ forzar: true })">
+                                    Reintentar
+                                </button>
+                            </p>
+
+                            <p v-else-if="!serviciosActivos.length" class="rounded-lg border border-dashed border-hilo px-4 py-5 text-sm text-niebla">
+                                No hay servicios disponibles en la carta. Activa o crea alguno en Servicios.
+                            </p>
+
+                            <div v-else class="grid gap-3 sm:grid-cols-2">
                                 <label
                                     v-for="servicio in serviciosActivos"
                                     :key="servicio.id"
@@ -430,15 +918,20 @@ function guardar() {
 
                                     <span class="min-w-0 flex-1">
                                         <span class="block text-sm font-medium text-perla">{{ servicio.nombre }}</span>
-                                        <span class="mt-0.5 inline-flex items-center gap-1 text-xs text-bruma">
-                                            <Icono name="pendiente" class="h-3.5 w-3.5" />
-                                            {{ servicio.duracion_minutos }} min
+                                        <span class="mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5 text-xs text-bruma">
+                                            <span class="inline-flex items-center gap-1">
+                                                <Icono name="pendiente" class="h-3.5 w-3.5" />
+                                                {{ duracion(servicio.duracion_minutos) }}
+                                            </span>
+                                            <span class="tabular-nums" :class="precioDe(servicio) === null ? 'text-niebla' : ''">
+                                                {{ precioDe(servicio) === null ? 'Sin precio vigente' : guaranies(precioDe(servicio)) }}
+                                            </span>
                                         </span>
                                     </span>
                                 </label>
                             </div>
 
-                            <p v-if="error('servicios')" class="mt-2 text-sm text-borgona">
+                            <p v-if="error('servicios')" data-error role="alert" class="mt-2 text-sm text-borgona">
                                 {{ error('servicios') }}
                             </p>
                         </fieldset>
@@ -509,31 +1002,71 @@ function guardar() {
                                 </button>
                             </div>
 
-                            <p v-if="error('fecha')" class="mt-2 text-sm text-borgona">{{ error('fecha') }}</p>
+                            <p v-if="error('fecha')" data-error role="alert" class="mt-2 text-sm text-borgona">{{ error('fecha') }}</p>
                             <p v-else-if="profesionalActual" class="mt-2 text-xs text-niebla">
-                                Los días apagados son los que {{ profesionalActual.nombre }} no atiende.
+                                {{ esProfesional ? 'Los días apagados son los que no atiendes.' : `Los días apagados son los que ${profesionalActual.nombre} no atiende.` }}
                             </p>
                         </div>
 
                         <div class="mt-6">
                             <p class="text-sm font-medium text-perla">Horario</p>
+                            <p v-if="textoDia" class="mt-1 text-xs text-niebla">{{ textoDia }}</p>
 
                             <div
-                                v-if="!form.fecha"
+                                v-if="!profesionalActual"
+                                class="mt-2 flex items-center gap-3 rounded-lg border border-dashed border-hilo px-4 py-5 text-sm text-niebla"
+                            >
+                                <Icono name="personal" class="h-5 w-5 shrink-0 text-hilo-fuerte" />
+                                Elige un profesional para ver sus horarios libres.
+                            </div>
+
+                            <div
+                                v-else-if="!form.fecha"
                                 class="mt-2 flex items-center gap-3 rounded-lg border border-dashed border-hilo px-4 py-5 text-sm text-niebla"
                             >
                                 <Icono name="pendiente" class="h-5 w-5 shrink-0 text-hilo-fuerte" />
                                 Elige un día para ver los horarios disponibles.
                             </div>
 
+                            <p
+                                v-else-if="errorAgenda"
+                                role="alert"
+                                class="mt-2 flex items-start gap-2.5 rounded-lg border border-borgona/40 bg-borgona-hondo px-4 py-3 text-sm text-borgona"
+                            >
+                                <Icono name="alerta" class="mt-0.5 h-4 w-4 shrink-0" />
+                                <span>
+                                    {{ errorAgenda }}
+                                    <button type="button" class="rounded underline underline-offset-4" :class="claseEnfoque" @click="revisarAgenda()">
+                                        Reintentar
+                                    </button>
+                                </span>
+                            </p>
+
+                            <div
+                                v-else-if="!disponibilidad"
+                                class="mt-2 grid grid-cols-4 gap-2 sm:grid-cols-6"
+                                aria-busy="true"
+                                :aria-label="`Revisando la agenda de ${profesionalActual.nombre}`"
+                            >
+                                <div v-for="n in 6" :key="n" class="h-11 animate-pulse rounded-lg bg-terciopelo"></div>
+                            </div>
+
                             <div
                                 v-else-if="!horarios.length"
                                 class="mt-2 rounded-lg border border-dashed border-hilo px-4 py-5 text-sm text-niebla"
                             >
-                                No hay horarios en los que entren los servicios elegidos ese día.
+                                <template v-if="sinTurnoEseDia">
+                                    {{ esProfesional ? 'Ese día no tienes turno.' : `Ese día ${profesionalActual.nombre} no tiene turno.` }} Prueba con otro día.
+                                </template>
+                                <template v-else>No hay horarios en los que entren los servicios elegidos ese día.</template>
                             </div>
 
-                            <div v-else class="mt-2 space-y-4">
+                            <div
+                                v-else
+                                class="mt-2 space-y-4 transition-opacity"
+                                :class="{ 'opacity-60': revisando }"
+                                :aria-busy="revisando"
+                            >
                                 <div v-for="bloque in [{ titulo: 'Mañana', lista: horariosManana }, { titulo: 'Tarde', lista: horariosTarde }]" :key="bloque.titulo">
                                     <template v-if="bloque.lista.length">
                                         <p class="mb-2 text-xs font-medium text-niebla">{{ bloque.titulo }}</p>
@@ -551,27 +1084,45 @@ function guardar() {
                                                             : 'cursor-not-allowed border-hilo text-hilo-fuerte line-through'
                                                 "
                                                 :disabled="!horario.disponible"
+                                                :title="horario.motivo || horario.ahora ? etiquetaHorario(horario) : undefined"
+                                                :aria-label="etiquetaHorario(horario)"
                                                 :aria-pressed="form.hora_inicio === horario.hora"
                                                 @click="elegirHora(horario)"
                                             >
                                                 {{ horario.hora }}
+                                                <span
+                                                    v-if="horario.ahora"
+                                                    class="block font-sans text-[0.6875rem] font-medium leading-tight"
+                                                    :class="form.hora_inicio === horario.hora ? 'text-noche/80' : 'text-menta'"
+                                                    aria-hidden="true"
+                                                >
+                                                    Ahora
+                                                </span>
                                             </button>
                                         </div>
                                     </template>
                                 </div>
+
+                                <p v-if="sinHorariosLibres" class="text-sm text-niebla">
+                                    Ese día ya no quedan horarios libres para estos servicios. Prueba con otro día.
+                                </p>
                             </div>
 
-                            <p v-if="error('hora_inicio')" class="mt-2 text-sm text-borgona">{{ error('hora_inicio') }}</p>
+                            <p v-if="error('horario')" data-error role="alert" class="mt-2 text-sm text-borgona">{{ error('horario') }}</p>
+                            <p v-else-if="horarioDescartado && !form.hora_inicio" class="mt-2 text-sm text-miel">
+                                El horario que habías elegido ya no está disponible. Elige otro.
+                            </p>
 
                             <div
-                                v-if="form.hora_inicio && form.hora_fin"
+                                v-if="form.hora_inicio && horaFin"
                                 class="mt-4 flex items-center gap-3 rounded-lg border border-orquidea/40 bg-orquidea/12 px-4 py-3 text-sm text-perla"
                             >
                                 <Icono name="completada" class="h-5 w-5 shrink-0 text-orquidea" />
                                 <span class="tabular-nums">
                                     De <strong class="font-semibold text-perla">{{ form.hora_inicio }}</strong>
-                                    a <strong class="font-semibold text-perla">{{ form.hora_fin }}</strong>
-                                    ({{ duracionTotal }} min según los servicios)
+                                    a <strong class="font-semibold text-perla">{{ horaFin }}</strong>
+                                    ({{ duracion(duracionTotal) }} según los servicios)
+                                    <span v-if="bloqueAgenda" class="mt-0.5 block text-bruma">{{ bloqueAgenda }}</span>
                                 </span>
                             </div>
                             <p v-else-if="form.hora_inicio && !duracionTotal" class="mt-3 text-sm text-niebla">
@@ -581,19 +1132,20 @@ function guardar() {
                     </section>
 
                     <div
-                        v-if="avisoSinConexion"
-                        role="status"
-                        class="mx-5 mb-5 flex items-start gap-2.5 rounded-lg border border-orquidea/40 bg-orquidea/12 px-4 py-3 text-sm text-perla sm:mx-6"
+                        v-if="errorGeneral"
+                        data-error
+                        role="alert"
+                        class="mx-5 mb-5 flex items-start gap-2.5 rounded-lg border border-borgona/40 bg-borgona-hondo px-4 py-3 text-sm text-borgona sm:mx-6"
                     >
-                        <Icono name="alerta" class="mt-0.5 h-4 w-4 shrink-0 text-orquidea" />
-                        El formulario está completo, pero todavía no está conectado al servidor. La reserva no se guardó.
+                        <Icono name="alerta" class="mt-0.5 h-4 w-4 shrink-0" />
+                        {{ errorGeneral }}
                     </div>
 
                     <div class="flex flex-col-reverse gap-3 rounded-b-[28px] border-t border-hilo bg-velo p-5 sm:flex-row sm:justify-end sm:px-6">
                         <Button label="Cancelar" href="/reservas" variant="secondary" class="w-full sm:w-auto" />
-                        <Button type="submit" class="w-full sm:w-auto">
+                        <Button type="submit" class="w-full sm:w-auto" :disabled="guardando">
                             <Icono name="completada" class="h-4 w-4" />
-                            Guardar reserva
+                            {{ guardando ? 'Guardando…' : 'Guardar reserva' }}
                         </Button>
                     </div>
                 </form>
@@ -602,7 +1154,6 @@ function guardar() {
                     <p class="mb-3 text-sm font-medium text-bruma">Resumen de la cita</p>
 
                     <div class="relative overflow-hidden rounded-[28px] bg-orquidea-hondo/35 ring-1 ring-inset ring-orquidea/25">
-                        
                         <div class="p-5">
                             <p class="text-sm text-orquidea-claro">Cliente</p>
                             <p class="mt-1 font-display text-2xl" :class="clienteElegido ? 'text-perla' : 'text-niebla'">
@@ -634,9 +1185,26 @@ function guardar() {
                                         <dt class="sr-only">Horario</dt>
                                         <dd class="tabular-nums" :class="form.hora_inicio ? 'text-perla' : 'text-niebla'">
                                             <template v-if="form.hora_inicio">
-                                                {{ form.hora_inicio }}{{ form.hora_fin ? ` – ${form.hora_fin}` : '' }}
+                                                {{ form.hora_inicio }}{{ horaFin ? ` – ${horaFin}` : '' }}
                                             </template>
                                             <template v-else>Horario sin elegir</template>
+                                        </dd>
+                                    </div>
+                                </div>
+                                <div class="flex items-start gap-2.5">
+                                    <Icono :name="form.a_domicilio ? 'casa' : 'servicios'" class="mt-0.5 h-4 w-4 shrink-0 text-orquidea" />
+                                    <div class="min-w-0">
+                                        <dt class="sr-only">Lugar de atención</dt>
+                                        <dd class="text-perla">
+                                            {{ form.a_domicilio ? 'A domicilio' : 'En el salón' }}
+                                            <span
+                                                v-if="form.a_domicilio"
+                                                class="mt-0.5 block whitespace-pre-line break-words text-bruma"
+                                                :class="{ 'text-niebla': !form.direccion_domicilio.trim() }"
+                                            >
+                                                {{ form.direccion_domicilio.trim() || 'Dirección sin indicar' }}
+                                            </span>
+                                            <span v-if="form.a_domicilio" class="mt-0.5 block text-bruma">{{ textoTraslado }}</span>
                                         </dd>
                                     </div>
                                 </div>
@@ -652,22 +1220,40 @@ function guardar() {
                                     :key="servicio.id"
                                     class="flex items-baseline justify-between gap-3 text-sm"
                                 >
-                                    <span class="text-perla">{{ servicio.nombre }}</span>
-                                    <span class="shrink-0 text-xs text-bruma">{{ servicio.duracion_minutos }} min</span>
+                                    <span class="min-w-0">
+                                        <span class="block text-perla">{{ servicio.nombre }}</span>
+                                        <span class="block text-xs text-niebla">{{ duracion(servicio.duracion_minutos) }}</span>
+                                    </span>
+                                    <span class="shrink-0 text-xs tabular-nums text-bruma">
+                                        {{ precioDe(servicio) === null ? 'Sin precio' : guaranies(precioDe(servicio)) }}
+                                    </span>
                                 </li>
                             </ul>
                             <p v-else class="mt-2 text-sm text-niebla">Todavía no elegiste servicios.</p>
 
                             <div class="mt-4 flex items-baseline justify-between border-t border-hilo-fuerte pt-3">
                                 <span class="text-sm text-bruma">Duración total</span>
-                                <span class="font-display text-2xl tabular-nums text-perla">
-                                    {{ duracionTotal }} <span class="text-base">min</span>
-                                </span>
+                                <span class="text-sm tabular-nums text-perla">{{ duracion(duracionTotal) }}</span>
                             </div>
+
+                            <div class="mt-2 flex items-baseline justify-between gap-3">
+                                <span class="text-sm text-bruma">Total estimado</span>
+                                <span class="font-display text-2xl tabular-nums text-perla">{{ guaranies(totalEstimado) }}</span>
+                            </div>
+
+                            <p v-if="serviciosElegidos.length" class="mt-2 text-xs text-niebla">
+                                {{
+                                    faltaPrecio
+                                        ? 'Hay servicios sin precio vigente; el total no los incluye.'
+                                        : 'Con los precios vigentes hoy. Si un precio cambia antes de la cita, se cobra el de esa fecha.'
+                                }}
+                            </p>
                         </div>
                     </div>
                 </aside>
             </div>
         </div>
+
+        <Aviso :mensaje="aviso" @cerrar="aviso = ''" />
     </AppLayout>
 </template>

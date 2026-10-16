@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
+import { usePage } from '@inertiajs/vue3'
 import AppLayout from '../../Layouts/AppLayout.vue'
 import Button from '../../Components/Button.vue'
 import SearchInput from '../../Components/SearchInput.vue'
@@ -12,34 +13,54 @@ import Dropdown from '../../Components/Dropdown.vue'
 import Campo from '../../Components/Campo.vue'
 import Aviso from '../../Components/Aviso.vue'
 import PanelReserva from '../../Components/PanelReserva.vue'
-import { aFecha, aISO, guaranies, hora, plural } from '../../formato'
+import { aFecha, aISO, fechaLarga, guaranies, hora, plural } from '../../formato'
 import { claseEntrada, claseEnfoque } from '../../ui'
 import { useReservas } from '../../reservas'
+import { usePermisos } from '../../auth'
 import {
+    aDomicilio,
     agruparPorDia,
+    descartada,
     dia as diaDe,
     filtrarBase,
+    minutosTraslado,
+    montosReserva,
     nombreCliente,
     nombrePersonal,
     nombresServicios,
     ordenar,
     porAtender,
     sinCerrar,
-    totalReserva,
+    textoTraslado,
 } from '../../agenda'
 
 const { reservas, cargando, cargado, error, cargarReservas } = useReservas()
+const { esProfesional } = usePermisos()
+
+const page = usePage()
+const reservaNueva = Number(new URL(page.url, window.location.origin).searchParams.get('nueva')) || null
 
 const diasPorPagina = 7
 
 const ahora = ref(new Date())
 let reloj = null
 
-onMounted(() => {
-    cargarReservas({ forzar: true })
+function avisarNueva() {
+    const nueva = reservaNueva && reservas.value.find((r) => r.id === reservaNueva)
+    if (!nueva) return false
+    aviso.value = `Reserva de ${nombreCliente(nueva)} agendada para el ${fechaLarga(nueva.fecha)} a las ${hora(nueva.hora_inicio)}.`
+    return true
+}
+
+onMounted(async () => {
     reloj = setInterval(() => {
         ahora.value = new Date()
     }, 30000)
+
+    // Lo que ya está en memoria se muestra al instante; la recarga corre en segundo plano.
+    const avisada = avisarNueva()
+    await cargarReservas({ forzar: true })
+    if (!avisada) avisarNueva()
 })
 
 onBeforeUnmount(() => clearInterval(reloj))
@@ -64,6 +85,7 @@ const opcionesEstado = [
     { label: 'Confirmadas', value: 'confirmada', tinte: 'bg-menta' },
     { label: 'Completadas', value: 'completada', tinte: 'bg-ceniza' },
     { label: 'Canceladas', value: 'cancelada', tinte: 'bg-borgona' },
+    { label: 'No asistió', value: 'no_asistio', tinte: 'bg-niebla' },
 ]
 
 const tinteEstado = {
@@ -71,6 +93,7 @@ const tinteEstado = {
     confirmada: 'bg-menta',
     completada: 'bg-ceniza',
     cancelada: 'bg-borgona',
+    no_asistio: 'bg-niebla',
 }
 
 const opcionesVista = computed(() => [
@@ -229,6 +252,11 @@ function verTodas() {
     vista.value = 'todas'
 }
 
+function etiquetaReserva(reserva) {
+    const lugar = aDomicilio(reserva) ? `, a domicilio${minutosTraslado(reserva) ? `. ${textoTraslado(reserva)}` : ''}` : ''
+    return `Ver la reserva de ${nombreCliente(reserva)} a las ${hora(reserva.hora_inicio)}${lugar}`
+}
+
 function abrir(reserva) {
     reservaAbierta.value = reserva.id
 }
@@ -237,7 +265,7 @@ function abrir(reserva) {
 <template>
     <AppLayout>
         <div class="mx-auto max-w-6xl px-6 py-10">
-            <PageHeader titulo="Agenda de reservas" :descripcion="descripcion">
+            <PageHeader :titulo="esProfesional ? 'Tu agenda' : 'Agenda de reservas'" :descripcion="descripcion">
                 <Button variant="secondary" :disabled="cargando" @click="cargarReservas({ forzar: true })">
                     {{ cargando && reservas.length ? 'Actualizando…' : 'Actualizar' }}
                 </Button>
@@ -315,7 +343,7 @@ function abrir(reserva) {
                 </div>
 
                 <div v-show="filtrosAbiertos" id="filtros-adicionales" class="mt-4 grid gap-4 sm:grid-cols-3 sm:items-start">
-                    <Campo etiqueta="Profesional">
+                    <Campo v-if="!esProfesional" etiqueta="Profesional">
                         <Dropdown v-model="personalId" :options="opcionesPersonal" placeholder="Todo el equipo" />
                     </Campo>
 
@@ -401,10 +429,10 @@ function abrir(reserva) {
                                     class="group relative flex w-full flex-wrap items-center gap-x-5 gap-y-2 overflow-hidden rounded-2xl bg-velo py-4 pl-6 pr-4 text-left transition-colors hover:bg-terciopelo"
                                     :class="[
                                         claseEnfoque,
-                                        reserva.estado === 'cancelada' ? 'opacity-60' : '',
+                                        descartada(reserva) ? 'opacity-60' : '',
                                         reserva.id === reservaAbierta ? 'ring-1 ring-orquidea/50' : '',
                                     ]"
-                                    :aria-label="`Ver la reserva de ${nombreCliente(reserva)} a las ${hora(reserva.hora_inicio)}`"
+                                    :aria-label="etiquetaReserva(reserva)"
                                     @click="abrir(reserva)"
                                 >
                                     <span class="absolute inset-y-3 left-2 w-1.5 rounded-full" :class="tinteEstado[reserva.estado]" aria-hidden="true"></span>
@@ -421,7 +449,20 @@ function abrir(reserva) {
                                     </span>
 
                                     <span class="order-3 block w-full min-w-0 sm:order-none sm:w-auto sm:flex-1">
-                                        <span class="block truncate font-medium">{{ nombreCliente(reserva) }}</span>
+                                        <span class="flex min-w-0 items-center gap-2">
+                                            <span class="truncate font-medium">{{ nombreCliente(reserva) }}</span>
+                                            <span
+                                                v-if="aDomicilio(reserva)"
+                                                class="inline-flex shrink-0 items-center gap-1 rounded-full bg-orquidea/12 px-2 py-0.5 text-xs text-orquidea-claro"
+                                                :title="textoTraslado(reserva) || undefined"
+                                            >
+                                                <Icono name="casa" class="h-3.5 w-3.5" />
+                                                A domicilio
+                                                <span v-if="minutosTraslado(reserva)" class="hidden text-orquidea-claro/80 sm:inline">
+                                                    · {{ minutosTraslado(reserva) }} min de traslado
+                                                </span>
+                                            </span>
+                                        </span>
                                         <span class="block truncate text-sm text-bruma">
                                             {{ nombresServicios(reserva).join(', ') || 'Sin servicios' }}
                                         </span>
@@ -435,7 +476,7 @@ function abrir(reserva) {
                                     </span>
 
                                     <span class="hidden w-28 shrink-0 text-right text-sm tabular-nums text-bruma md:block">
-                                        {{ guaranies(totalReserva(reserva)) }}
+                                        {{ guaranies(montosReserva(reserva).total) }}
                                     </span>
 
                                     <span class="ml-auto flex w-28 shrink-0 justify-end sm:ml-0">

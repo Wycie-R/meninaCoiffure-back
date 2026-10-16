@@ -1,7 +1,7 @@
 import { router } from '@inertiajs/vue3'
 
 export async function api(url, opciones = {}) {
-    const { metodo = 'GET', datos } = opciones
+    const { metodo = 'GET', datos, senal } = opciones
     const headers = { Accept: 'application/json' }
     if (datos !== undefined) headers['Content-Type'] = 'application/json'
 
@@ -13,9 +13,10 @@ export async function api(url, opciones = {}) {
             headers,
             credentials: 'same-origin',
             body: datos !== undefined ? JSON.stringify(datos) : undefined,
+            signal: senal,
         })
-    } catch {
-        return { ok: false, status: 0, cuerpo: null }
+    } catch (error) {
+        return { ok: false, status: 0, cuerpo: null, cancelada: error?.name === 'AbortError' }
     }
 
     const cuerpo = await respuesta.json().catch(() => null)
@@ -33,8 +34,14 @@ export function primerosErrores(cuerpo) {
     )
 }
 
+const SIN_PERMISO = 'No tienes permiso para realizar esta acción.'
+
 export function mensajeError(respuesta, accion) {
     if (respuesta.status === 0) return 'No hay conexión con el servidor. Revisa que esté encendido y vuelve a intentar.'
+    if (respuesta.status === 403) {
+        const mensaje = respuesta.cuerpo?.message
+        return mensaje && mensaje !== 'This action is unauthorized.' && mensaje !== 'Forbidden' ? mensaje : SIN_PERMISO
+    }
     if (respuesta.status === 404) return 'Ese registro ya no existe. Recarga la página para ver los datos actuales.'
     if (respuesta.status >= 500) return `El servidor no pudo ${accion}. Vuelve a intentar en unos minutos.`
     return respuesta.cuerpo?.message ?? `No se pudo ${accion}.`

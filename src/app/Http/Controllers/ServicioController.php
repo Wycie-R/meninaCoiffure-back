@@ -8,6 +8,7 @@ use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class ServicioController extends Controller
 {
@@ -167,30 +168,45 @@ class ServicioController extends Controller
     {
         $validated = $request->validate([
             'precio' => ['required', 'numeric', 'min:0'],
-            'vigente_desde' => ['nullable', 'date'],
+            'vigente_desde' => ['nullable', 'date', 'after_or_equal:today'],
         ], [
             'precio.required' => 'El nuevo precio es obligatorio.',
             'precio.numeric' => 'El precio debe ser numérico.',
+            'vigente_desde.after_or_equal' => 'El nuevo precio no puede regir desde una fecha pasada.',
         ]);
 
-        $fechaDesde = $validated['vigente_desde'] ?? now()->toDateString();
+        $fechaDesde = Carbon::parse($validated['vigente_desde'] ?? now())->toDateString();
 
         DB::transaction(function () use ($servicio, $validated, $fechaDesde) {
-            // Cerrar el precio vigente actual
             $precioActual = $servicio->precioVigente($fechaDesde);
+
+            // Un segundo cambio que rige desde el mismo día corrige ese precio en vez de
+            // cerrar uno de un día y dejar un rango invertido (desde D, hasta D-1)
+            if ($precioActual && Carbon::parse($precioActual->vigente_desde)->toDateString() === $fechaDesde) {
+                $precioActual->update(['precio' => $validated['precio']]);
+                return;
+            }
+
+            // Cerrar el precio vigente hasta el día anterior al cambio
             if ($precioActual) {
-                // Se cierra con vigencia hasta el día anterior o la fecha de cambio
                 $precioActual->update([
                     'vigente_hasta' => Carbon::parse($fechaDesde)->subDay()->toDateString(),
                 ]);
             }
 
-            // Registrar el nuevo precio vigente
+            // Si ya hay un precio programado más adelante, el nuevo rige solo hasta el día previo a ese
+            $siguiente = $servicio->precios()
+                ->where('vigente_desde', '>', $fechaDesde)
+                ->orderBy('vigente_desde')
+                ->first();
+
             PrecioServicio::create([
                 'servicio_id' => $servicio->id,
                 'precio' => $validated['precio'],
                 'vigente_desde' => $fechaDesde,
-                'vigente_hasta' => null,
+                'vigente_hasta' => $siguiente
+                    ? Carbon::parse($siguiente->vigente_desde)->subDay()->toDateString()
+                    : null,
             ]);
         });
 
@@ -205,14 +221,22 @@ class ServicioController extends Controller
     }
 
     /**
-     * HU-10: Inactivación lógica del servicio
+     * HU-10: Eliminación de un servicio que nunca se usó (por ejemplo, uno cargado por error).
+     * Un servicio con reservas no se borra porque es parte del historial: se desactiva con
+     * PUT { activo: false } y deja de ofrecerse sin perder sus precios ni sus atenciones.
      */
     public function destroy(Servicio $servicio): JsonResponse
     {
-        $servicio->update(['activo' => false]);
+        if ($servicio->detalles()->exists()) {
+            throw ValidationException::withMessages([
+                'servicio' => ["El servicio '{$servicio->nombre}' ya se usó en reservas y no se puede eliminar. Desactívalo para que deje de ofrecerse."],
+            ]);
+        }
+
+        $servicio->delete();
 
         return response()->json([
-            'message' => "El servicio '{$servicio->nombre}' ha sido desactivado exitosamente.",
+            'message' => "El servicio '{$servicio->nombre}' ha sido eliminado.",
         ]);
     }
 }

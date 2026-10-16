@@ -69,3 +69,21 @@ export function capitalizar(texto) {
     const valor = String(texto ?? '')
     return valor.charAt(0).toUpperCase() + valor.slice(1)
 }
+
+export function porcentaje(fraccion, decimales = 1) {
+    const valor = Number(fraccion)
+    if (!Number.isFinite(valor)) return '—'
+    return `${(valor * 100).toLocaleString('es-PY', { maximumFractionDigits: decimales })} %`
+}
+
+export function guaraniesCompacto(monto) {
+    const valor = Number(monto) || 0
+    const absoluto = Math.abs(valor)
+    if (absoluto >= 1_000_000) return `${(valor / 1_000_000).toLocaleString('es-PY', { maximumFractionDigits: 1 })} M`
+    if (absoluto >= 1_000) return `${Math.round(valor / 1_000).toLocaleString('es-PY')} mil`
+    return Math.round(valor).toLocaleString('es-PY')
+}
+
+export function fechaBreve(iso) {
+    return aFecha(iso).toLocaleDateString('es-PY', { day: 'numeric', month: 'short' }).replace('.', '')
+}

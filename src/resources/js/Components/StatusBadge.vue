@@ -13,6 +13,7 @@ const statuses = {
     confirmada: { label: 'Confirmada', tinte: 'bg-menta', class: 'bg-menta/12 text-menta' },
     completada: { label: 'Completada', tinte: 'bg-ceniza', class: 'bg-ceniza/12 text-ceniza' },
     cancelada: { label: 'Cancelada', tinte: 'bg-borgona', class: 'bg-borgona/12 text-borgona' },
+    no_asistio: { label: 'No asistió', tinte: 'bg-niebla', class: 'bg-niebla/12 text-bruma' },
     activo: { label: 'Activo', tinte: 'bg-menta', class: 'bg-menta/12 text-menta' },
     inactivo: { label: 'Inactivo', tinte: 'bg-niebla', class: 'bg-raso text-niebla' },
 }

@@ -79,6 +79,7 @@ class SprintAvanceTest extends TestCase
      */
     public function test_gestion_de_servicios_y_precios_historicos_hu_10(): void
     {
+        $this->comoAdmin();
         $categoria = CategoriaServicio::first();
 
         // 1. Crear nuevo servicio con precio inicial
@@ -125,14 +126,18 @@ class SprintAvanceTest extends TestCase
             'vigente_hasta' => null,
         ]);
 
-        // 3. Inactivación lógica del servicio
-        $deleteResponse = $this->deleteJson("/api/servicios/{$servicioId}");
-        $deleteResponse->assertStatus(200);
+        // 3. Inactivación lógica del servicio (deja de ofrecerse, conserva su historial)
+        $this->putJson("/api/servicios/{$servicioId}", ['activo' => false])->assertStatus(200);
 
         $this->assertDatabaseHas('servicios', [
             'id' => $servicioId,
             'activo' => false,
         ]);
+
+        // 4. Un servicio que nunca se usó en reservas se puede eliminar
+        $this->deleteJson("/api/servicios/{$servicioId}")->assertStatus(200);
+        $this->assertDatabaseMissing('servicios', ['id' => $servicioId]);
+        $this->assertDatabaseMissing('precios_servicio', ['servicio_id' => $servicioId]);
     }
 
     /**
@@ -163,7 +168,7 @@ class SprintAvanceTest extends TestCase
         // Probar filtro por búsqueda
         $busquedaResponse = $this->getJson('/api/servicios?buscar=Corte');
         $busquedaResponse->assertStatus(200);
-        $this->assertTrue(collect($busquedaResponse->json('data'))->pluck('nombre')->contains('Corte Femenino'));
+        $this->assertTrue(collect($busquedaResponse->json('data'))->pluck('nombre')->contains('Corte de dama'));
     }
 
     /**
@@ -171,10 +176,12 @@ class SprintAvanceTest extends TestCase
      */
     public function test_gestion_de_personal_y_turnos_laborales_hu_07(): void
     {
+        $this->comoAdmin();
+
         // 1. Alta de nueva profesional con turnos
         $crearPersonalResponse = $this->postJson('/api/personal', [
             'nombre' => 'Elena',
-            'apellido' => 'Manicurista',
+            'apellido' => 'Peinadora',
             'telefono' => '0981999888',
             'email' => 'elena@meninacoiffure.com',
             'turnos' => [
@@ -193,7 +200,7 @@ class SprintAvanceTest extends TestCase
 
         $crearPersonalResponse->assertStatus(201)
             ->assertJsonPath('data.nombre', 'Elena')
-            ->assertJsonPath('data.apellido', 'Manicurista')
+            ->assertJsonPath('data.apellido', 'Peinadora')
             ->assertJsonCount(2, 'data.turnos');
 
         $personalId = $crearPersonalResponse->json('data.id');
@@ -221,6 +228,171 @@ class SprintAvanceTest extends TestCase
             'id' => $personalId,
             'activo' => false,
         ]);
+    }
+
+    /**
+     * HU-25: La API de gestión exige sesión; el catálogo (HU-01) sigue siendo público.
+     */
+    public function test_api_de_gestion_exige_sesion_y_catalogo_es_publico(): void
+    {
+        $this->getJson('/api/reservas')->assertStatus(401);
+        $this->getJson('/api/clientes')->assertStatus(401);
+        $this->getJson('/api/personal')->assertStatus(401);
+        $this->postJson('/api/servicios', [])->assertStatus(401);
+
+        $this->getJson('/api/servicios')->assertStatus(200);
+        $this->getJson('/api/categorias-servicio')->assertStatus(200);
+    }
+
+    /**
+     * HU-25: Roles reales del salón (sin recepcionista) y una cuenta por cada profesional.
+     */
+    public function test_roles_del_salon_y_cuentas_del_equipo(): void
+    {
+        $this->assertDatabaseMissing('roles', ['nombre' => 'recepcionista']);
+        $this->assertDatabaseMissing('users', ['email' => 'recepcion@meninacoiffure.com']);
+
+        // La propietaria administra y además atiende: su cuenta admin está vinculada a su ficha
+        $this->postJson('/api/auth/login', [
+            'email' => 'admin@meninacoiffure.com',
+            'password' => 'password123',
+        ])->assertStatus(200)
+            ->assertJsonPath('data.user.rol', 'admin')
+            ->assertJsonPath('data.user.personal.nombre_completo', 'Mónica Propietaria');
+
+        $this->postJson('/api/auth/login', [
+            'email' => 'carla@meninacoiffure.com',
+            'password' => 'password123',
+        ])->assertStatus(200)
+            ->assertJsonPath('data.user.rol', 'profesional')
+            ->assertJsonPath('data.user.personal.nombre_completo', 'Carla Estilista');
+    }
+
+    /**
+     * Volver a sembrar no duplica personal, y el correo del personal es único.
+     */
+    public function test_reseed_no_duplica_y_correo_de_personal_es_unico(): void
+    {
+        $this->seed(SprintUnoDosSeeder::class);
+        $this->assertSame(1, Personal::where('email', 'carla@meninacoiffure.com')->count());
+
+        $this->comoAdmin();
+        $this->postJson('/api/personal', ['nombre' => 'Carla', 'apellido' => 'Repetida', 'email' => 'CARLA@meninacoiffure.com'])
+            ->assertStatus(422)->assertJsonValidationErrors(['email']);
+    }
+
+    /**
+     * HU-10: Un servicio usado en reservas no se elimina; se desactiva.
+     */
+    public function test_servicio_con_reservas_no_se_elimina(): void
+    {
+        $this->comoAdmin();
+        $reserva = \App\Models\Reserva::create([
+            'cliente_id' => 1, 'personal_id' => 1, 'fecha' => now()->toDateString(),
+            'hora_inicio' => '10:00:00', 'hora_fin' => '10:45:00', 'estado' => 'completada',
+        ]);
+        $reserva->detalles()->create(['servicio_id' => 1, 'precio_aplicado' => 70000, 'cantidad' => 1]);
+
+        $this->deleteJson('/api/servicios/1')->assertStatus(422)->assertJsonValidationErrors(['servicio']);
+        $this->assertDatabaseHas('servicios', ['id' => 1]);
+    }
+
+    /**
+     * Permisos por rol: un profesional no gestiona catálogo, personal, pagos ni reportes.
+     */
+    public function test_profesional_no_accede_a_funciones_de_administracion(): void
+    {
+        $this->actingAs(User::where('email', 'carla@meninacoiffure.com')->first());
+
+        $this->postJson('/api/servicios', [])->assertStatus(403);
+        $this->postJson('/api/servicios/1/cambiar-precio', ['precio' => 1])->assertStatus(403);
+        $this->postJson('/api/personal', [])->assertStatus(403);
+        $this->getJson('/api/pagos')->assertStatus(403);
+        $this->getJson('/api/reportes/resumen')->assertStatus(403);
+        $this->deleteJson('/api/clientes/1')->assertStatus(403);
+
+        // Lo que necesita para atender sí lo puede consultar
+        $this->getJson('/api/personal')->assertStatus(200);
+        $this->getJson('/api/clientes')->assertStatus(200);
+    }
+
+    /**
+     * HU-09: No se borra una categoría que tiene servicios (antes podía dar un error 500).
+     */
+    public function test_no_se_elimina_categoria_con_servicios(): void
+    {
+        $this->comoAdmin();
+        $categoria = CategoriaServicio::has('servicios')->first();
+
+        $this->deleteJson("/api/categorias-servicio/{$categoria->id}")
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['categoria']);
+
+        $vacia = CategoriaServicio::create(['nombre' => 'Categoría sin servicios']);
+        $this->deleteJson("/api/categorias-servicio/{$vacia->id}")->assertStatus(200);
+        $this->assertDatabaseMissing('categorias_servicio', ['id' => $vacia->id]);
+    }
+
+    /**
+     * HU-11: Dos cambios de precio el mismo día corrigen el precio de ese día sin dejar un rango invertido.
+     */
+    public function test_cambiar_precio_dos_veces_el_mismo_dia_no_invierte_rangos(): void
+    {
+        $this->comoAdmin();
+        $servicio = Servicio::where('nombre', 'Corte de dama')->first();
+        $hoy = now()->toDateString();
+
+        $this->postJson("/api/servicios/{$servicio->id}/cambiar-precio", ['precio' => 75000])->assertStatus(200);
+        $this->postJson("/api/servicios/{$servicio->id}/cambiar-precio", ['precio' => 78000])->assertStatus(200);
+
+        $this->assertSame(1, PrecioServicio::where('servicio_id', $servicio->id)->where('vigente_desde', $hoy)->count());
+        $this->assertDatabaseHas('precios_servicio', ['servicio_id' => $servicio->id, 'vigente_desde' => $hoy, 'precio' => 78000, 'vigente_hasta' => null]);
+        $this->assertSame(0, PrecioServicio::whereColumn('vigente_hasta', '<', 'vigente_desde')->count());
+        $this->assertEquals(78000, $servicio->fresh()->precioVigente()->precio);
+
+        // Un precio no puede regir desde una fecha pasada
+        $this->postJson("/api/servicios/{$servicio->id}/cambiar-precio", [
+            'precio' => 60000,
+            'vigente_desde' => now()->subDay()->toDateString(),
+        ])->assertStatus(422)->assertJsonValidationErrors(['vigente_desde']);
+    }
+
+    /**
+     * HU-08: Los turnos validan horas invertidas y franjas solapadas, y pueden quedar vacíos.
+     */
+    public function test_turnos_validan_horas_y_solapamientos(): void
+    {
+        $this->comoAdmin();
+        $carla = Personal::where('email', 'carla@meninacoiffure.com')->first();
+
+        $this->postJson("/api/personal/{$carla->id}/turnos", [
+            'turnos' => [['dia_semana' => 1, 'hora_inicio' => '18:00', 'hora_fin' => '09:00']],
+        ])->assertStatus(422)->assertJsonValidationErrors(['turnos.0.hora_fin']);
+
+        $this->postJson("/api/personal/{$carla->id}/turnos", [
+            'turnos' => [
+                ['dia_semana' => 1, 'hora_inicio' => '09:00', 'hora_fin' => '12:00'],
+                ['dia_semana' => 1, 'hora_inicio' => '11:00', 'hora_fin' => '15:00'],
+            ],
+        ])->assertStatus(422)->assertJsonValidationErrors(['turnos']);
+
+        // Franjas contiguas sí se aceptan
+        $this->postJson("/api/personal/{$carla->id}/turnos", [
+            'turnos' => [
+                ['dia_semana' => 1, 'hora_inicio' => '09:00', 'hora_fin' => '12:00'],
+                ['dia_semana' => 1, 'hora_inicio' => '12:00', 'hora_fin' => '15:00'],
+            ],
+        ])->assertStatus(200)->assertJsonCount(2, 'data.turnos');
+
+        // Lista vacía: queda sin turnos
+        $this->postJson("/api/personal/{$carla->id}/turnos", ['turnos' => []])
+            ->assertStatus(200)
+            ->assertJsonCount(0, 'data.turnos');
+    }
+
+    protected function comoAdmin(): void
+    {
+        $this->actingAs(User::where('email', 'admin@meninacoiffure.com')->first());
     }
 
     /**

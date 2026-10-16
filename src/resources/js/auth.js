@@ -1,4 +1,4 @@
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { router } from '@inertiajs/vue3'
 
 const usuario = ref(null)
@@ -21,6 +21,20 @@ export function useUsuario() {
     }
 
     return usuario
+}
+
+// Mientras el usuario no cargó, nada cuenta como admin: así no aparecen de más
+// botones o enlaces de administración que después habría que esconder.
+export function usePermisos() {
+    const usuario = useUsuario()
+
+    return {
+        usuario,
+        cargado: computed(() => usuario.value !== null),
+        esAdmin: computed(() => usuario.value?.rol === 'admin'),
+        esProfesional: computed(() => usuario.value?.rol === 'profesional'),
+        personalPropio: computed(() => usuario.value?.personal ?? null),
+    }
 }
 
 export function establecerUsuario(datos) {

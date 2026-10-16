@@ -7,17 +7,22 @@ import StatusBadge from './StatusBadge.vue'
 import Dropdown from './Dropdown.vue'
 import Icono from './Icono.vue'
 import { mensajeError } from '../api'
+import { claseEntrada } from '../ui'
 import { useCatalogo } from '../catalogo'
 import { cambiarEstadoReserva, cancelarReserva, agregarServicioReserva, useReservas } from '../reservas'
 import {
+    aDomicilio,
     accionesDe,
     admiteServicios,
+    etiquetaDescuento,
     minutosReserva,
+    montosReserva,
     nombreCliente,
     nombrePersonal,
     notaAcciones,
+    pagosReserva,
     sinCerrar,
-    totalReserva,
+    textoTraslado,
 } from '../agenda'
 import { capitalizar, duracion, fechaLarga, guaranies, hora } from '../formato'
 
@@ -56,8 +61,11 @@ const acciones = computed(() => (mostrada.value ? accionesDe(mostrada.value, pro
 const nota = computed(() => (mostrada.value ? notaAcciones(mostrada.value, props.ahora) : ''))
 const puedeAgregar = computed(() => (mostrada.value ? admiteServicios(mostrada.value) : false))
 const abandonada = computed(() => (mostrada.value ? sinCerrar(mostrada.value, props.ahora) : false))
-const total = computed(() => (mostrada.value ? totalReserva(mostrada.value) : 0))
+const montos = computed(() => (mostrada.value ? montosReserva(mostrada.value) : { subtotal: 0, descuento: 0, total: 0 }))
+const tieneDescuento = computed(() => Boolean(mostrada.value && (mostrada.value.descuento || mostrada.value.descuento_id || montos.value.descuento)))
 const detalles = computed(() => mostrada.value?.detalles ?? [])
+const pagos = computed(() => (mostrada.value ? pagosReserva(mostrada.value) : null))
+const traslado = computed(() => (mostrada.value ? textoTraslado(mostrada.value) : ''))
 
 const opcionesServicio = computed(() =>
     servicios.value
@@ -73,6 +81,7 @@ const opcionesServicio = computed(() =>
 const procesando = ref(false)
 const errorAccion = ref('')
 const confirmacion = ref(null)
+const notasAtencion = ref('')
 
 const servicioElegido = ref(null)
 const agregando = ref(false)
@@ -90,6 +99,7 @@ watch(
         errorServicio.value = ''
         servicioElegido.value = null
         confirmacion.value = null
+        notasAtencion.value = ''
         if (id !== null) cargarCatalogo()
     }
 )
@@ -98,12 +108,26 @@ const accionTexto = {
     confirmar: 'confirmar la reserva',
     completar: 'completar la reserva',
     cancelar: 'cancelar la reserva',
+    no_asistio: 'marcar que no asistió',
 }
 
 const accionAviso = {
     confirmar: 'quedó confirmada.',
     completar: 'quedó completada.',
     cancelar: 'quedó cancelada.',
+    no_asistio: 'quedó registrada como ausencia.',
+}
+
+const estadoDeAccion = {
+    confirmar: 'confirmada',
+    completar: 'completada',
+    no_asistio: 'no_asistio',
+}
+
+const etiquetaModal = {
+    cancelar: 'Confirmar cancelación',
+    completar: 'Confirmar cierre de la reserva',
+    no_asistio: 'Confirmar ausencia',
 }
 
 async function ejecutar(accion) {
@@ -111,10 +135,11 @@ async function ejecutar(accion) {
     procesando.value = true
     errorAccion.value = ''
 
+    const notas = accion === 'completar' ? notasAtencion.value.trim() : ''
     const respuesta =
         accion === 'cancelar'
             ? await cancelarReserva(actual.id)
-            : await cambiarEstadoReserva(actual.id, accion === 'confirmar' ? 'confirmada' : 'completada')
+            : await cambiarEstadoReserva(actual.id, estadoDeAccion[accion], notas ? { notas } : {})
 
     procesando.value = false
     confirmacion.value = null
@@ -123,6 +148,8 @@ async function ejecutar(accion) {
         errorAccion.value = mensajeError(respuesta, accionTexto[accion])
         return
     }
+
+    notasAtencion.value = ''
 
     emit('aviso', `La reserva de ${nombreCliente(actual)} ${accionAviso[accion]}`)
 }
@@ -169,6 +196,26 @@ async function agregarServicio() {
 
                     <dt class="text-niebla">Profesional</dt>
                     <dd class="text-perla">{{ nombrePersonal(mostrada) }}</dd>
+
+                    <dt class="text-niebla">Lugar</dt>
+                    <dd class="min-w-0 text-perla">
+                        <span v-if="aDomicilio(mostrada)" class="inline-flex items-center gap-1.5">
+                            <Icono name="casa" class="h-4 w-4 shrink-0 text-orquidea" />
+                            A domicilio
+                        </span>
+                        <template v-else>En el salón</template>
+                        <span
+                            v-if="aDomicilio(mostrada)"
+                            class="mt-1 block whitespace-pre-line break-words"
+                            :class="mostrada.direccion_domicilio ? 'text-bruma' : 'text-niebla'"
+                        >
+                            {{ mostrada.direccion_domicilio || 'Sin dirección registrada' }}
+                        </span>
+                        <span v-if="traslado" class="mt-1 flex items-center gap-1.5 text-bruma">
+                            <Icono name="pendiente" class="h-4 w-4 shrink-0 text-niebla" />
+                            {{ traslado }}
+                        </span>
+                    </dd>
                 </dl>
 
                 <p
@@ -240,19 +287,39 @@ async function agregarServicio() {
                     </li>
                 </ul>
 
-                <p class="mt-4 flex items-baseline justify-between gap-4">
-                    <span class="text-sm text-bruma">Subtotal</span>
-                    <span class="font-display text-2xl tabular-nums">{{ guaranies(total) }}</span>
-                </p>
-
-                <p v-if="mostrada.descuento_id" class="mt-2 text-sm text-niebla">
-                    Esta reserva tiene un descuento asignado que el subtotal no incluye.
-                </p>
+                <dl class="mt-4 space-y-2">
+                    <template v-if="tieneDescuento">
+                        <div class="flex items-baseline justify-between gap-4 text-sm">
+                            <dt class="text-bruma">Subtotal</dt>
+                            <dd class="tabular-nums text-perla">{{ guaranies(montos.subtotal) }}</dd>
+                        </div>
+                        <div class="flex items-baseline justify-between gap-4 text-sm">
+                            <dt class="min-w-0 text-bruma">{{ etiquetaDescuento(mostrada) }}</dt>
+                            <dd class="shrink-0 tabular-nums text-menta">− {{ guaranies(montos.descuento) }}</dd>
+                        </div>
+                    </template>
+                    <div class="flex items-baseline justify-between gap-4" :class="{ 'border-t border-hilo pt-2': tieneDescuento }">
+                        <dt class="text-sm text-bruma">Total</dt>
+                        <dd class="font-display text-2xl tabular-nums">{{ guaranies(montos.total) }}</dd>
+                    </div>
+                    <template v-if="pagos">
+                        <div class="flex items-baseline justify-between gap-4 text-sm">
+                            <dt class="text-bruma">Pagado</dt>
+                            <dd class="tabular-nums text-perla">{{ guaranies(pagos.pagado) }}</dd>
+                        </div>
+                        <div class="flex items-baseline justify-between gap-4 text-sm">
+                            <dt class="text-bruma">Saldo</dt>
+                            <dd class="tabular-nums" :class="pagos.saldo > 0 ? 'text-perla' : 'text-niebla'">
+                                {{ pagos.saldo > 0 ? guaranies(pagos.saldo) : 'Sin saldo pendiente' }}
+                            </dd>
+                        </div>
+                    </template>
+                </dl>
 
                 <div v-if="puedeAgregar" class="mt-6 rounded-[24px] border border-hilo p-5">
                     <h4 class="text-lg">Agregar un servicio</h4>
                     <p class="mt-1 text-sm text-bruma">
-                        Se suma al subtotal con el precio vigente en la fecha de la cita. El horario de la cita no cambia.
+                        Se suma al total con el precio vigente en la fecha de la cita. El horario de la cita no cambia.
                     </p>
 
                     <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start">
@@ -291,6 +358,14 @@ async function agregarServicio() {
                     <Button v-if="acciones.includes('confirmar')" :disabled="procesando" @click="ejecutar('confirmar')">
                         {{ procesando ? 'Confirmando…' : 'Confirmar reserva' }}
                     </Button>
+                    <Button
+                        v-if="acciones.includes('no_asistio')"
+                        variant="secondary"
+                        :disabled="procesando"
+                        @click="confirmacion = 'no_asistio'"
+                    >
+                        Marcar que no asistió
+                    </Button>
                     <Button v-if="acciones.includes('completar')" :disabled="procesando" @click="confirmacion = 'completar'">
                         Completar reserva
                     </Button>
@@ -301,7 +376,7 @@ async function agregarServicio() {
 
     <Modal
         :show="confirmacion !== null && mostrada !== null"
-        :label="confirmacion === 'cancelar' ? 'Confirmar cancelación' : 'Confirmar cierre de la reserva'"
+        :label="etiquetaModal[confirmacion] ?? 'Confirmar acción'"
         max-width="sm"
         @close="confirmacion = null"
     >
@@ -324,10 +399,42 @@ async function agregarServicio() {
             <p class="mt-2 text-sm text-bruma">
                 Confirma que el servicio ya se realizó. Una reserva completada ya no se puede modificar ni cancelar.
             </p>
+            <div class="mt-5">
+                <label for="notas-atencion" class="mb-1.5 block text-sm font-medium text-perla">
+                    Notas de la atención
+                    <span class="font-normal text-niebla">(opcional)</span>
+                </label>
+                <textarea
+                    id="notas-atencion"
+                    v-model="notasAtencion"
+                    rows="3"
+                    maxlength="1000"
+                    placeholder="Ej.: tinte 6.1 con oxidante de 20 vol., prefiere el corte más largo atrás."
+                    :class="[claseEntrada(false, true), 'resize-y']"
+                    aria-describedby="notas-atencion-ayuda"
+                ></textarea>
+                <p id="notas-atencion-ayuda" class="mt-1.5 text-sm text-niebla">
+                    Quedan guardadas en el historial de {{ nombreCliente(mostrada) }} para consultarlas en la próxima visita.
+                </p>
+            </div>
             <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <Button label="Volver" variant="secondary" @click="confirmacion = null" />
                 <Button :disabled="procesando" @click="ejecutar('completar')">
                     {{ procesando ? 'Completando…' : 'Completar reserva' }}
+                </Button>
+            </div>
+        </template>
+
+        <template v-else-if="mostrada && confirmacion === 'no_asistio'">
+            <h2 class="text-2xl">¿Marcar que {{ nombreCliente(mostrada) }} no asistió?</h2>
+            <p class="mt-2 text-sm text-bruma">
+                La cita del {{ fechaLarga(mostrada.fecha) }} a las {{ hora(mostrada.hora_inicio) }} quedará registrada como
+                ausencia y ya no se podrá completar ni cambiar de estado.
+            </p>
+            <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <Button label="Volver" variant="secondary" @click="confirmacion = null" />
+                <Button :disabled="procesando" @click="ejecutar('no_asistio')">
+                    {{ procesando ? 'Guardando…' : 'Marcar que no asistió' }}
                 </Button>
             </div>
         </template>

@@ -1,6 +1,6 @@
 # Despliegue de Portainer — Menina Coiffure
 
-Este documento describe la integración y puesta en marcha de **Portainer Community Edition (CE)** para la gestión y orquestación visual de los contenedores Docker del proyecto.
+Integración y puesta en marcha de **Portainer Community Edition (CE)** para la gestión y orquestación visual de los contenedores Docker del proyecto.
 
 ---
 
@@ -15,6 +15,7 @@ docker compose up -d
 ```
 
 Docker Compose se encargará de:
+
 1. Crear la red compartida `menina_net`.
 2. Crear y gestionar el volumen persistente `portainer_data`.
 3. Conectar el socket del daemon (`/var/run/docker.sock`).
@@ -24,24 +25,25 @@ Docker Compose se encargará de:
 
 ## 🌐 Puntos de Acceso a Portainer
 
-* **HTTPS (Seguro - Recomendado):** [https://localhost:9443](https://localhost:9443)
-  *(Aceptar la advertencia de certificado autofirmado local).*
-* **HTTP:** [http://localhost:9001](http://localhost:9001)
+- **HTTPS (Seguro - Recomendado):** [https://localhost:9443](https://localhost:9443)
+  _(Aceptar la advertencia de certificado autofirmado local)._
+- **HTTP:** [http://localhost:9001](http://localhost:9001)
 
 ---
 
 ## 🔑 Configuración Inicial del Administrador
 
 Al ingresar por primera vez a `https://localhost:9443`:
+
 1. **Crear usuario administrador:**
-   * **Usuario:** `admin`
-   * **Contraseña:** `meninacoiffure123`
+   - **Usuario:** `admin`
+   - **Contraseña:** `meninacoiffure123`
 2. Seleccionar el entorno local (**Get Started / Local Docker Environment**).
 3. Podrás visualizar y administrar en tiempo real los 4 contenedores del proyecto:
-   * `menina_nginx` (Servidor web / Proxy inverso)
-   * `menina_app` (Backend Laravel PHP 8.4)
-   * `menina_db` (Base de datos relacional PostgreSQL 18)
-   * `menina_portainer` (Consola de orquestación)
+   - `menina_nginx` (Servidor web / Proxy inverso)
+   - `menina_app` (Backend Laravel PHP 8.4)
+   - `menina_db` (Base de datos relacional PostgreSQL 18)
+   - `menina_portainer` (Consola de orquestación)
 
 ---
 

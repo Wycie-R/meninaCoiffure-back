@@ -7,22 +7,32 @@ const error = ref('')
 const cargado = ref(false)
 
 let consulta = null
+let cambiosDurante = null
 
 const POR_PAGINA = 100
 
-function urlPagina(pagina) {
-    return `/api/reservas?per_page=${POR_PAGINA}&page=${pagina}`
+function urlPagina(pagina, filtros) {
+    const parametros = new URLSearchParams()
+
+    for (const [clave, valor] of Object.entries(filtros)) {
+        if (valor !== null && valor !== undefined && valor !== '') parametros.set(clave, valor)
+    }
+
+    parametros.set('per_page', POR_PAGINA)
+    parametros.set('page', pagina)
+
+    return `/api/reservas?${parametros}`
 }
 
-async function traerTodas() {
-    const primera = await api(urlPagina(1))
+async function traerTodas(filtros = {}) {
+    const primera = await api(urlPagina(1, filtros))
     if (!primera.ok) return { fallo: primera }
 
     const ultima = Number(primera.cuerpo?.last_page ?? 1)
     const paginas = [primera]
 
     if (ultima > 1) {
-        const resto = await Promise.all(Array.from({ length: ultima - 1 }, (_, i) => api(urlPagina(i + 2))))
+        const resto = await Promise.all(Array.from({ length: ultima - 1 }, (_, i) => api(urlPagina(i + 2, filtros))))
         const fallida = resto.find((respuesta) => !respuesta.ok)
         if (fallida) return { fallo: fallida }
         paginas.push(...resto)
@@ -37,12 +47,17 @@ async function traerTodas() {
     return { lista: [...porId.values()] }
 }
 
+export function buscarReservas(filtros = {}) {
+    return traerTodas(filtros)
+}
+
 export async function cargarReservas({ forzar = false } = {}) {
     if (consulta) return consulta
     if (cargado.value && !forzar) return
 
     cargando.value = true
     error.value = ''
+    cambiosDurante = new Map()
 
     consulta = traerTodas()
         .then(({ lista, fallo }) => {
@@ -51,12 +66,16 @@ export async function cargarReservas({ forzar = false } = {}) {
                 return
             }
 
-            reservas.value = lista
+            const porId = new Map(lista.map((reserva) => [reserva.id, reserva]))
+            for (const [id, reserva] of cambiosDurante) porId.set(id, reserva)
+
+            reservas.value = [...porId.values()]
             cargado.value = true
         })
         .finally(() => {
             cargando.value = false
             consulta = null
+            cambiosDurante = null
         })
 
     return consulta
@@ -68,6 +87,8 @@ function reemplazar(reserva) {
     reservas.value = existe
         ? reservas.value.map((r) => (r.id === reserva.id ? reserva : r))
         : [reserva, ...reservas.value]
+
+    cambiosDurante?.set(reserva.id, reserva)
 }
 
 function fusionar(id, datos) {
@@ -75,8 +96,18 @@ function fusionar(id, datos) {
     reemplazar({ ...actual, ...datos })
 }
 
-export async function cambiarEstadoReserva(id, estado) {
-    const respuesta = await api(`/api/reservas/${id}`, { metodo: 'PUT', datos: { estado } })
+export function insertarReserva(reserva) {
+    if (cargado.value || consulta) reemplazar(reserva)
+}
+
+export async function crearReserva(datos) {
+    const respuesta = await api('/api/reservas', { metodo: 'POST', datos })
+    if (respuesta.ok && respuesta.cuerpo?.data) insertarReserva(respuesta.cuerpo.data)
+    return respuesta
+}
+
+export async function cambiarEstadoReserva(id, estado, extra = {}) {
+    const respuesta = await api(`/api/reservas/${id}`, { metodo: 'PUT', datos: { ...extra, estado } })
     if (respuesta.ok) fusionar(id, respuesta.cuerpo.data)
     return respuesta
 }
@@ -95,7 +126,19 @@ export async function agregarServicioReserva(id, servicioId) {
 
     if (respuesta.ok) {
         const actual = reservas.value.find((r) => r.id === id)
-        fusionar(id, { detalles: [...(actual?.detalles ?? []), respuesta.cuerpo.data] })
+
+        // Los montos que manda el servidor quedan viejos con el servicio nuevo:
+        // se quitan para que montosReserva() los recalcule hasta traer la reserva actualizada.
+        fusionar(id, {
+            detalles: [...(actual?.detalles ?? []), respuesta.cuerpo.data],
+            subtotal: undefined,
+            monto_descuento: undefined,
+            total: undefined,
+            saldo: undefined,
+        })
+
+        const actualizada = await api(`/api/reservas/${id}`)
+        if (actualizada.ok && actualizada.cuerpo?.data) fusionar(id, actualizada.cuerpo.data)
     }
 
     return respuesta

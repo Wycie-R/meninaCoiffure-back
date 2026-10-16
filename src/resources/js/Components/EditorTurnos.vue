@@ -26,7 +26,9 @@ defineProps({
 
 const resumen = computed(() => {
     const minutos = minutosSemana(semana.value)
-    return minutos ? `${duracion(minutos)} por semana` : 'Todavía no hay horas asignadas.'
+    return minutos
+        ? `${duracion(minutos)} por semana`
+        : 'Sin horario: se puede guardar así, pero no se le podrán agendar reservas hasta que actives algún día.'
 })
 
 const filas = computed(() =>

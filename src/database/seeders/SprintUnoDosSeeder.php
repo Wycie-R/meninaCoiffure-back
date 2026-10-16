@@ -12,47 +12,36 @@ class SprintUnoDosSeeder extends Seeder
 {
     public function run(): void
     {
-        // 1. Roles del sistema
+        // 1. Roles del sistema. El salón no tiene recepcionista: la propietaria (admin) agenda las citas.
+        // El rol cliente queda reservado: la clientela todavía no usa el sistema.
         $rolAdmin = Role::firstOrCreate(['nombre' => 'admin']);
-        $rolRecepcion = Role::firstOrCreate(['nombre' => 'recepcionista']);
         $rolProfesional = Role::firstOrCreate(['nombre' => 'profesional']);
-        $rolCliente = Role::firstOrCreate(['nombre' => 'cliente']);
+        Role::firstOrCreate(['nombre' => 'cliente']);
 
-        // 2. Asegurar que existan datos de AvanceDosSeeder si aún no se poblaron
-        if (\Illuminate\Support\Facades\DB::table('categorias_servicio')->count() === 0) {
-            $this->call(AvanceDosSeeder::class);
+        // Bases creadas antes de alinear los datos con el salón real traen cuentas que no corresponden
+        User::whereIn('email', ['recepcion@meninacoiffure.com', 'diana@meninacoiffure.com'])->delete();
+        Role::where('nombre', 'recepcionista')->delete();
+
+        // 2. Datos base del salón (personal, catálogo, insumos); el seeder es idempotente
+        $this->call(AvanceDosSeeder::class);
+
+        // 3. Usuarios de prueba para HU-25. La propietaria administra y además atiende,
+        // así que su cuenta admin está vinculada a su ficha de personal
+        $cuentas = [
+            ['admin@meninacoiffure.com', 'Mónica (propietaria)', $rolAdmin, 'monica@meninacoiffure.com'],
+            ['carla@meninacoiffure.com', 'Carla Estilista', $rolProfesional, 'carla@meninacoiffure.com'],
+        ];
+
+        foreach ($cuentas as [$email, $nombre, $rol, $emailPersonal]) {
+            User::updateOrCreate(
+                ['email' => $email],
+                [
+                    'name' => $nombre,
+                    'password' => Hash::make('password123'),
+                    'rol_id' => $rol->id,
+                    'personal_id' => Personal::where('email', $emailPersonal)->value('id'),
+                ]
+            );
         }
-
-        // 3. Obtener profesional Carla (si existe)
-        $personalCarla = Personal::where('email', 'carla@meninacoiffure.com')->first();
-
-        // 4. Usuarios de prueba para HU-25
-        User::updateOrCreate(
-            ['email' => 'admin@meninacoiffure.com'],
-            [
-                'name' => 'Administradora General',
-                'password' => Hash::make('password123'),
-                'rol_id' => $rolAdmin->id,
-            ]
-        );
-
-        User::updateOrCreate(
-            ['email' => 'recepcion@meninacoiffure.com'],
-            [
-                'name' => 'Recepcionista Turnos',
-                'password' => Hash::make('password123'),
-                'rol_id' => $rolRecepcion->id,
-            ]
-        );
-
-        User::updateOrCreate(
-            ['email' => 'carla@meninacoiffure.com'],
-            [
-                'name' => 'Carla Estilista',
-                'password' => Hash::make('password123'),
-                'rol_id' => $rolProfesional->id,
-                'personal_id' => $personalCarla ? $personalCarla->id : null,
-            ]
-        );
     }
 }

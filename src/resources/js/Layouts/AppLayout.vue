@@ -1,14 +1,14 @@
 <script setup>
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { Link, usePage } from '@inertiajs/vue3'
-import { useUsuario, cerrarSesion } from '../auth'
+import { usePermisos, cerrarSesion } from '../auth'
 import Monograma from '../Components/Monograma.vue'
 import Icono from '../Components/Icono.vue'
 
 const page = usePage()
 const rutaActual = computed(() => page.url.split('?')[0])
 
-const usuario = useUsuario()
+const { usuario, esAdmin } = usePermisos()
 
 const abierto = ref(false)
 const escritorio = ref(true)
@@ -32,8 +32,8 @@ const grupos = [
         titulo: 'Salón',
         items: [
             { label: 'Servicios', icono: 'servicios', href: '/servicios' },
-            { label: 'Nuevo servicio', icono: 'agregar', href: '/servicios/crear' },
-            { label: 'Categorías', icono: 'etiqueta', href: '/categorias' },
+            { label: 'Nuevo servicio', icono: 'agregar', href: '/servicios/crear', soloAdmin: true },
+            { label: 'Categorías', icono: 'etiqueta', href: '/categorias', soloAdmin: true },
         ],
     },
     {
@@ -45,13 +45,22 @@ const grupos = [
     {
         titulo: 'Administración',
         items: [
-            { label: 'Reportes', icono: 'reportes', href: null },
-            { label: 'Configuración', icono: 'configuracion', href: null },
+            { label: 'Reportes', icono: 'reportes', href: '/reportes', soloAdmin: true },
+            { label: 'Configuración', icono: 'configuracion', href: null, soloAdmin: true },
         ],
     },
 ]
 
+// Lo que es solo de administración no se muestra hasta saber que el usuario es admin.
+const gruposVisibles = computed(() =>
+    grupos
+        .map((grupo) => ({ ...grupo, items: grupo.items.filter((item) => !item.soloAdmin || esAdmin.value) }))
+        .filter((grupo) => grupo.items.length)
+)
+
 const enlaces = grupos.flatMap((grupo) => grupo.items.filter((item) => item.href))
+
+const nombresRol = { admin: 'Administración', profesional: 'Profesional' }
 
 const hrefActivo = computed(() => {
     const coincidencias = enlaces
@@ -161,6 +170,7 @@ onBeforeUnmount(() => {
             <div class="flex shrink-0 items-center justify-between gap-2 px-5 pb-6 pt-6 bajo:pb-3 bajo:pt-4">
                 <Link
                     href="/dashboard"
+                    prefetch
                     class="flex items-center gap-3 rounded-xl"
                     :class="focusClass"
                 >
@@ -186,7 +196,7 @@ onBeforeUnmount(() => {
             </div>
 
             <nav class="scroll-fino flex-1 overflow-y-auto px-3 pb-4 bajo:pb-2">
-                <div v-for="grupo in grupos" :key="grupo.titulo" class="mb-5 bajo:mb-2">
+                <div v-for="grupo in gruposVisibles" :key="grupo.titulo" class="mb-5 bajo:mb-2">
                     <p class="mb-1 px-3 text-xs font-medium text-niebla bajo:mb-0">
                         {{ grupo.titulo }}
                     </p>
@@ -195,6 +205,7 @@ onBeforeUnmount(() => {
                         <Link
                             v-if="item.href"
                             :href="item.href"
+                            prefetch
                             class="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm transition-colors bajo:py-1.5"
                             :class="[
                                 focusClass,
@@ -240,7 +251,7 @@ onBeforeUnmount(() => {
                             {{ usuario?.name ?? 'Usuario' }}
                         </p>
                         <p v-if="usuario?.rol" class="truncate text-xs capitalize text-niebla">
-                            {{ usuario.rol }}
+                            {{ nombresRol[usuario.rol] ?? usuario.rol }}
                         </p>
                     </div>
 

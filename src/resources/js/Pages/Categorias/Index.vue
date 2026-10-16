@@ -13,9 +13,11 @@ import Modal from '../../Components/Modal.vue'
 import { api, primerosErrores, mensajeError } from '../../api'
 import { normalizar, plural } from '../../formato'
 import { useCatalogo } from '../../catalogo'
+import { usePermisos } from '../../auth'
 import { claseEntrada, ilustracionDe } from '../../ui'
 
 const { categorias, servicios, cargando, error, cargarCatalogo } = useCatalogo()
+const { esAdmin } = usePermisos()
 
 onMounted(() => cargarCatalogo())
 
@@ -119,6 +121,14 @@ async function eliminar() {
     eliminando.value = false
 
     if (!respuesta.ok) {
+        if (respuesta.status === 422) {
+            errorEliminar.value =
+                primerosErrores(respuesta.cuerpo).categoria ??
+                respuesta.cuerpo?.message ??
+                'No se puede eliminar porque la categoría todavía tiene servicios. Muévelos a otra categoría primero.'
+            cargarCatalogo({ forzar: true })
+            return
+        }
         errorEliminar.value = mensajeError(respuesta, 'eliminar la categoría')
         return
     }
@@ -134,7 +144,7 @@ async function eliminar() {
         <div class="mx-auto max-w-5xl px-6 py-10">
             <PageHeader titulo="Categorías" :descripcion="cargando && !categorias.length ? 'Cargando categorías…' : resumen">
                 <Button href="/servicios" variant="secondary">Ver la carta</Button>
-                <Button @click="abrirNueva">
+                <Button v-if="esAdmin" @click="abrirNueva">
                     <Icono name="agregar" class="h-4 w-4" />
                     Nueva categoría
                 </Button>
@@ -154,7 +164,7 @@ async function eliminar() {
                     titulo="Sin categorías todavía"
                     descripcion="Crea la primera, por ejemplo Peluquería o Coloración, para empezar a armar la carta."
                 >
-                    <Button label="Nueva categoría" @click="abrirNueva" />
+                    <Button v-if="esAdmin" label="Nueva categoría" @click="abrirNueva" />
                 </EstadoVacio>
 
                 <ul v-else class="grid gap-4 sm:grid-cols-2">
@@ -178,7 +188,7 @@ async function eliminar() {
                             {{ categoria.ejemplos.join(', ') }}<template v-if="categoria.activos > 3"> y más</template>.
                         </p>
 
-                        <div class="mt-auto flex flex-wrap items-center gap-2 pt-6">
+                        <div v-if="esAdmin" class="mt-auto flex flex-wrap items-center gap-2 pt-6">
                             <Button variant="secondary" @click="abrirEdicion(categoria)">Editar</Button>
                             <Button
                                 v-if="!categoria.total"

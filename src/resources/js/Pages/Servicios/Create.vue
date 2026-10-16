@@ -10,12 +10,15 @@ import Icono from '../../Components/Icono.vue'
 import Ilustracion from '../../Components/Ilustracion.vue'
 import Campo from '../../Components/Campo.vue'
 import Interruptor from '../../Components/Interruptor.vue'
+import EstadoVacio from '../../Components/EstadoVacio.vue'
 import { api, primerosErrores, mensajeError } from '../../api'
 import { duracion, guaranies } from '../../formato'
 import { useCatalogo } from '../../catalogo'
+import { usePermisos } from '../../auth'
 import { claseEntrada, ilustracionDe } from '../../ui'
 
 const { categorias, cargando: cargandoCategorias, error: errorCatalogo, cargarCatalogo } = useCatalogo()
+const { esProfesional } = usePermisos()
 
 onMounted(() => cargarCatalogo())
 
@@ -119,7 +122,16 @@ async function guardar() {
         <div class="mx-auto max-w-6xl px-6 py-10">
             <PageHeader titulo="Nuevo servicio" descripcion="Agrega un servicio a la carta con su duración y su precio inicial." />
 
-            <div class="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+            <EstadoVacio
+                v-if="esProfesional"
+                class="mt-8"
+                titulo="Solo la administración agrega servicios"
+                descripcion="Puedes consultar la carta completa, con precios y duraciones, desde Servicios."
+            >
+                <Button href="/servicios" label="Ver la carta" variant="secondary" />
+            </EstadoVacio>
+
+            <div v-else class="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
                 <form class="min-w-0 rounded-[28px] border border-hilo bg-velo" novalidate @submit.prevent="guardar">
                     <div
                         v-if="errorGeneral || errorCatalogo"

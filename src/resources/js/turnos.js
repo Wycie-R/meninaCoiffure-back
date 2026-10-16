@@ -119,11 +119,6 @@ export function opcionesFin(inicio, actual) {
 export function validarSemana(semana) {
     const errores = { general: '', dias: {} }
 
-    if (!semana.some((d) => d.activo)) {
-        errores.general = 'Activa al menos un día de trabajo.'
-        return errores
-    }
-
     for (const d of semana.filter((x) => x.activo)) {
         if (!d.franjas.length) {
             errores.dias[d.dia] = 'Agrega una franja o desactiva el día.'
@@ -149,4 +144,87 @@ export function semanaTieneErrores(errores) {
 
 export function erroresVacios() {
     return { general: '', dias: {} }
+}
+
+export function erroresTurnosDesdeServidor(errores, enviados) {
+    const resultado = erroresVacios()
+
+    for (const [clave, mensaje] of Object.entries(errores)) {
+        const indice = clave.match(/^turnos\.(\d+)/)?.[1]
+        const dia = indice === undefined ? null : enviados[Number(indice)]?.dia_semana
+
+        if (dia && !resultado.dias[dia]) resultado.dias[dia] = mensaje
+        else if (!dia && !resultado.general) resultado.general = mensaje
+    }
+
+    return resultado
+}
+
+export function diaSemanaDe(iso) {
+    const [anio, mes, dia] = String(iso).slice(0, 10).split('-').map(Number)
+    return new Date(anio, mes - 1, dia).getDay() || 7
+}
+
+export function franjasUnidas(turnos = [], dia) {
+    const lista = turnos
+        .filter((t) => Number(t.dia_semana) === dia)
+        .map((t) => ({ inicio: aMinutos(t.hora_inicio), fin: aMinutos(t.hora_fin) }))
+        .filter((f) => f.fin > f.inicio)
+        .sort((a, b) => a.inicio - b.inicio)
+
+    const unidas = []
+
+    for (const franja of lista) {
+        const ultima = unidas.at(-1)
+        if (ultima && franja.inicio <= ultima.fin) ultima.fin = Math.max(ultima.fin, franja.fin)
+        else unidas.push({ ...franja })
+    }
+
+    return unidas
+}
+
+const NOMBRE_DIA = { 1: 'lunes', 2: 'martes', 3: 'miércoles', 4: 'jueves', 5: 'viernes', 6: 'sábado', 7: 'domingo' }
+const NOMBRE_DIAS = { 1: 'lunes', 2: 'martes', 3: 'miércoles', 4: 'jueves', 5: 'viernes', 6: 'sábados', 7: 'domingos' }
+
+export function nombreDia(dia) {
+    return NOMBRE_DIA[dia] ?? ''
+}
+
+function enumerar(partes) {
+    if (partes.length <= 1) return partes.join('')
+    return `${partes.slice(0, -1).join(', ')} y ${partes.at(-1)}`
+}
+
+export function textoFranjas(franjas) {
+    return enumerar(franjas.map((f) => `de ${aHora(f.inicio)} a ${aHora(f.fin)}`))
+}
+
+function textoDias(dias) {
+    const seguidos = dias.every((d, i) => i === 0 || d === dias[i - 1] + 1)
+    if (seguidos && dias.length >= 3) return `de ${NOMBRE_DIA[dias[0]]} a ${NOMBRE_DIA[dias.at(-1)]}`
+    return `los ${enumerar(dias.map((d) => NOMBRE_DIAS[d]))}`
+}
+
+export function resumenHorario(turnos = []) {
+    const grupos = []
+
+    for (const { dia } of DIAS) {
+        const franjas = franjasUnidas(turnos, dia)
+        if (!franjas.length) continue
+
+        const texto = textoFranjas(franjas)
+        const grupo = grupos.find((g) => g.texto === texto)
+
+        if (grupo) grupo.dias.push(dia)
+        else grupos.push({ texto, dias: [dia] })
+    }
+
+    if (!grupos.length) return ''
+
+    if (grupos.length > 3) {
+        const cantidad = grupos.reduce((total, g) => total + g.dias.length, 0)
+        return `Atiende ${cantidad} días por semana, con horarios distintos según el día`
+    }
+
+    return `Atiende ${grupos.map((g) => `${textoDias(g.dias)}, ${g.texto}`).join('; ')}`
 }

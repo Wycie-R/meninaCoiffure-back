@@ -15,7 +15,7 @@ export function claseEntrada(conError = false, compacto = false) {
 export function ilustracionDe(nombre) {
     const texto = normalizar(nombre)
     if (texto.includes('color') || texto.includes('tint') || texto.includes('mecha')) return 'bol'
-    if (texto.includes('estetic') || texto.includes('facial') || texto.includes('spa') || texto.includes('mani') || texto.includes('uña')) return 'gota'
+    if (texto.includes('estetic') || texto.includes('facial') || texto.includes('spa')) return 'gota'
     if (texto.includes('pelu') || texto.includes('corte') || texto.includes('peina')) return 'tijeras'
     return 'muestrario'
 }

@@ -29,6 +29,10 @@
     --color-borgona: #f08ca5;
     --color-borgona-hondo: #4a2132;
 
+    /* Series de los gráficos: validadas para CVD y contraste sobre velo (#1f1825). */
+    --color-serie-a: #a873c9;
+    --color-serie-b: #c98500;
+
     --animate-crecer: crecer 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
 
     @keyframes crecer {

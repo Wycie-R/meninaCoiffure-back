@@ -30,7 +30,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/servicios/crear', function () {
         return Inertia::render('Servicios/Create');
-    });
+    })->middleware('rol:admin');
 
     Route::get('/categorias', function () {
         return Inertia::render('Categorias/Index');
@@ -39,6 +39,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/personal', function () {
         return Inertia::render('Personal/Index');
     });
+
+    Route::get('/reportes', function () {
+        return Inertia::render('Reportes/Index');
+    })->middleware('rol:admin');
 });
 
 // Documentación interactiva de la API con Swagger UI

@@ -5,9 +5,12 @@ namespace App\Http\Controllers;
 use App\Http\Requests\StoreReservaRequest;
 use App\Http\Requests\UpdateReservaRequest;
 use App\Models\Reserva;
+use App\Models\Servicio;
 use App\Services\ReservaService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use OpenApi\Attributes as OA;
 
 class ReservaController extends Controller
@@ -35,22 +38,49 @@ class ReservaController extends Controller
     #[OA\Parameter(
         name: 'per_page',
         in: 'query',
-        description: 'Cantidad de registros por página',
+        description: 'Cantidad de registros por página (máximo 100)',
         required: false,
-        schema: new OA\Schema(type: 'integer', default: 15)
+        schema: new OA\Schema(type: 'integer', default: 15, maximum: 100)
     )]
+    #[OA\Parameter(name: 'fecha_desde', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date'))]
+    #[OA\Parameter(name: 'fecha_hasta', in: 'query', required: false, schema: new OA\Schema(type: 'string', format: 'date'))]
+    #[OA\Parameter(name: 'estado', in: 'query', required: false, schema: new OA\Schema(type: 'string', enum: Reserva::ESTADOS))]
+    #[OA\Parameter(name: 'personal_id', in: 'query', required: false, schema: new OA\Schema(type: 'integer'))]
+    #[OA\Parameter(name: 'cliente_id', in: 'query', required: false, schema: new OA\Schema(type: 'integer'))]
     #[OA\Response(
         response: 200,
         description: 'Listado de reservas obtenido exitosamente'
     )]
     public function index(Request $request): JsonResponse
     {
-        $perPage = $request->input('per_page', 15);
+        $filtros = $request->validate([
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+            'fecha_desde' => ['nullable', 'date'],
+            'fecha_hasta' => ['nullable', 'date', 'after_or_equal:fecha_desde'],
+            'estado' => ['nullable', 'string', Rule::in(Reserva::ESTADOS)],
+            'personal_id' => ['nullable', 'integer'],
+            'cliente_id' => ['nullable', 'integer'],
+        ], [
+            'per_page.max' => 'Se pueden pedir como máximo 100 reservas por página.',
+            'fecha_hasta.after_or_equal' => 'La fecha final no puede ser anterior a la inicial.',
+        ]);
 
-        $reservas = Reserva::with(['cliente', 'personal', 'detalles.servicio'])
+        // HU-06: un profesional ve solo su propia agenda
+        $usuario = $request->user();
+        if (!$usuario->esAdmin()) {
+            $filtros['personal_id'] = $usuario->personal_id ?? 0;
+        }
+
+        $reservas = Reserva::with(ReservaService::RELACIONES)
+            ->when($filtros['fecha_desde'] ?? null, fn ($q, $fecha) => $q->where('fecha', '>=', $fecha))
+            ->when($filtros['fecha_hasta'] ?? null, fn ($q, $fecha) => $q->where('fecha', '<=', $fecha))
+            ->when($filtros['estado'] ?? null, fn ($q, $estado) => $q->where('estado', $estado))
+            ->when($filtros['personal_id'] ?? null, fn ($q, $id) => $q->where('personal_id', $id))
+            ->when($filtros['cliente_id'] ?? null, fn ($q, $id) => $q->where('cliente_id', $id))
             ->orderByDesc('fecha')
             ->orderByDesc('hora_inicio')
-            ->paginate($perPage);
+            ->paginate($filtros['per_page'] ?? 15)
+            ->withQueryString();
 
         return response()->json($reservas);
     }
@@ -82,7 +112,9 @@ class ReservaController extends Controller
                     items: new OA\Items(type: 'integer', example: 1)
                 ),
                 new OA\Property(property: 'descuento_id', type: 'integer', nullable: true, example: null, description: 'ID del descuento opcional'),
-                new OA\Property(property: 'estado', type: 'string', enum: ['pendiente', 'confirmada', 'cancelada', 'completada'], example: 'pendiente')
+                new OA\Property(property: 'estado', type: 'string', enum: ['pendiente', 'confirmada'], example: 'pendiente'),
+                new OA\Property(property: 'a_domicilio', type: 'boolean', example: false, description: 'true si la cita se atiende fuera del salón'),
+                new OA\Property(property: 'direccion_domicilio', type: 'string', nullable: true, example: null, description: 'Obligatoria si a_domicilio es true')
             ]
         )
     )]
@@ -96,6 +128,11 @@ class ReservaController extends Controller
     )]
     public function store(StoreReservaRequest $request): JsonResponse
     {
+        $usuario = $request->user();
+        if (!$usuario->esAdmin() && (int) $request->input('personal_id') !== (int) $usuario->personal_id) {
+            abort(403, 'Solo puedes agendar reservas en tu propia agenda.');
+        }
+
         $reserva = $this->reservaService->crearReserva($request->validated());
 
         return response()->json([
@@ -128,10 +165,12 @@ class ReservaController extends Controller
         response: 404,
         description: 'Reserva no encontrada'
     )]
-    public function show(Reserva $reserva): JsonResponse
+    public function show(Request $request, Reserva $reserva): JsonResponse
     {
+        $this->autorizarReserva($request, $reserva);
+
         return response()->json([
-            'data' => $reserva->load(['cliente', 'personal', 'detalles.servicio']),
+            'data' => $reserva->load(ReservaService::RELACIONES),
         ]);
     }
 
@@ -161,8 +200,10 @@ class ReservaController extends Controller
                 new OA\Property(property: 'fecha', type: 'string', format: 'date', example: '2026-09-07'),
                 new OA\Property(property: 'hora_inicio', type: 'string', example: '10:30'),
                 new OA\Property(property: 'hora_fin', type: 'string', example: '11:30'),
-                new OA\Property(property: 'estado', type: 'string', enum: ['pendiente', 'confirmada', 'cancelada', 'completada'], example: 'confirmada'),
-                new OA\Property(property: 'descuento_id', type: 'integer', nullable: true, example: null)
+                new OA\Property(property: 'estado', type: 'string', enum: Reserva::ESTADOS, example: 'confirmada'),
+                new OA\Property(property: 'descuento_id', type: 'integer', nullable: true, example: null),
+                new OA\Property(property: 'a_domicilio', type: 'boolean', example: false),
+                new OA\Property(property: 'direccion_domicilio', type: 'string', nullable: true, example: null)
             ]
         )
     )]
@@ -180,6 +221,13 @@ class ReservaController extends Controller
     )]
     public function update(UpdateReservaRequest $request, Reserva $reserva): JsonResponse
     {
+        $this->autorizarReserva($request, $reserva);
+
+        // Un profesional no puede pasarse una cita a la agenda de otra persona
+        if (!$request->user()->esAdmin() && $request->has('personal_id') && (int) $request->input('personal_id') !== (int) $reserva->personal_id) {
+            abort(403, 'Solo la administración puede reasignar una reserva a otro profesional.');
+        }
+
         $reservaActualizada = $this->reservaService->actualizarReserva($reserva, $request->validated());
 
         return response()->json([
@@ -216,8 +264,10 @@ class ReservaController extends Controller
         response: 404,
         description: 'Reserva no encontrada'
     )]
-    public function destroy(Reserva $reserva): JsonResponse
+    public function destroy(Request $request, Reserva $reserva): JsonResponse
     {
+        $this->autorizarReserva($request, $reserva);
+
         $reservaCancelada = $this->reservaService->cancelarReserva($reserva);
 
         return response()->json([
@@ -267,6 +317,8 @@ class ReservaController extends Controller
     )]
     public function agregarServicio(Request $request, Reserva $reserva): JsonResponse
     {
+        $this->autorizarReserva($request, $reserva);
+
         $validated = $request->validate([
             'servicio_id' => ['required', 'integer', 'exists:servicios,id'],
             'cantidad' => ['nullable', 'integer', 'min:1'],
@@ -287,6 +339,58 @@ class ReservaController extends Controller
             'message' => 'Servicio agregado a la reserva exitosamente.',
             'data' => $detalle,
         ], 201);
+    }
+
+    /**
+     * HU-02: Horarios libres de un profesional en una fecha para una cita de cierta duración.
+     * La duración se indica en minutos o se calcula a partir de los servicios elegidos.
+     */
+    #[OA\Get(
+        path: '/api/disponibilidad',
+        summary: 'Horarios disponibles de un profesional',
+        description: 'Recorre las franjas del turno del día y marca cada inicio como disponible, ocupado (otra reserva o su traslado), pasado o local_cerrado.',
+        tags: ['Reservas']
+    )]
+    #[OA\Response(response: 200, description: 'Franjas del turno y horarios con su disponibilidad')]
+    public function disponibilidad(Request $request): JsonResponse
+    {
+        $datos = $request->validate([
+            'personal_id' => ['required', 'integer', 'exists:personal,id'],
+            'fecha' => ['required', 'date'],
+            'duracion_minutos' => ['required_without:servicios', 'nullable', 'integer', 'min:5', 'max:600'],
+            'servicios' => ['required_without:duracion_minutos', 'array'],
+            'servicios.*' => ['integer', 'exists:servicios,id'],
+            'a_domicilio' => ['nullable', 'boolean'],
+            'minutos_traslado' => ['nullable', 'integer', 'min:0', 'max:240'],
+            'intervalo' => ['nullable', 'integer', Rule::in([15, 30, 60])],
+        ], [
+            'duracion_minutos.required_without' => 'Indica la duración de la cita o los servicios elegidos.',
+            'servicios.required_without' => 'Indica la duración de la cita o los servicios elegidos.',
+        ]);
+
+        $duracion = isset($datos['duracion_minutos'])
+            ? (int) $datos['duracion_minutos']
+            : (int) Servicio::whereIn('id', $datos['servicios'])->sum('duracion_minutos');
+
+        $fecha = Carbon::parse($datos['fecha'])->toDateString();
+
+        $resultado = $this->reservaService->horariosDisponibles(
+            (int) $datos['personal_id'],
+            $fecha,
+            max($duracion, 5),
+            (bool) ($datos['a_domicilio'] ?? false),
+            (int) ($datos['minutos_traslado'] ?? 0),
+            (int) ($datos['intervalo'] ?? 30),
+        );
+
+        return response()->json([
+            'data' => [
+                'personal_id' => (int) $datos['personal_id'],
+                'fecha' => $fecha,
+                'duracion_minutos' => $duracion,
+                ...$resultado,
+            ],
+        ]);
     }
 }
 
