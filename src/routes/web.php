@@ -32,6 +32,10 @@ Route::middleware('auth')->group(function () {
         return Inertia::render('Servicios/Create');
     })->middleware('rol:admin');
 
+    Route::get('/clientes', function () {
+        return Inertia::render('Clientes/Index');
+    });
+
     Route::get('/categorias', function () {
         return Inertia::render('Categorias/Index');
     });

@@ -26,6 +26,7 @@ const grupos = [
             { label: 'Dashboard', icono: 'dashboard', href: '/dashboard' },
             { label: 'Reservas', icono: 'reservas', href: '/reservas' },
             { label: 'Nueva reserva', icono: 'agregar', href: '/reservas/crear' },
+            { label: 'Clientes', icono: 'clientes', href: '/clientes' },
         ],
     },
     {
