@@ -7,6 +7,7 @@ import StatusBadge from './StatusBadge.vue'
 import Dropdown from './Dropdown.vue'
 import Icono from './Icono.vue'
 import ReagendarReserva from './ReagendarReserva.vue'
+import PagosReserva from './PagosReserva.vue'
 import { mensajeError, primerosErrores } from '../api'
 import { claseEntrada } from '../ui'
 import { useCatalogo } from '../catalogo'
@@ -21,7 +22,6 @@ import {
     nombreCliente,
     nombrePersonal,
     notaAcciones,
-    pagosReserva,
     sinCerrar,
     textoTraslado,
 } from '../agenda'
@@ -65,7 +65,6 @@ const abandonada = computed(() => (mostrada.value ? sinCerrar(mostrada.value, pr
 const montos = computed(() => (mostrada.value ? montosReserva(mostrada.value) : { subtotal: 0, descuento: 0, total: 0 }))
 const tieneDescuento = computed(() => Boolean(mostrada.value && (mostrada.value.descuento || mostrada.value.descuento_id || montos.value.descuento)))
 const detalles = computed(() => mostrada.value?.detalles ?? [])
-const pagos = computed(() => (mostrada.value ? pagosReserva(mostrada.value) : null))
 const traslado = computed(() => (mostrada.value ? textoTraslado(mostrada.value) : ''))
 const puedeReagendar = computed(() => acciones.value.includes('cancelar'))
 
@@ -378,18 +377,6 @@ async function agregarServicio() {
                         <dt class="text-sm text-bruma">Total</dt>
                         <dd class="font-display text-2xl tabular-nums">{{ guaranies(montos.total) }}</dd>
                     </div>
-                    <template v-if="pagos">
-                        <div class="flex items-baseline justify-between gap-4 text-sm">
-                            <dt class="text-bruma">Pagado</dt>
-                            <dd class="tabular-nums text-perla">{{ guaranies(pagos.pagado) }}</dd>
-                        </div>
-                        <div class="flex items-baseline justify-between gap-4 text-sm">
-                            <dt class="text-bruma">Saldo</dt>
-                            <dd class="tabular-nums" :class="pagos.saldo > 0 ? 'text-perla' : 'text-niebla'">
-                                {{ pagos.saldo > 0 ? guaranies(pagos.saldo) : 'Sin saldo pendiente' }}
-                            </dd>
-                        </div>
-                    </template>
                 </dl>
 
                 <div v-if="puedeAgregar" class="mt-6 rounded-[24px] border border-hilo p-5">
@@ -415,6 +402,8 @@ async function agregarServicio() {
                     <p v-if="errorServicio" role="alert" class="mt-3 text-sm text-borgona">{{ errorServicio }}</p>
                 </div>
             </section>
+
+            <PagosReserva :reserva="mostrada" @aviso="emit('aviso', $event)" />
         </div>
 
         <template #pie>
