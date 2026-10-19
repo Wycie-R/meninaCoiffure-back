@@ -47,6 +47,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/reportes', function () {
         return Inertia::render('Reportes/Index');
     })->middleware('rol:admin');
+
+    Route::get('/configuracion', function () {
+        return Inertia::render('Configuracion/Index');
+    })->middleware('rol:admin');
 });
 
 // Documentación interactiva de la API con Swagger UI

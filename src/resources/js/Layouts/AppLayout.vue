@@ -47,7 +47,7 @@ const grupos = [
         titulo: 'Administración',
         items: [
             { label: 'Reportes', icono: 'reportes', href: '/reportes', soloAdmin: true },
-            { label: 'Configuración', icono: 'configuracion', href: null, soloAdmin: true },
+            { label: 'Configuración', icono: 'configuracion', href: '/configuracion', soloAdmin: true },
         ],
     },
 ]
