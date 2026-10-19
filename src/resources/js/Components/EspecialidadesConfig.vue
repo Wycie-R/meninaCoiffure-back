@@ -206,7 +206,7 @@ async function eliminar() {
                 </Campo>
 
                 <p class="rounded-xl bg-terciopelo px-4 py-3 text-sm text-bruma">
-                    La asignación de especialidades a cada profesional se hará desde la pantalla Personal.
+                    Para asignarla a cada profesional, abre su ficha en Personal.
                 </p>
 
                 <section v-if="editando" class="rounded-[24px] border border-hilo p-5" aria-labelledby="especialidad-eliminar">
