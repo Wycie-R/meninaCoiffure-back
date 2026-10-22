@@ -3,7 +3,7 @@
   "info": {
     "title": "Menina Coiffure — API REST",
     "version": "2.0.0",
-    "description": "API REST de **Menina Coiffure**, centro familiar de **peluquería y estética** de Villa Elisa (Paraguay): peluquería\n(cortes, brushing, peinados), colorimetría (tintes, mechas, balayage), tratamientos capilares y estética (depilación,\nlimpieza facial, maquillaje social), en el salón y a domicilio. Laravel 13 + PostgreSQL 18 + Vue/Inertia.\n\nMontos en **guaraníes (PYG)**, sin decimales en la práctica (los campos decimales de la base se serializan como\ntexto, por ejemplo `\"70000.00\"`; los montos calculados, como número). Fechas `YYYY-MM-DD`, horas `HH:MM[:SS]`,\nzona horaria America/Asuncion.\n\n### Roles\n- **`admin`**: la propietaria, Sra. Mónica. Su usuario `admin@meninacoiffure.com` está vinculado a su ficha de\n  personal porque también atiende clientes. Acceso total.\n- **`profesional`**: por ejemplo Carla (`carla@meninacoiffure.com`). Solo ve y opera **su propia agenda**: el listado\n  de reservas le devuelve solo las suyas y sobre reservas ajenas recibe 403. No accede a rutas de administración.\n  Además, la dueña le habilita o quita **permisos** desde Configuración (`/api/configuracion/permisos`); por defecto\n  están todos habilitados. Sin el permiso necesario la API responde **403** \"La administración no te habilitó para\n  esta acción.\":\n  - `puede_crear_reservas`: `POST /api/reservas`, `POST /api/reservas/{id}/servicios`, `GET /api/disponibilidad` y\n    reprogramar en `PUT /api/reservas/{id}` (fecha, horas, cliente, domicilio, descuento o `fuera_de_horario`).\n  - `puede_cambiar_estado`: `PUT /api/reservas/{id}` con un `estado` distinto y `DELETE /api/reservas/{id}`.\n  - `puede_reservar_fuera_de_horario`: crear o marcar una reserva con `fuera_de_horario = true`.\n  - `puede_ver_clientes`: ficha, edición, preferencias e historial de clientes. El listado (`GET /api/clientes`) y el\n    alta (`POST /api/clientes`) se permiten con este permiso **o** con `puede_crear_reservas`.\n- **`cliente`**: reservado para el futuro (la clientela todavía no usa el sistema); hoy recibe 403 en toda ruta\n  protegida.\n\nUsuarios de prueba (contraseña `password123`): `admin@meninacoiffure.com` y `carla@meninacoiffure.com`.\n\n### Autenticación y \"Try it out\"\nLa API usa la **sesión de Laravel** (cookie `laravel_session`, sesión guardada en PostgreSQL), no tokens.\nPúblicas: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` y la consulta del catálogo\n(`GET /api/servicios`, `GET /api/servicios/{servicio}`, `GET /api/categorias-servicio`,\n`GET /api/categorias-servicio/{categorias_servicio}`). Todo lo demás exige sesión (**401** sin ella) y un rol del\nsalón (**403** si el rol no corresponde; varias rutas son solo `admin`).\n\n> Antes de usar **\"Try it out\"** en rutas protegidas, inicia sesión en [/login](/login) **en el mismo navegador**\n> (o ejecuta aquí `POST /api/auth/login`, que está en el mismo origen) y vuelve a esta página: el navegador envía la\n> cookie `laravel_session` solo. El esquema `cookieAuth` de \"Authorize\" es informativo; Swagger UI no puede fijar\n> cookies por sí mismo.\n\n**CSRF:** las rutas `api/*` están excluidas de la verificación CSRF (`bootstrap/app.php`), así que los métodos de\nescritura (POST/PUT/DELETE) **no** necesitan la cabecera `X-XSRF-TOKEN`; basta la cookie de sesión.\n\nErrores con formato JSON estándar de Laravel: `{\"message\": \"...\"}` (401/403/404) y\n`{\"message\": \"...\", \"errors\": {\"campo\": [\"...\"]}}` (422)."
+    "description": "API REST de **Menina Coiffure**, centro familiar de **peluquería y estética** de Villa Elisa (Paraguay): peluquería\n(cortes, brushing, peinados), colorimetría (tintes, mechas, balayage), tratamientos capilares y estética (depilación,\nlimpieza facial, maquillaje social), en el salón y a domicilio. Laravel 13 + PostgreSQL 18 + Vue/Inertia.\n\nMontos en **guaraníes (PYG)**, sin decimales en la práctica (los campos decimales de la base se serializan como\ntexto, por ejemplo `\"70000.00\"`; los montos calculados, como número). Fechas `YYYY-MM-DD`, horas `HH:MM[:SS]`,\nzona horaria America/Asuncion.\n\n### Roles\n- **`admin`**: la propietaria, Sra. Mónica. Su usuario `admin@meninacoiffure.com` está vinculado a su ficha de\n  personal porque también atiende clientes. Acceso total.\n- **`profesional`**: por ejemplo Carla (`carla@meninacoiffure.com`). Solo ve y opera **su propia agenda**: el listado\n  de reservas le devuelve solo las suyas y sobre reservas ajenas recibe 403. No accede a rutas de administración.\n  Además, la dueña le habilita o quita **permisos** desde Configuración (`/api/configuracion/permisos`); por defecto\n  están todos habilitados. Sin el permiso necesario la API responde **403** \"La administración no te habilitó para\n  esta acción.\":\n  - `puede_crear_reservas`: `POST /api/reservas`, `POST /api/reservas/{id}/servicios`, `GET /api/disponibilidad` y\n    reprogramar en `PUT /api/reservas/{id}` (fecha, horas, cliente, domicilio, descuento o `fuera_de_horario`).\n  - `puede_cambiar_estado`: `PUT /api/reservas/{id}` con un `estado` distinto y `DELETE /api/reservas/{id}`.\n  - `puede_reservar_fuera_de_horario`: crear o marcar una reserva con `fuera_de_horario = true`.\n  - `puede_ver_clientes`: ficha, edición, preferencias e historial de clientes. El listado (`GET /api/clientes`) y el\n    alta (`POST /api/clientes`) se permiten con este permiso **o** con `puede_crear_reservas`.\n- **`cliente`**: reservado para el futuro (la clientela todavía no usa el sistema); hoy recibe 403 en toda ruta\n  protegida.\n\nUsuarios de prueba (contraseña `password123`): `admin@meninacoiffure.com` y `carla@meninacoiffure.com`.\n\n### Autenticación y \"Try it out\"\nLa API usa la **sesión de Laravel** (cookie `laravel_session`, sesión guardada en PostgreSQL), no tokens.\nPúblicas: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, la consulta del catálogo\n(`GET /api/servicios`, `GET /api/servicios/{servicio}`, `GET /api/categorias-servicio`,\n`GET /api/categorias-servicio/{categorias_servicio}`) y lo que usa la página pública del salón (`/salon`):\n`GET /api/horarios-atencion` y `GET /api/promociones`. Todo lo demás exige sesión (**401** sin ella) y un rol del\nsalón (**403** si el rol no corresponde; varias rutas son solo `admin`).\n\n> Antes de usar **\"Try it out\"** en rutas protegidas, inicia sesión en [/login](/login) **en el mismo navegador**\n> (o ejecuta aquí `POST /api/auth/login`, que está en el mismo origen) y vuelve a esta página: el navegador envía la\n> cookie `laravel_session` solo. El esquema `cookieAuth` de \"Authorize\" es informativo; Swagger UI no puede fijar\n> cookies por sí mismo.\n\n**CSRF:** las rutas `api/*` están excluidas de la verificación CSRF (`bootstrap/app.php`), así que los métodos de\nescritura (POST/PUT/DELETE) **no** necesitan la cabecera `X-XSRF-TOKEN`; basta la cookie de sesión.\n\nErrores con formato JSON estándar de Laravel: `{\"message\": \"...\"}` (401/403/404) y\n`{\"message\": \"...\", \"errors\": {\"campo\": [\"...\"]}}` (422)."
   },
   "servers": [
     {
@@ -2004,7 +2004,7 @@
           "Especialidades y horarios"
         ],
         "summary": "Horario del salón",
-        "description": "HU-08. Franjas de atención del salón por día (1 = lunes … 7 = domingo). Lista vacía: el local no restringe el horario.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "HU-08. Franjas de atención del salón por día (1 = lunes … 7 = domingo). El salón siempre tiene al menos una\nfranja; un día sin franjas está cerrado. Lo usa la página pública del salón.\n\n**Acceso:** público (no requiere sesión).",
         "responses": {
           "200": {
             "description": "Horario del salón",
@@ -2060,14 +2060,9 @@
                 }
               }
             }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
           }
-        }
+        },
+        "security": []
       },
       "put": {
         "tags": [
@@ -4785,6 +4780,77 @@
         }
       }
     },
+    "/api/promociones": {
+      "get": {
+        "tags": [
+          "Descuentos"
+        ],
+        "summary": "Promociones vigentes (público)",
+        "description": "HU-22. Promociones que se pueden aprovechar **hoy**: activas y con la fecha de hoy dentro de su vigencia\n(`fecha_inicio` y `fecha_fin` vacías no limitan). Ordenadas por nombre. Sin datos internos (no incluye `activo` ni\n`reservas_count`). Si no hay ninguna, `data` viene vacío y `message` trae el aviso que muestra la página pública:\n\"No hay promociones vigentes por el momento.\".\n\n**Acceso:** público (no requiere sesión).",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Promociones vigentes hoy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/PromocionPublica"
+                      }
+                    },
+                    "message": {
+                      "type": "string",
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "data",
+                    "message"
+                  ]
+                },
+                "examples": {
+                  "con_promociones": {
+                    "summary": "Hay promociones vigentes",
+                    "value": {
+                      "data": [
+                        {
+                          "id": 1,
+                          "nombre": "Mes de la madre",
+                          "tipo": "porcentaje",
+                          "valor": "15.00",
+                          "fecha_inicio": "2026-10-01",
+                          "fecha_fin": "2026-10-31"
+                        },
+                        {
+                          "id": 2,
+                          "nombre": "Clienta frecuente",
+                          "tipo": "monto_fijo",
+                          "valor": "20000.00",
+                          "fecha_inicio": null,
+                          "fecha_fin": null
+                        }
+                      ],
+                      "message": null
+                    }
+                  },
+                  "sin_promociones": {
+                    "summary": "No hay promociones vigentes",
+                    "value": {
+                      "data": [],
+                      "message": "No hay promociones vigentes por el momento."
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/descuentos/{descuento}": {
       "get": {
         "tags": [
@@ -7251,6 +7317,39 @@
           },
           "permisos": {
             "$ref": "#/components/schemas/Permisos"
+          }
+        }
+      },
+      "PromocionPublica": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "nombre": {
+            "type": "string"
+          },
+          "tipo": {
+            "type": "string",
+            "enum": [
+              "porcentaje",
+              "monto_fijo"
+            ]
+          },
+          "valor": {
+            "type": "string",
+            "pattern": "^-?\\d+(\\.\\d{2})$",
+            "example": "10.00"
+          },
+          "fecha_inicio": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
+          },
+          "fecha_fin": {
+            "type": "string",
+            "format": "date",
+            "nullable": true
           }
         }
       }

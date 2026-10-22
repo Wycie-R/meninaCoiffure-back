@@ -38,15 +38,36 @@ class DescuentoController extends Controller
 
         $descuentos = Descuento::query()
             ->withCount('reservas')
-            ->when($request->boolean('solo_vigentes'), fn ($q) => $q
-                ->where('activo', true)
-                ->where(fn ($q) => $q->whereNull('fecha_inicio')->orWhere('fecha_inicio', '<=', $hoy))
-                ->where(fn ($q) => $q->whereNull('fecha_fin')->orWhere('fecha_fin', '>=', $hoy)))
+            ->when($request->boolean('solo_vigentes'), fn ($q) => $q->vigentes($hoy))
             ->orderBy('nombre')
             ->get();
 
         return response()->json([
             'data' => $descuentos,
+        ]);
+    }
+
+    /**
+     * Página pública del salón: solo las promociones vigentes hoy, sin datos internos
+     * (cuántas reservas la usaron). Sin promociones, el mensaje lo muestra la página.
+     */
+    public function promociones(): JsonResponse
+    {
+        $hoy = now()->toDateString();
+
+        $vigentes = Descuento::query()
+            ->vigentes($hoy)
+            ->orderBy('nombre')
+            ->get(['id', 'nombre', 'tipo', 'valor', 'fecha_inicio', 'fecha_fin']);
+
+        $mensaje = null;
+        if ($vigentes->isEmpty()) {
+            $mensaje = 'No hay promociones vigentes por el momento.';
+        }
+
+        return response()->json([
+            'data' => $vigentes,
+            'message' => $mensaje,
         ]);
     }
 

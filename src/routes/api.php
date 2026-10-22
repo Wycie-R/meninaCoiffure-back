@@ -28,14 +28,17 @@ Route::prefix('auth')->middleware(['web'])->group(function () {
 Route::apiResource('categorias-servicio', CategoriaServicioController::class)->only(['index', 'show']);
 Route::apiResource('servicios', ServicioController::class)->only(['index', 'show']);
 
+// Página pública del salón: horario de atención y promociones vigentes hoy
+Route::get('horarios-atencion', [HorarioAtencionController::class, 'index']);
+Route::get('promociones', [DescuentoController::class, 'promociones']);
+
 // El resto exige sesión iniciada (la sesión vive en PostgreSQL, compartida entre nodos)
 // y un rol del salón: admin (la dueña) o profesional (solo opera sobre su propia agenda)
 Route::middleware(['web', 'auth', 'rol:admin,profesional'])->group(function () {
-    // Consulta del equipo, especialidades, horario del salón, métodos de pago y promociones
+    // Consulta del equipo, especialidades, métodos de pago y promociones
     Route::get('personal', [PersonalController::class, 'index']);
     Route::get('personal/{personal}', [PersonalController::class, 'show']);
     Route::get('especialidades', [EspecialidadController::class, 'index']);
-    Route::get('horarios-atencion', [HorarioAtencionController::class, 'index']);
     Route::get('metodos-pago', [MetodoPagoController::class, 'index']);
     Route::get('descuentos', [DescuentoController::class, 'index']);
 

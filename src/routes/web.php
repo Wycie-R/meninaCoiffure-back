@@ -3,7 +3,21 @@
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
-Route::redirect('/', '/dashboard');
+// Quien entra sin sesión ve la página pública del salón; el equipo va directo a su panel
+Route::get('/', function () {
+    if (auth()->check()) {
+        return redirect('/dashboard');
+    }
+
+    return redirect('/salon');
+});
+
+// Página pública: catálogo, horario, promociones vigentes y contacto por WhatsApp
+Route::get('/salon', function () {
+    return Inertia::render('Salon/Index', [
+        'whatsapp' => config('app.salon_whatsapp'),
+    ]);
+});
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', function () {

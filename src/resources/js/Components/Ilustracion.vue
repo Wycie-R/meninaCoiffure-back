@@ -44,6 +44,18 @@ defineProps({
             <path d="M28 40 C 34 40, 38 46, 36 52 C 30 50, 26 46, 28 40 Z" fill="#d9a9e9" />
         </template>
 
+        <!-- Tratamientos capilares: frasco con dosificador -->
+        <template v-else-if="nombre === 'frasco'">
+            <circle cx="60" cy="60" r="56" fill="#282030" />
+            <path d="M42 54 C 42 50, 45 48, 48 48 H72 C 75 48, 78 50, 78 54 V92 C 78 96, 75 98, 72 98 H48 C 45 98, 42 96, 42 92 Z" fill="#33293c" stroke="#f6eff4" stroke-width="3" />
+            <path d="M52 48 V40 H68 V48" stroke="#f6eff4" stroke-width="3" />
+            <path d="M58 40 V30 H78 V35" stroke="#f2bf70" stroke-width="3" />
+            <path d="M50 68 H70" stroke="#d9a9e9" stroke-width="3" />
+            <path d="M50 77 H63" stroke="#d9a9e9" stroke-width="2.5" />
+            <path d="M88 44 C 92 50, 94 53, 94 56 C 94 59, 92 61, 89 61 C 86 61, 84 59, 84 56 C 84 53, 86 50, 88 44 Z" fill="#8fd5b5" />
+            <path d="M26 36 l2 4 4 2 -4 2 -2 4 -2 -4 -4 -2 4 -2 z" fill="#f2bf70" />
+        </template>
+
         <template v-else-if="nombre === 'espejo'">
             <ellipse cx="60" cy="48" rx="26" ry="32" fill="#282030" stroke="#d9a9e9" stroke-width="3" />
             <ellipse cx="60" cy="48" rx="19" ry="25" stroke="#5a4b66" stroke-width="2" />
