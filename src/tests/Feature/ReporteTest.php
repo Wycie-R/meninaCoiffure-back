@@ -5,12 +5,10 @@ namespace Tests\Feature;
 use App\Models\Cliente;
 use App\Models\Descuento;
 use App\Models\MetodoPago;
-use App\Models\MovimientoStock;
 use App\Models\Pago;
 use App\Models\Personal;
 use App\Models\Reserva;
 use App\Models\Servicio;
-use App\Models\StockRecurso;
 use App\Models\User;
 use Database\Seeders\SprintUnoDosSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -201,30 +199,6 @@ class ReporteTest extends TestCase
         $this->assertEquals([50000, 100000, 58000, 0, 0, 15000, 0], array_column($dias, 'cobrado'));
     }
 
-    public function test_stock_con_recursos_bajo_minimo_primero(): void
-    {
-        $tinte = StockRecurso::where('nombre', 'Tinte en crema')->first(); // mínimo 300 ml
-        $tinte->update(['cantidad_actual' => 200]);
-
-        MovimientoStock::create(['recurso_id' => $tinte->id, 'tipo' => 'entrada', 'cantidad' => 500, 'fecha' => '2026-03-03 09:00:00', 'motivo' => 'Compra']);
-        MovimientoStock::create(['recurso_id' => $tinte->id, 'tipo' => 'salida', 'cantidad' => 60, 'fecha' => '2026-03-02 10:00:00', 'motivo' => 'Consumo']);
-        MovimientoStock::create(['recurso_id' => $tinte->id, 'tipo' => 'salida', 'cantidad' => 999, 'fecha' => '2026-03-09 10:00:00', 'motivo' => 'Fuera del período']);
-
-        $recursos = $this->getJson('/api/reportes/stock' . self::PERIODO)->assertStatus(200)->json('data.recursos');
-
-        $this->assertCount(StockRecurso::count(), $recursos);
-        $this->assertSame('Tinte en crema', $recursos[0]['nombre']);
-        $this->assertTrue($recursos[0]['bajo_minimo']);
-        $this->assertSame('ml', $recursos[0]['unidad_medida']);
-        $this->assertEquals(200, $recursos[0]['cantidad_actual']);
-        $this->assertEquals(300, $recursos[0]['stock_minimo']);
-        $this->assertEquals(500, $recursos[0]['entradas']);
-        $this->assertEquals(60, $recursos[0]['consumido']);
-
-        $this->assertFalse($recursos[1]['bajo_minimo']);
-        $this->assertEquals(0, $recursos[1]['entradas']);
-    }
-
     public function test_periodo_por_defecto_y_validaciones(): void
     {
         $this->getJson('/api/reportes/resumen')
@@ -254,8 +228,14 @@ class ReporteTest extends TestCase
     {
         $this->actingAs(User::where('email', 'carla@meninacoiffure.com')->first());
 
-        foreach (['resumen', 'servicios', 'personal', 'ingresos-diarios', 'stock'] as $reporte) {
+        foreach (['resumen', 'servicios', 'personal', 'ingresos-diarios'] as $reporte) {
             $this->getJson("/api/reportes/{$reporte}")->assertStatus(403);
         }
+    }
+
+    public function test_el_reporte_de_insumos_ya_no_existe(): void
+    {
+        $this->getJson('/api/reportes/stock' . self::PERIODO)->assertStatus(404);
+        $this->getJson('/api/recursos')->assertStatus(404);
     }
 }

@@ -15,8 +15,12 @@ import { primerosErrores, mensajeError } from '../../api'
 import { fechaCorta, iniciales, normalizar, plural } from '../../formato'
 import { claseEntrada, claseEnfoque } from '../../ui'
 import { useClientes, crearCliente } from '../../clientes'
+import { usePermisos } from '../../auth'
 
 const { clientes, cargando, error, cargarClientes } = useClientes()
+const { cargado: usuarioCargado, puedeVerClientes } = usePermisos()
+// El expediente (preferencias, alergias e historial) depende del permiso que habilita la dueña
+const sinPermiso = computed(() => usuarioCargado.value && !puedeVerClientes.value)
 const pedido = Number(new URLSearchParams(usePage().url.split('?')[1] ?? '').get('cliente')) || null
 
 const aviso = ref('')
@@ -157,14 +161,21 @@ watch(aviso, (valor) => {
 <template>
     <AppLayout>
         <div class="mx-auto max-w-6xl px-6 py-10">
-            <PageHeader titulo="Clientes" :descripcion="descripcion">
-                <Button @click="abrirNuevo">
+            <PageHeader titulo="Clientes" :descripcion="sinPermiso ? '' : descripcion">
+                <Button v-if="!sinPermiso" @click="abrirNuevo">
                     <Icono name="agregar" class="h-4 w-4" />
                     Nuevo cliente
                 </Button>
             </PageHeader>
 
-            <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <EstadoVacio
+                v-if="sinPermiso"
+                class="mt-8"
+                titulo="No puedes ver el expediente de las clientas"
+                descripcion="La administración no te habilitó para ver las fichas, preferencias e historial. Si lo necesitas, pídele que lo active en Configuración."
+            />
+
+            <div v-if="!sinPermiso" class="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div class="sm:w-80">
                     <SearchInput v-model="busqueda" placeholder="Buscar por nombre, teléfono o correo..." />
                 </div>
@@ -173,7 +184,7 @@ watch(aviso, (valor) => {
                 </p>
             </div>
 
-            <div class="mt-8">
+            <div v-if="!sinPermiso" class="mt-8">
                 <div v-if="cargando && !clientes.length" class="space-y-2" aria-busy="true" aria-label="Cargando clientes">
                     <div v-for="n in 6" :key="n" class="h-[4.5rem] animate-pulse rounded-2xl bg-velo"></div>
                 </div>
@@ -287,7 +298,7 @@ watch(aviso, (valor) => {
                 <p class="text-sm text-bruma">Después de registrarlo podrás agregar sus preferencias y alergias.</p>
             </form>
 
-            <FichaCliente v-else-if="cliente" :key="cliente.id" :cliente="cliente" @aviso="aviso = $event" @eliminado="alEliminar" />
+            <FichaCliente v-else-if="cliente && !sinPermiso" :key="cliente.id" :cliente="cliente" @aviso="aviso = $event" @eliminado="alEliminar" />
 
             <template v-if="esNuevo" #pie>
                 <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">

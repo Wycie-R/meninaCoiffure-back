@@ -62,8 +62,8 @@ class ReservaService
             $this->validarPersonalActivo($personalId, bloquear: true);
             $this->validarHorarioFuturo($fecha, $horaInicio);
 
-            // Regla 1: la profesional no puede tener dos citas activas a la vez
-            $this->validarSolapamiento($personalId, $fecha, $horaInicio, $horaFin);
+            // Regla 1: la profesional no puede tener dos citas activas a la vez (traslados incluidos)
+            $this->validarSolapamiento($personalId, $fecha, $horaInicio, $horaFin, $domicilio['minutos_traslado']);
 
             // Regla 2: dentro del horario del salón, salvo atención fuera de horario autorizada
             $this->validarHorarioSalon($fecha, $horaInicio, $horaFin, $fueraDeHorario);
@@ -174,13 +174,15 @@ class ReservaService
             $horaFin = isset($datos['hora_fin']) ? $this->normalizarHora($datos['hora_fin']) : $reserva->hora_fin;
 
             $cambiaDomicilio = array_key_exists('a_domicilio', $datos)
-                || array_key_exists('direccion_domicilio', $datos);
+                || array_key_exists('direccion_domicilio', $datos)
+                || array_key_exists('minutos_traslado', $datos);
 
             $domicilio = $this->datosDomicilio([
                 'a_domicilio' => $datos['a_domicilio'] ?? $reserva->a_domicilio,
                 'direccion_domicilio' => array_key_exists('direccion_domicilio', $datos)
                     ? $datos['direccion_domicilio']
                     : $reserva->direccion_domicilio,
+                'minutos_traslado' => $datos['minutos_traslado'] ?? $reserva->minutos_traslado,
             ]);
 
             // Si no se envía, la reserva conserva lo que la dueña autorizó al crearla
@@ -196,7 +198,8 @@ class ReservaService
                 (isset($datos['hora_fin']) && $this->normalizarHora($datos['hora_fin']) !== $this->normalizarHora($reserva->hora_fin)) ||
                 (isset($datos['personal_id']) && $datos['personal_id'] !== $reserva->personal_id) ||
                 $fueraDeHorario !== (bool) $reserva->fuera_de_horario ||
-                $domicilio['a_domicilio'] !== $reserva->a_domicilio
+                $domicilio['a_domicilio'] !== $reserva->a_domicilio ||
+                $domicilio['minutos_traslado'] !== (int) $reserva->minutos_traslado
             );
 
             if ($horarioCambiado) {
@@ -210,7 +213,7 @@ class ReservaService
                 $this->validarHorarioFuturo($fecha, $horaInicio);
 
                 // Revalidar Regla 1 excluyendo la reserva actual
-                $this->validarSolapamiento($personalId, $fecha, $horaInicio, $horaFin, $reserva->id);
+                $this->validarSolapamiento($personalId, $fecha, $horaInicio, $horaFin, $domicilio['minutos_traslado'], $reserva->id);
 
                 // Revalidar Regla 2
                 $this->validarHorarioSalon($fecha, $horaInicio, $horaFin, $fueraDeHorario);
@@ -239,13 +242,90 @@ class ReservaService
 
             $reserva->update($datosActualizar);
 
-            // HU-13 y HU-16: al completar, la visita pasa al historial y se descuentan los insumos
+            // Modificar la reserva: la lista de servicios enviada reemplaza a la actual
+            if (array_key_exists('servicios', $datos)) {
+                $this->reemplazarServicios($reserva, $datos['servicios'], substr((string) $fecha, 0, 10));
+            }
+
+            // HU-13: al completar, la visita pasa al historial de la clienta
             if ($nuevoEstado === 'completada' && $estadoAnterior !== 'completada') {
                 ReservaCompletada::dispatch($reserva->fresh(), $datos['notas'] ?? null);
             }
 
             return $reserva->fresh(self::RELACIONES);
         });
+    }
+
+    /**
+     * Reemplaza los servicios de una reserva por la lista enviada.
+     * Los que ya estaban conservan su precio congelado y su cantidad (Regla 4); los nuevos toman el
+     * precio vigente a la fecha de la cita (Reglas 3 y 4); los que no vienen en la lista se quitan.
+     * Lo ya pagado no puede quedar por encima del nuevo total.
+     */
+    protected function reemplazarServicios(Reserva $reserva, array $servicios, string $fecha): void
+    {
+        $idsPedidos = [];
+        foreach ($servicios as $item) {
+            if (is_array($item)) {
+                $servicioId = $item['servicio_id'] ?? $item['id'] ?? null;
+            } else {
+                $servicioId = $item;
+            }
+
+            if (!$servicioId) {
+                throw ValidationException::withMessages([
+                    'servicios' => ['El servicio especificado es inválido.'],
+                ]);
+            }
+
+            $idsPedidos[] = (int) $servicioId;
+        }
+
+        if (count($idsPedidos) === 0) {
+            throw ValidationException::withMessages([
+                'servicios' => ['La reserva debe tener al menos un servicio.'],
+            ]);
+        }
+
+        $lineasActuales = $reserva->detalles()->get();
+        $idsActuales = [];
+        foreach ($lineasActuales as $linea) {
+            $idsActuales[] = (int) $linea->servicio_id;
+        }
+
+        // Primero se validan los servicios nuevos (activos y con precio): si alguno falla, no se toca nada
+        $lineasNuevas = [];
+        foreach ($idsPedidos as $servicioId) {
+            if (!in_array($servicioId, $idsActuales, true)) {
+                $lineasNuevas[] = [
+                    'servicio_id' => $servicioId,
+                    'precio_aplicado' => $this->obtenerPrecioVigente($servicioId, $fecha),
+                    'cantidad' => 1,
+                    'agregado_en_el_momento' => false,
+                ];
+            }
+        }
+
+        foreach ($lineasActuales as $linea) {
+            if (!in_array((int) $linea->servicio_id, $idsPedidos, true)) {
+                $linea->delete();
+            }
+        }
+
+        foreach ($lineasNuevas as $linea) {
+            $reserva->detalles()->create($linea);
+        }
+
+        $reserva->load(['detalles', 'descuento', 'pagos']);
+
+        if ($reserva->pagado > $reserva->total) {
+            $pagado = number_format($reserva->pagado, 0, ',', '.');
+            $total = number_format($reserva->total, 0, ',', '.');
+
+            throw ValidationException::withMessages([
+                'servicios' => ["Ya se pagaron Gs. {$pagado} y el nuevo total sería Gs. {$total}. Quita un pago antes de sacar servicios."],
+            ]);
+        }
     }
 
     /**
@@ -326,20 +406,28 @@ class ReservaService
     /**
      * HU-02: Horarios en los que una profesional puede recibir una cita de cierta duración.
      * Recorre el horario del salón (o la jornada máxima, si es fuera de horario) cada $intervalo
-     * minutos y marca cada inicio como disponible, ocupado (Regla 1) o pasado.
+     * minutos y marca cada inicio como disponible, ocupado (Regla 1, con traslados) o pasado.
+     * El traslado de una cita a domicilio ocupa a la profesional antes y después, pero la cita
+     * en sí es la que debe caber en el horario: el viaje puede empezar antes de abrir.
      * Si el salón no abre ese día y no es fuera de horario, no hay franjas ni horarios.
      *
      * @return array{franjas: array<int, array{0: string, 1: string}>, horarios: array<int, array{hora: string, disponible: bool, motivo: ?string}>}
      */
-    public function horariosDisponibles(int $personalId, string $fecha, int $duracion, bool $fueraDeHorario = false, int $intervalo = 30): array
+    public function horariosDisponibles(int $personalId, string $fecha, int $duracion, bool $fueraDeHorario = false, bool $aDomicilio = false, int $traslado = 0, int $intervalo = 30, ?int $excluirReservaId = null): array
     {
+        // El traslado solo cuenta para citas a domicilio
+        if (!$aDomicilio) {
+            $traslado = 0;
+        }
+
         if ($fueraDeHorario) {
             $franjas = [self::JORNADA_MAXIMA];
         } else {
             $franjas = $this->franjasLocal($fecha);
         }
 
-        $ocupados = $this->bloquesOcupados($personalId, $fecha);
+        // Al modificar una reserva, su propio horario no cuenta como ocupado
+        $ocupados = $this->bloquesOcupados($personalId, $fecha, $excluirReservaId);
         $limitePasado = now()->subMinutes(self::TOLERANCIA_SIN_CITA);
         $horarios = [];
 
@@ -353,7 +441,7 @@ class ReservaService
 
                 if (Carbon::parse($fecha)->startOfDay()->addMinutes($inicio)->lt($limitePasado)) {
                     $motivo = 'pasado';
-                } elseif ($this->chocaConBloques($inicio, $fin, $ocupados)) {
+                } elseif ($this->chocaConBloques($inicio - $traslado, $fin + $traslado, $ocupados)) {
                     $motivo = 'ocupado';
                 }
 
@@ -421,13 +509,14 @@ class ReservaService
 
     /**
      * Regla 1: la profesional no puede tener dos reservas activas que se superpongan.
-     * Una cita ocupa exactamente su horario (de hora_inicio a hora_fin).
+     * Una cita a domicilio ocupa también su traslado antes y después, así que se comparan
+     * bloques [inicio - traslado, fin + traslado] de la cita nueva y de las existentes.
      */
-    protected function validarSolapamiento(int $personalId, string $fecha, string $horaInicio, string $horaFin, ?int $excluirReservaId = null): void
+    protected function validarSolapamiento(int $personalId, string $fecha, string $horaInicio, string $horaFin, int $traslado = 0, ?int $excluirReservaId = null): void
     {
         $bloquesOcupados = $this->bloquesOcupados($personalId, $fecha, $excluirReservaId);
-        $inicioEnMinutos = $this->aMinutos($horaInicio);
-        $finEnMinutos = $this->aMinutos($horaFin);
+        $inicioEnMinutos = $this->aMinutos($horaInicio) - $traslado;
+        $finEnMinutos = $this->aMinutos($horaFin) + $traslado;
 
         if ($this->chocaConBloques($inicioEnMinutos, $finEnMinutos, $bloquesOcupados)) {
             throw ValidationException::withMessages([
@@ -529,7 +618,8 @@ class ReservaService
     }
 
     /**
-     * HU-14: una cita a domicilio necesita dirección; una cita en el salón no la guarda.
+     * HU-14: una cita a domicilio necesita dirección y puede reservar tiempo de traslado;
+     * una cita en el salón no guarda ninguno de los dos.
      */
     protected function datosDomicilio(array $datos): array
     {
@@ -545,6 +635,7 @@ class ReservaService
         return [
             'a_domicilio' => $aDomicilio,
             'direccion_domicilio' => $aDomicilio ? $direccion : null,
+            'minutos_traslado' => $aDomicilio ? (int) ($datos['minutos_traslado'] ?? 0) : 0,
         ];
     }
 
@@ -600,7 +691,7 @@ class ReservaService
     }
 
     /**
-     * Bloques en minutos que la profesional ya tiene ocupados ese día.
+     * Bloques en minutos que la profesional ya tiene ocupados ese día (con traslados incluidos).
      *
      * @return array<int, array{0: int, 1: int}>
      */
@@ -615,8 +706,12 @@ class ReservaService
         }
 
         $bloques = [];
-        foreach ($consulta->get(['hora_inicio', 'hora_fin']) as $reserva) {
-            $bloques[] = [$this->aMinutos($reserva->hora_inicio), $this->aMinutos($reserva->hora_fin)];
+        foreach ($consulta->get(['hora_inicio', 'hora_fin', 'minutos_traslado']) as $reserva) {
+            $traslado = (int) $reserva->minutos_traslado;
+            $bloques[] = [
+                $this->aMinutos($reserva->hora_inicio) - $traslado,
+                $this->aMinutos($reserva->hora_fin) + $traslado,
+            ];
         }
 
         return $bloques;

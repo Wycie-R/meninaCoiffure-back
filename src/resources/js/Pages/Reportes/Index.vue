@@ -55,7 +55,6 @@ const FUENTES = [
     { clave: 'servicios', ruta: 'servicios', accion: 'calcular los servicios más pedidos' },
     { clave: 'personal', ruta: 'personal', accion: 'calcular el desempeño del equipo' },
     { clave: 'diarios', ruta: 'ingresos-diarios', accion: 'calcular la evolución diaria' },
-    { clave: 'stock', ruta: 'stock', accion: 'revisar los insumos' },
 ]
 
 const datos = reactive(Object.fromEntries(FUENTES.map((f) => [f.clave, null])))
@@ -310,22 +309,6 @@ const filasPersonal = computed(() => {
         .sort((a, b) => b.facturado - a.facturado || a.nombreCompleto.localeCompare(b.nombreCompleto, 'es'))
         .map((persona) => ({ ...persona, fraccion: maximo ? persona.facturado / maximo : 0 }))
 })
-
-// Insumos
-function cantidad(valor, unidad) {
-    const numero = Number(valor) || 0
-    return `${numero.toLocaleString('es-PY', { maximumFractionDigits: 2 })}${unidad ? ` ${unidad}` : ''}`
-}
-
-const recursos = computed(() => datos.stock?.recursos ?? [])
-const bajoMinimo = computed(() => recursos.value.filter((recurso) => recurso.bajo_minimo))
-const verTodosInsumos = ref(false)
-
-const recursosOrdenados = computed(() =>
-    [...recursos.value].sort(
-        (a, b) => Number(Boolean(b.bajo_minimo)) - Number(Boolean(a.bajo_minimo)) || String(a.nombre).localeCompare(String(b.nombre), 'es')
-    )
-)
 
 const claseTarjeta = 'rounded-[28px] border border-hilo bg-velo p-5 sm:p-6'
 </script>
@@ -664,96 +647,6 @@ const claseTarjeta = 'rounded-[28px] border border-hilo bg-velo p-5 sm:p-6'
                                 </tr>
                             </tbody>
                         </table>
-                    </div>
-                </section>
-
-                <!-- Insumos -->
-                <section :class="claseTarjeta" aria-labelledby="titulo-insumos">
-                    <div class="flex flex-wrap items-start justify-between gap-4">
-                        <div>
-                            <h2 id="titulo-insumos" class="text-2xl">Insumos bajo el mínimo</h2>
-                            <p class="mt-1 text-sm text-niebla">Stock actual y lo que se consumió en el período.</p>
-                        </div>
-                        <Button
-                            v-if="recursos.length"
-                            variant="secondary"
-                            :aria-expanded="verTodosInsumos"
-                            aria-controls="tabla-insumos"
-                            @click="verTodosInsumos = !verTodosInsumos"
-                        >
-                            {{ verTodosInsumos ? 'Ocultar el inventario' : `Ver los ${recursos.length} insumos` }}
-                        </Button>
-                    </div>
-
-                    <div v-if="primeraCarga('stock')" class="mt-6 grid gap-3 sm:grid-cols-2" aria-busy="true" aria-label="Revisando los insumos">
-                        <div v-for="n in 2" :key="n" class="h-24 animate-pulse rounded-2xl bg-terciopelo"></div>
-                    </div>
-
-                    <div v-else-if="errores.stock" role="alert" class="mt-6 flex flex-wrap items-center justify-between gap-3 text-sm text-borgona">
-                        <span>{{ errores.stock }}</span>
-                        <Button label="Reintentar" variant="secondary" @click="cargar" />
-                    </div>
-
-                    <p v-else-if="!recursos.length" class="mt-6 text-sm text-bruma">Todavía no hay insumos cargados en el inventario.</p>
-
-                    <div v-else class="mt-6 transition-opacity" :class="{ 'opacity-60': cargando }">
-                        <ul v-if="bajoMinimo.length" class="grid gap-3 sm:grid-cols-2">
-                            <li
-                                v-for="recurso in bajoMinimo"
-                                :key="recurso.id"
-                                class="rounded-2xl border border-miel/30 bg-miel/8 p-4"
-                            >
-                                <div class="flex items-start justify-between gap-3">
-                                    <p class="min-w-0 font-medium text-perla">{{ recurso.nombre }}</p>
-                                    <span class="inline-flex shrink-0 items-center gap-1 rounded-full bg-miel/15 px-2 py-0.5 text-xs font-medium text-miel">
-                                        <Icono name="alerta" class="h-3.5 w-3.5" />
-                                        Bajo mínimo
-                                    </span>
-                                </div>
-                                <p class="mt-2 text-sm text-bruma">
-                                    Quedan <span class="tabular-nums text-perla">{{ cantidad(recurso.cantidad_actual, recurso.unidad_medida) }}</span>;
-                                    el mínimo es <span class="tabular-nums">{{ cantidad(recurso.stock_minimo, recurso.unidad_medida) }}</span>.
-                                </p>
-                                <p class="mt-1 text-sm text-niebla">
-                                    Consumo del período: <span class="tabular-nums">{{ cantidad(recurso.consumido, recurso.unidad_medida) }}</span>.
-                                    Entradas: <span class="tabular-nums">{{ cantidad(recurso.entradas, recurso.unidad_medida) }}</span>.
-                                </p>
-                            </li>
-                        </ul>
-                        <p v-else class="flex items-center gap-2.5 text-sm text-bruma">
-                            <Icono name="completada" class="h-5 w-5 shrink-0 text-menta" />
-                            Todos los insumos están por encima del mínimo.
-                        </p>
-
-                        <div v-if="verTodosInsumos" id="tabla-insumos" class="scroll-fino mt-6 overflow-x-auto rounded-2xl border border-hilo">
-                            <table class="w-full min-w-[40rem] text-sm">
-                                <caption class="sr-only">Inventario de insumos</caption>
-                                <thead class="bg-terciopelo text-left text-xs text-bruma">
-                                    <tr>
-                                        <th scope="col" class="px-4 py-2.5 font-medium">Insumo</th>
-                                        <th scope="col" class="px-4 py-2.5 text-right font-medium">Stock actual</th>
-                                        <th scope="col" class="px-4 py-2.5 text-right font-medium">Mínimo</th>
-                                        <th scope="col" class="px-4 py-2.5 text-right font-medium">Entradas</th>
-                                        <th scope="col" class="px-4 py-2.5 text-right font-medium">Consumido</th>
-                                    </tr>
-                                </thead>
-                                <tbody class="divide-y divide-hilo">
-                                    <tr v-for="recurso in recursosOrdenados" :key="recurso.id">
-                                        <th scope="row" class="px-4 py-2.5 text-left font-normal text-perla">
-                                            {{ recurso.nombre }}
-                                            <span v-if="recurso.bajo_minimo" class="ml-1.5 inline-flex items-center gap-1 text-xs text-miel">
-                                                <Icono name="alerta" class="h-3.5 w-3.5" />
-                                                Bajo mínimo
-                                            </span>
-                                        </th>
-                                        <td class="px-4 py-2.5 text-right tabular-nums text-perla">{{ cantidad(recurso.cantidad_actual, recurso.unidad_medida) }}</td>
-                                        <td class="px-4 py-2.5 text-right tabular-nums text-bruma">{{ cantidad(recurso.stock_minimo, recurso.unidad_medida) }}</td>
-                                        <td class="px-4 py-2.5 text-right tabular-nums text-bruma">{{ cantidad(recurso.entradas, recurso.unidad_medida) }}</td>
-                                        <td class="px-4 py-2.5 text-right tabular-nums text-bruma">{{ cantidad(recurso.consumido, recurso.unidad_medida) }}</td>
-                                    </tr>
-                                </tbody>
-                            </table>
-                        </div>
                     </div>
                 </section>
             </div>

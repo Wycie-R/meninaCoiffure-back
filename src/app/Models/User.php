@@ -10,12 +10,39 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
-#[Fillable(['name', 'email', 'password', 'rol_id', 'personal_id'])]
+#[Fillable([
+    'name', 'email', 'password', 'rol_id', 'personal_id',
+    'puede_crear_reservas', 'puede_cambiar_estado', 'puede_reservar_fuera_de_horario',
+    'puede_ver_clientes',
+])]
 #[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
     /** @use HasFactory<UserFactory> */
     use HasFactory, Notifiable;
+
+    /**
+     * Permisos que la dueña habilita a cada empleada desde Configuración (columnas de users).
+     * La administración los tiene todos sin depender de las columnas.
+     */
+    public const PERMISOS = [
+        'puede_crear_reservas' => [
+            'nombre' => 'Crear y reprogramar reservas',
+            'descripcion' => 'Agendar citas en su agenda, cambiarles fecha, hora o servicios y consultar la disponibilidad.',
+        ],
+        'puede_cambiar_estado' => [
+            'nombre' => 'Cambiar el estado de las citas',
+            'descripcion' => 'Confirmar, completar, marcar como no asistida o cancelar sus citas.',
+        ],
+        'puede_reservar_fuera_de_horario' => [
+            'nombre' => 'Atender fuera del horario del salón',
+            'descripcion' => 'Marcar una cita como fuera de horario (entre las 06:00 y las 22:00).',
+        ],
+        'puede_ver_clientes' => [
+            'nombre' => 'Ver el expediente de las clientas',
+            'descripcion' => 'Datos de contacto, preferencias, alergias e historial de visitas.',
+        ],
+    ];
 
     /**
      * Get the attributes that should be cast.
@@ -27,6 +54,10 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'puede_crear_reservas' => 'boolean',
+            'puede_cambiar_estado' => 'boolean',
+            'puede_reservar_fuera_de_horario' => 'boolean',
+            'puede_ver_clientes' => 'boolean',
         ];
     }
 
@@ -48,6 +79,36 @@ class User extends Authenticatable
     public function esAdmin(): bool
     {
         return $this->hasRole('admin');
+    }
+
+    /**
+     * La administración tiene todos los permisos; una profesional, solo los que la dueña le habilitó.
+     */
+    public function tienePermiso(string $permiso): bool
+    {
+        if ($this->esAdmin()) {
+            return true;
+        }
+
+        if (!array_key_exists($permiso, self::PERMISOS)) {
+            return false;
+        }
+
+        // Una columna sin cargar (null) cuenta como habilitada, igual que el valor por defecto
+        return $this->getAttribute($permiso) !== false;
+    }
+
+    /**
+     * Los permisos de la cuenta como {clave: bool}, para el frontend y Configuración.
+     */
+    public function permisos(): array
+    {
+        $permisos = [];
+        foreach (array_keys(self::PERMISOS) as $clave) {
+            $permisos[$clave] = $this->tienePermiso($clave);
+        }
+
+        return $permisos;
     }
 
     /**

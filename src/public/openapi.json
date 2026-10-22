@@ -3,7 +3,7 @@
   "info": {
     "title": "Menina Coiffure — API REST",
     "version": "2.0.0",
-    "description": "API REST de **Menina Coiffure**, centro familiar de **peluquería y estética** de Villa Elisa (Paraguay): peluquería\n(cortes, brushing, peinados), colorimetría (tintes, mechas, balayage), tratamientos capilares y estética (depilación,\nlimpieza facial, maquillaje social), en el salón y a domicilio. Laravel 13 + PostgreSQL 18 + Vue/Inertia.\n\nMontos en **guaraníes (PYG)**, sin decimales en la práctica (los campos decimales de la base se serializan como\ntexto, por ejemplo `\"70000.00\"`; los montos calculados, como número). Fechas `YYYY-MM-DD`, horas `HH:MM[:SS]`,\nzona horaria America/Asuncion.\n\n### Roles\n- **`admin`**: la propietaria, Sra. Mónica. Su usuario `admin@meninacoiffure.com` está vinculado a su ficha de\n  personal porque también atiende clientes. Acceso total.\n- **`profesional`**: por ejemplo Carla (`carla@meninacoiffure.com`). Solo ve y opera **su propia agenda**: el listado\n  de reservas le devuelve solo las suyas y sobre reservas ajenas recibe 403. No accede a rutas de administración.\n- **`cliente`**: reservado para el futuro (la clientela todavía no usa el sistema); hoy recibe 403 en toda ruta\n  protegida.\n\nUsuarios de prueba (contraseña `password123`): `admin@meninacoiffure.com` y `carla@meninacoiffure.com`.\n\n### Autenticación y \"Try it out\"\nLa API usa la **sesión de Laravel** (cookie `laravel_session`, sesión guardada en PostgreSQL), no tokens.\nPúblicas: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` y la consulta del catálogo\n(`GET /api/servicios`, `GET /api/servicios/{servicio}`, `GET /api/categorias-servicio`,\n`GET /api/categorias-servicio/{categorias_servicio}`). Todo lo demás exige sesión (**401** sin ella) y un rol del\nsalón (**403** si el rol no corresponde; varias rutas son solo `admin`).\n\n> Antes de usar **\"Try it out\"** en rutas protegidas, inicia sesión en [/login](/login) **en el mismo navegador**\n> (o ejecuta aquí `POST /api/auth/login`, que está en el mismo origen) y vuelve a esta página: el navegador envía la\n> cookie `laravel_session` solo. El esquema `cookieAuth` de \"Authorize\" es informativo; Swagger UI no puede fijar\n> cookies por sí mismo.\n\n**CSRF:** las rutas `api/*` están excluidas de la verificación CSRF (`bootstrap/app.php`), así que los métodos de\nescritura (POST/PUT/DELETE) **no** necesitan la cabecera `X-XSRF-TOKEN`; basta la cookie de sesión.\n\nErrores con formato JSON estándar de Laravel: `{\"message\": \"...\"}` (401/403/404) y\n`{\"message\": \"...\", \"errors\": {\"campo\": [\"...\"]}}` (422)."
+    "description": "API REST de **Menina Coiffure**, centro familiar de **peluquería y estética** de Villa Elisa (Paraguay): peluquería\n(cortes, brushing, peinados), colorimetría (tintes, mechas, balayage), tratamientos capilares y estética (depilación,\nlimpieza facial, maquillaje social), en el salón y a domicilio. Laravel 13 + PostgreSQL 18 + Vue/Inertia.\n\nMontos en **guaraníes (PYG)**, sin decimales en la práctica (los campos decimales de la base se serializan como\ntexto, por ejemplo `\"70000.00\"`; los montos calculados, como número). Fechas `YYYY-MM-DD`, horas `HH:MM[:SS]`,\nzona horaria America/Asuncion.\n\n### Roles\n- **`admin`**: la propietaria, Sra. Mónica. Su usuario `admin@meninacoiffure.com` está vinculado a su ficha de\n  personal porque también atiende clientes. Acceso total.\n- **`profesional`**: por ejemplo Carla (`carla@meninacoiffure.com`). Solo ve y opera **su propia agenda**: el listado\n  de reservas le devuelve solo las suyas y sobre reservas ajenas recibe 403. No accede a rutas de administración.\n  Además, la dueña le habilita o quita **permisos** desde Configuración (`/api/configuracion/permisos`); por defecto\n  están todos habilitados. Sin el permiso necesario la API responde **403** \"La administración no te habilitó para\n  esta acción.\":\n  - `puede_crear_reservas`: `POST /api/reservas`, `POST /api/reservas/{id}/servicios`, `GET /api/disponibilidad` y\n    reprogramar en `PUT /api/reservas/{id}` (fecha, horas, cliente, domicilio, descuento o `fuera_de_horario`).\n  - `puede_cambiar_estado`: `PUT /api/reservas/{id}` con un `estado` distinto y `DELETE /api/reservas/{id}`.\n  - `puede_reservar_fuera_de_horario`: crear o marcar una reserva con `fuera_de_horario = true`.\n  - `puede_ver_clientes`: ficha, edición, preferencias e historial de clientes. El listado (`GET /api/clientes`) y el\n    alta (`POST /api/clientes`) se permiten con este permiso **o** con `puede_crear_reservas`.\n- **`cliente`**: reservado para el futuro (la clientela todavía no usa el sistema); hoy recibe 403 en toda ruta\n  protegida.\n\nUsuarios de prueba (contraseña `password123`): `admin@meninacoiffure.com` y `carla@meninacoiffure.com`.\n\n### Autenticación y \"Try it out\"\nLa API usa la **sesión de Laravel** (cookie `laravel_session`, sesión guardada en PostgreSQL), no tokens.\nPúblicas: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me` y la consulta del catálogo\n(`GET /api/servicios`, `GET /api/servicios/{servicio}`, `GET /api/categorias-servicio`,\n`GET /api/categorias-servicio/{categorias_servicio}`). Todo lo demás exige sesión (**401** sin ella) y un rol del\nsalón (**403** si el rol no corresponde; varias rutas son solo `admin`).\n\n> Antes de usar **\"Try it out\"** en rutas protegidas, inicia sesión en [/login](/login) **en el mismo navegador**\n> (o ejecuta aquí `POST /api/auth/login`, que está en el mismo origen) y vuelve a esta página: el navegador envía la\n> cookie `laravel_session` solo. El esquema `cookieAuth` de \"Authorize\" es informativo; Swagger UI no puede fijar\n> cookies por sí mismo.\n\n**CSRF:** las rutas `api/*` están excluidas de la verificación CSRF (`bootstrap/app.php`), así que los métodos de\nescritura (POST/PUT/DELETE) **no** necesitan la cabecera `X-XSRF-TOKEN`; basta la cookie de sesión.\n\nErrores con formato JSON estándar de Laravel: `{\"message\": \"...\"}` (401/403/404) y\n`{\"message\": \"...\", \"errors\": {\"campo\": [\"...\"]}}` (422)."
   },
   "servers": [
     {
@@ -62,12 +62,12 @@
       "description": "Promociones por porcentaje o monto fijo con vigencia (HU-22)."
     },
     {
-      "name": "Inventario",
-      "description": "Insumos (stock), movimientos de entrada y salida, consumo estándar por servicio (plantilla) y consumo real por atención (HU-15 a HU-18)."
+      "name": "Reportes",
+      "description": "Indicadores de gestión del período: resumen, servicios, personal e ingresos diarios (HU-23)."
     },
     {
-      "name": "Reportes",
-      "description": "Indicadores de gestión del período: resumen, servicios, personal, ingresos diarios y stock (HU-23, HU-24)."
+      "name": "Configuración",
+      "description": "Permisos de cada empleada: la dueña decide qué puede hacer cada profesional en el sistema."
     }
   ],
   "paths": {
@@ -165,6 +165,9 @@
                               },
                               "description": "Ficha de personal vinculada (null si el usuario no atiende).",
                               "nullable": true
+                            },
+                            "permisos": {
+                              "$ref": "#/components/schemas/Permisos"
                             }
                           }
                         }
@@ -187,6 +190,12 @@
                       "personal": {
                         "id": 1,
                         "nombre_completo": "Mónica Propietaria"
+                      },
+                      "permisos": {
+                        "puede_crear_reservas": true,
+                        "puede_cambiar_estado": true,
+                        "puede_reservar_fuera_de_horario": true,
+                        "puede_ver_clientes": true
                       }
                     }
                   }
@@ -291,6 +300,9 @@
                             }
                           ],
                           "nullable": true
+                        },
+                        "permisos": {
+                          "$ref": "#/components/schemas/Permisos"
                         }
                       }
                     }
@@ -315,6 +327,12 @@
                       "activo": true,
                       "created_at": "2026-09-02T19:20:00.000000Z",
                       "updated_at": "2026-09-02T19:20:00.000000Z"
+                    },
+                    "permisos": {
+                      "puede_crear_reservas": true,
+                      "puede_cambiar_estado": true,
+                      "puede_reservar_fuera_de_horario": true,
+                      "puede_ver_clientes": true
                     }
                   }
                 }
@@ -730,7 +748,7 @@
           "Servicios"
         ],
         "summary": "Eliminar servicio nunca usado",
-        "description": "HU-10. **Elimina** un servicio que nunca se usó en reservas (por ejemplo, uno cargado por error); sus precios y\nsu plantilla de insumos se borran en cascada.\n\nSi el servicio ya figura en alguna reserva responde **422** en la clave `servicio`: para dejar de ofrecerlo se\ndesactiva con `PUT /api/servicios/{servicio}` y `{\"activo\": false}`, conservando precios e historial.\n\n**Acceso:** solo `admin`.",
+        "description": "HU-10. **Elimina** un servicio que nunca se usó en reservas (por ejemplo, uno cargado por error); sus precios se\nborran en cascada.\n\nSi el servicio ya figura en alguna reserva responde **422** en la clave `servicio`: para dejar de ofrecerlo se\ndesactiva con `PUT /api/servicios/{servicio}` y `{\"activo\": false}`, conservando precios e historial.\n\n**Acceso:** solo `admin`.",
         "responses": {
           "200": {
             "description": "Servicio eliminado",
@@ -2223,7 +2241,7 @@
           "Clientes"
         ],
         "summary": "Listar clientes",
-        "description": "Lista de clientes por nombre y apellido.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "Lista de clientes por nombre y apellido.\n\n**Permiso:** `puede_ver_clientes` o `puede_crear_reservas` (buscar a la clienta para agendar).\n\n**Acceso:** `admin` o `profesional`.",
         "parameters": [
           {
             "name": "buscar",
@@ -2276,7 +2294,7 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/SinPermiso"
           }
         }
       },
@@ -2285,7 +2303,7 @@
           "Clientes"
         ],
         "summary": "Registrar cliente",
-        "description": "Alta de cliente (por ejemplo, desde la pantalla de nueva reserva). `fecha_registro` = hoy.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "Alta de cliente (por ejemplo, desde la pantalla de nueva reserva). `fecha_registro` = hoy.\n\n**Permiso:** `puede_ver_clientes` o `puede_crear_reservas` (alta desde la nueva reserva).\n\n**Acceso:** `admin` o `profesional`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2330,7 +2348,7 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/SinPermiso"
           },
           "422": {
             "description": "Error de validación",
@@ -2359,7 +2377,7 @@
           "Clientes"
         ],
         "summary": "Detalle de cliente",
-        "description": "Datos del cliente con `reservas_count`.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "Datos del cliente con `reservas_count`.\n\n**Permiso:** `puede_ver_clientes`.\n\n**Acceso:** `admin` o `profesional`.",
         "responses": {
           "200": {
             "description": "Cliente",
@@ -2396,7 +2414,7 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/SinPermiso"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -2413,7 +2431,7 @@
           "Clientes"
         ],
         "summary": "Actualizar cliente",
-        "description": "Campos opcionales.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "Campos opcionales.\n\n**Permiso:** `puede_ver_clientes`.\n\n**Acceso:** `admin` o `profesional`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2473,7 +2491,7 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/SinPermiso"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -2545,7 +2563,7 @@
           "Expediente (preferencias e historial)"
         ],
         "summary": "Preferencias del cliente",
-        "description": "HU-05. Preferencias y cuidados del cliente (alergias, color, profesional preferido…), por id.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "HU-05. Preferencias y cuidados del cliente (alergias, color, profesional preferido…), por id.\n\n**Permiso:** `puede_ver_clientes`.\n\n**Acceso:** `admin` o `profesional`.",
         "responses": {
           "200": {
             "description": "Preferencias",
@@ -2584,7 +2602,7 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/SinPermiso"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -2601,7 +2619,7 @@
           "Expediente (preferencias e historial)"
         ],
         "summary": "Registrar preferencia",
-        "description": "HU-05.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "HU-05.\n\n**Permiso:** `puede_ver_clientes`.\n\n**Acceso:** `admin` o `profesional`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2662,7 +2680,7 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/SinPermiso"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -2694,7 +2712,7 @@
           "Expediente (preferencias e historial)"
         ],
         "summary": "Actualizar preferencia",
-        "description": "HU-05. Campos opcionales; `descripcion`, si viene, no puede ir vacía.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "HU-05. Campos opcionales; `descripcion`, si viene, no puede ir vacía.\n\n**Permiso:** `puede_ver_clientes`.\n\n**Acceso:** `admin` o `profesional`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2750,7 +2768,7 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/SinPermiso"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -2770,7 +2788,7 @@
           "Expediente (preferencias e historial)"
         ],
         "summary": "Eliminar preferencia",
-        "description": "HU-05.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "HU-05.\n\n**Permiso:** `puede_ver_clientes`.\n\n**Acceso:** `admin` o `profesional`.",
         "responses": {
           "200": {
             "description": "Preferencia eliminada",
@@ -2795,7 +2813,7 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/SinPermiso"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -2809,7 +2827,7 @@
           "Expediente (preferencias e historial)"
         ],
         "summary": "Historial de visitas del cliente",
-        "description": "HU-13. Expediente del cliente: datos de contacto, preferencias, visitas realizadas (la más reciente primero) y un\nresumen (cantidad de visitas, última visita, profesional más frecuente, hasta 3 servicios más pedidos, ausencias\ny cancelaciones). Las visitas se registran solas al pasar una reserva a `completada`.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "HU-13. Expediente del cliente: datos de contacto, preferencias, visitas realizadas (la más reciente primero) y un\nresumen (cantidad de visitas, última visita, profesional más frecuente, hasta 3 servicios más pedidos, ausencias\ny cancelaciones). Las visitas se registran solas al pasar una reserva a `completada`.\n\n**Permiso:** `puede_ver_clientes`.\n\n**Acceso:** `admin` o `profesional`.",
         "responses": {
           "200": {
             "description": "Historial",
@@ -2893,7 +2911,7 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/SinPermiso"
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -2912,7 +2930,7 @@
           "Expediente (preferencias e historial)"
         ],
         "summary": "Editar notas de una visita",
-        "description": "HU-13. Reemplaza las notas de la visita. La clave `notas` debe venir (puede ser `null` o vacía para borrarlas).\nUn profesional solo edita visitas de su propia agenda (403 \"Esta reserva pertenece a la agenda de otro profesional.\").\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "HU-13. Reemplaza las notas de la visita. La clave `notas` debe venir (puede ser `null` o vacía para borrarlas).\nUn profesional solo edita visitas de su propia agenda (403 \"Esta reserva pertenece a la agenda de otro profesional.\").\n\n**Permiso:** `puede_ver_clientes`.\n\n**Acceso:** `admin` o `profesional`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2964,7 +2982,28 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/ForbiddenAgenda"
+            "description": "Rol sin permiso, o la reserva pertenece a la agenda de otro profesional, o la administración no habilitó el permiso necesario",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "agenda_ajena": {
+                    "summary": "Reserva de otra agenda",
+                    "value": {
+                      "message": "Esta reserva pertenece a la agenda de otro profesional."
+                    }
+                  },
+                  "sin_rol": {
+                    "summary": "Rol no permitido",
+                    "value": {
+                      "message": "No tienes permiso para realizar esta acción."
+                    }
+                  }
+                }
+              }
+            }
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -3131,7 +3170,7 @@
           "Reservas"
         ],
         "summary": "Crear reserva",
-        "description": "HU-03 / HU-04 / HU-14. Registra la reserva con sus líneas de servicio y precios congelados. Al crear cada línea se emite `DetalleReservaCreado` y se **precarga el consumo estándar** de insumos (plantilla × cantidad).\n\n**Reglas de negocio** (`ReservaService`):\n\n- **Agenda propia:** un profesional solo ve y opera su agenda. Sobre una reserva ajena responde **403**\n  \"Esta reserva pertenece a la agenda de otro profesional.\"; no puede crear en otra agenda ni reasignar a otro profesional (403).\n- **Regla 1, sin solapamiento:** el profesional no puede tener otra reserva pendiente, confirmada o completada que\n  se cruce. Cada cita ocupa exactamente `[hora_inicio, hora_fin]` (no hay tiempo de traslado) (422 `horario`).\n- **Regla 2, horario del salón:** las profesionales trabajan bajo demanda (sin turnos fijos). Toda cita, en el\n  salón o a domicilio, debe caber completa en el horario de atención del salón (`horarios_atencion`, franjas\n  contiguas unidas). Si el salón no abre ese día: 422 `horario` \"El salón no atiende ese día…\"; si no cabe:\n  422 `horario` \"La cita queda fuera del horario del salón…\".\n- **Fuera de horario:** con `fuera_de_horario = true` la dueña autoriza atender fuera del horario del salón (por\n  ejemplo, un sábado o a la noche). Solo se exige la jornada máxima de **06:00 a 22:00** (422 `horario`) y la\n  Regla 1. En `PUT`, si no se envía, la reserva conserva la marca que tenía.\n- **Reglas 3 y 4:** solo servicios activos (422 `servicio_id`) y con precio vigente en la fecha de la cita\n  (422 `precio`); el precio queda **congelado** en `detalle_reserva.precio_aplicado`.\n- **Horario pasado:** se tolera registrar una cita que empezó hace hasta **30 minutos** (clientes por orden de\n  llegada); más atrás responde 422 `horario` \"El horario seleccionado ya pasó…\".\n- **Profesional activo:** 422 `personal_id` si está inactivo.\n- **Domicilio (HU-14):** `a_domicilio = true` exige `direccion_domicilio`. Respeta el mismo horario que el salón.\n- **Descuento (HU-22):** debe estar activo y vigente en la fecha de la cita (422 `descuento_id`).\n- Las respuestas incluyen `subtotal`, `monto_descuento`, `total`, `pagado` y `saldo` (calculados, en guaraníes) y\n  las relaciones `cliente`, `personal`, `detalles.servicio`, `descuento` y `pagos`.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "HU-03 / HU-04 / HU-14. Registra la reserva con sus líneas de servicio y precios congelados.\n\n**Reglas de negocio** (`ReservaService`):\n\n- **Agenda propia:** un profesional solo ve y opera su agenda. Sobre una reserva ajena responde **403**\n  \"Esta reserva pertenece a la agenda de otro profesional.\"; no puede crear en otra agenda ni reasignar a otro profesional (403).\n- **Regla 1, sin solapamiento:** el profesional no puede tener otra reserva pendiente, confirmada o completada que\n  se cruce. Se comparan bloques `[inicio − minutos_traslado, fin + minutos_traslado]`, de la cita nueva y de las\n  existentes (422 `horario`).\n- **Regla 2, horario del salón:** las profesionales trabajan bajo demanda (sin turnos fijos). Toda cita, en el\n  salón o a domicilio, debe caber completa en el horario de atención del salón (`horarios_atencion`, franjas\n  contiguas unidas). Si el salón no abre ese día: 422 `horario` \"El salón no atiende ese día…\"; si no cabe:\n  422 `horario` \"La cita queda fuera del horario del salón…\".\n- **Fuera de horario:** con `fuera_de_horario = true` la dueña autoriza atender fuera del horario del salón (por\n  ejemplo, un sábado o a la noche). Solo se exige la jornada máxima de **06:00 a 22:00** (422 `horario`) y la\n  Regla 1. En `PUT`, si no se envía, la reserva conserva la marca que tenía.\n- **Reglas 3 y 4:** solo servicios activos (422 `servicio_id`) y con precio vigente en la fecha de la cita\n  (422 `precio`); el precio queda **congelado** en `detalle_reserva.precio_aplicado`.\n- **Horario pasado:** se tolera registrar una cita que empezó hace hasta **30 minutos** (clientes por orden de\n  llegada); más atrás responde 422 `horario` \"El horario seleccionado ya pasó…\".\n- **Profesional activo:** 422 `personal_id` si está inactivo.\n- **Domicilio (HU-14):** `a_domicilio = true` exige `direccion_domicilio`. `minutos_traslado` (0–240) es el viaje\n  antes y después de la cita: ocupa la agenda de la profesional (Regla 1). Solo aplica a domicilio: en el salón se\n  guarda 0 (CHECK `reservas_traslado_solo_domicilio`). La cita en sí respeta el horario del salón; el viaje puede\n  quedar fuera de él (por ejemplo, salir 07:30 para una cita a las 08:00).\n- **Descuento (HU-22):** debe estar activo y vigente en la fecha de la cita (422 `descuento_id`).\n- Las respuestas incluyen `subtotal`, `monto_descuento`, `total`, `pagado` y `saldo` (calculados, en guaraníes) y\n  las relaciones `cliente`, `personal`, `detalles.servicio`, `descuento` y `pagos`.\n\n**Permiso:** `puede_crear_reservas`; además `puede_reservar_fuera_de_horario` si se envía `fuera_de_horario = true`.\n\n**Acceso:** `admin` o `profesional`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -3189,6 +3228,7 @@
                     "descuento_id": 1,
                     "a_domicilio": false,
                     "direccion_domicilio": null,
+                    "minutos_traslado": 0,
                     "fuera_de_horario": false,
                     "created_at": "2026-10-16T12:00:00.000000Z",
                     "updated_at": "2026-10-16T12:00:00.000000Z",
@@ -3262,7 +3302,7 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "description": "Rol sin permiso, o un profesional intenta agendar en otra agenda",
+            "description": "Rol sin permiso, o un profesional intenta agendar en otra agenda, o la administración no habilitó el permiso necesario",
             "content": {
               "application/json": {
                 "schema": {
@@ -3330,6 +3370,7 @@
                     "descuento_id": 1,
                     "a_domicilio": false,
                     "direccion_domicilio": null,
+                    "minutos_traslado": 0,
                     "fuera_de_horario": false,
                     "created_at": "2026-10-16T12:00:00.000000Z",
                     "updated_at": "2026-10-16T12:00:00.000000Z",
@@ -3430,8 +3471,8 @@
         "tags": [
           "Reservas"
         ],
-        "summary": "Actualizar / cambiar estado de reserva",
-        "description": "HU-04 / HU-12 / HU-13. Campos opcionales. Si cambian fecha, horas, profesional o datos de domicilio, se revalidan\ntodas las reglas (excluyendo la propia reserva del solapamiento).\n\n**Estados:** `pendiente → confirmada | completada | no_asistio | cancelada`; `confirmada → completada | no_asistio |\ncancelada`. `completada` y `no_asistio` solo después de la hora de inicio. Una reserva completada, cancelada o\nno_asistio ya no se modifica (422 `estado`). Pasar a `cancelada` por PUT sigue las reglas de `DELETE`.\n\n**Al pasar a `completada`** se emite `ReservaCompletada`: se registra la visita en el historial del cliente\n(`fecha_realizada` = hoy, con las `notas` enviadas, máx. 2000) y se **descuentan del inventario** los insumos\nconsumidos (un movimiento de salida \"Consumo en reserva #ID\" por insumo, sin dejar la existencia negativa).\n\nUn profesional no puede reasignar la reserva a otra persona (403 \"Solo la administración puede reasignar una\nreserva a otro profesional.\").\n\n**Reglas de negocio** (`ReservaService`):\n\n- **Agenda propia:** un profesional solo ve y opera su agenda. Sobre una reserva ajena responde **403**\n  \"Esta reserva pertenece a la agenda de otro profesional.\"; no puede crear en otra agenda ni reasignar a otro profesional (403).\n- **Regla 1, sin solapamiento:** el profesional no puede tener otra reserva pendiente, confirmada o completada que\n  se cruce. Cada cita ocupa exactamente `[hora_inicio, hora_fin]` (no hay tiempo de traslado) (422 `horario`).\n- **Regla 2, horario del salón:** las profesionales trabajan bajo demanda (sin turnos fijos). Toda cita, en el\n  salón o a domicilio, debe caber completa en el horario de atención del salón (`horarios_atencion`, franjas\n  contiguas unidas). Si el salón no abre ese día: 422 `horario` \"El salón no atiende ese día…\"; si no cabe:\n  422 `horario` \"La cita queda fuera del horario del salón…\".\n- **Fuera de horario:** con `fuera_de_horario = true` la dueña autoriza atender fuera del horario del salón (por\n  ejemplo, un sábado o a la noche). Solo se exige la jornada máxima de **06:00 a 22:00** (422 `horario`) y la\n  Regla 1. En `PUT`, si no se envía, la reserva conserva la marca que tenía.\n- **Reglas 3 y 4:** solo servicios activos (422 `servicio_id`) y con precio vigente en la fecha de la cita\n  (422 `precio`); el precio queda **congelado** en `detalle_reserva.precio_aplicado`.\n- **Horario pasado:** se tolera registrar una cita que empezó hace hasta **30 minutos** (clientes por orden de\n  llegada); más atrás responde 422 `horario` \"El horario seleccionado ya pasó…\".\n- **Profesional activo:** 422 `personal_id` si está inactivo.\n- **Domicilio (HU-14):** `a_domicilio = true` exige `direccion_domicilio`. Respeta el mismo horario que el salón.\n- **Descuento (HU-22):** debe estar activo y vigente en la fecha de la cita (422 `descuento_id`).\n- Las respuestas incluyen `subtotal`, `monto_descuento`, `total`, `pagado` y `saldo` (calculados, en guaraníes) y\n  las relaciones `cliente`, `personal`, `detalles.servicio`, `descuento` y `pagos`.\n\n**Acceso:** `admin` o `profesional`.",
+        "summary": "Modificar una reserva",
+        "description": "HU-04 / HU-12 / HU-13. **Modifica** la reserva: todos los campos son opcionales y solo cambia lo que se envía.\nSi cambian fecha, horas, profesional, domicilio, traslado o `fuera_de_horario`, se revalidan las reglas (excluyendo\nla propia reserva del solapamiento). Si cambian los servicios, el front debe enviar también la nueva `hora_fin`.\n\n**Servicios:** `servicios` (lista de ids, mínimo uno, sin repetidos) **reemplaza** las líneas de la reserva. Los\nservicios que ya estaban conservan su precio congelado y su cantidad (Regla 4); los nuevos toman el precio vigente a\nla fecha de la cita (Reglas 3 y 4: 422 `servicio_id` si está inactivo, 422 `precio` si no tiene precio); los que no\nvienen se quitan. Si lo ya pagado supera el nuevo total responde 422 `servicios` y no se cambia nada.\n\n**Estados:** `pendiente → confirmada | completada | no_asistio | cancelada`; `confirmada → completada | no_asistio |\ncancelada`. `completada` y `no_asistio` solo después de la hora de inicio. Una reserva completada, cancelada o\nno_asistio ya no se modifica (422 `estado`). Pasar a `cancelada` por PUT sigue las reglas de `DELETE`.\n\n**Al pasar a `completada`** se emite `ReservaCompletada`: se registra la visita en el historial del cliente\n(`fecha_realizada` = hoy, con las `notas` enviadas, máx. 2000).\n\nUn profesional no puede reasignar la reserva a otra persona (403 \"Solo la administración puede reasignar una\nreserva a otro profesional.\").\n\n**Reglas de negocio** (`ReservaService`):\n\n- **Agenda propia:** un profesional solo ve y opera su agenda. Sobre una reserva ajena responde **403**\n  \"Esta reserva pertenece a la agenda de otro profesional.\"; no puede crear en otra agenda ni reasignar a otro profesional (403).\n- **Regla 1, sin solapamiento:** el profesional no puede tener otra reserva pendiente, confirmada o completada que\n  se cruce. Se comparan bloques `[inicio − minutos_traslado, fin + minutos_traslado]`, de la cita nueva y de las\n  existentes (422 `horario`).\n- **Regla 2, horario del salón:** las profesionales trabajan bajo demanda (sin turnos fijos). Toda cita, en el\n  salón o a domicilio, debe caber completa en el horario de atención del salón (`horarios_atencion`, franjas\n  contiguas unidas). Si el salón no abre ese día: 422 `horario` \"El salón no atiende ese día…\"; si no cabe:\n  422 `horario` \"La cita queda fuera del horario del salón…\".\n- **Fuera de horario:** con `fuera_de_horario = true` la dueña autoriza atender fuera del horario del salón (por\n  ejemplo, un sábado o a la noche). Solo se exige la jornada máxima de **06:00 a 22:00** (422 `horario`) y la\n  Regla 1. En `PUT`, si no se envía, la reserva conserva la marca que tenía.\n- **Reglas 3 y 4:** solo servicios activos (422 `servicio_id`) y con precio vigente en la fecha de la cita\n  (422 `precio`); el precio queda **congelado** en `detalle_reserva.precio_aplicado`.\n- **Horario pasado:** se tolera registrar una cita que empezó hace hasta **30 minutos** (clientes por orden de\n  llegada); más atrás responde 422 `horario` \"El horario seleccionado ya pasó…\".\n- **Profesional activo:** 422 `personal_id` si está inactivo.\n- **Domicilio (HU-14):** `a_domicilio = true` exige `direccion_domicilio`. `minutos_traslado` (0–240) es el viaje\n  antes y después de la cita: ocupa la agenda de la profesional (Regla 1). Solo aplica a domicilio: en el salón se\n  guarda 0 (CHECK `reservas_traslado_solo_domicilio`). La cita en sí respeta el horario del salón; el viaje puede\n  quedar fuera de él (por ejemplo, salir 07:30 para una cita a las 08:00).\n- **Descuento (HU-22):** debe estar activo y vigente en la fecha de la cita (422 `descuento_id`).\n- Las respuestas incluyen `subtotal`, `monto_descuento`, `total`, `pagado` y `saldo` (calculados, en guaraníes) y\n  las relaciones `cliente`, `personal`, `detalles.servicio`, `descuento` y `pagos`.\n\n**Permiso:** depende de lo que cambia: un `estado` distinto pide `puede_cambiar_estado`; fecha, horas, cliente,\ndomicilio, traslado, servicios, descuento o `fuera_de_horario` piden `puede_crear_reservas`; marcar `fuera_de_horario = true` en una\nreserva que no lo tenía pide además `puede_reservar_fuera_de_horario`. Las `notas` no piden permiso propio.\n\n**Acceso:** `admin` o `profesional`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -3474,7 +3515,28 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/ForbiddenAgenda"
+            "description": "Rol sin permiso, o la reserva pertenece a la agenda de otro profesional, o la administración no habilitó el permiso necesario",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "agenda_ajena": {
+                    "summary": "Reserva de otra agenda",
+                    "value": {
+                      "message": "Esta reserva pertenece a la agenda de otro profesional."
+                    }
+                  },
+                  "sin_rol": {
+                    "summary": "Rol no permitido",
+                    "value": {
+                      "message": "No tienes permiso para realizar esta acción."
+                    }
+                  }
+                }
+              }
+            }
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -3504,7 +3566,7 @@
           "Reservas"
         ],
         "summary": "Cancelar reserva",
-        "description": "HU-12. Cancelación **lógica** (estado `cancelada`). No se cancela una reserva completada, ya cancelada, registrada\ncomo no asistida ni una cuya hora de inicio ya pasó (422 `estado`). La respuesta trae la reserva sin relaciones\nprecargadas (los montos calculados sí se incluyen).\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "HU-12. Cancelación **lógica** (estado `cancelada`). No se cancela una reserva completada, ya cancelada, registrada\ncomo no asistida ni una cuya hora de inicio ya pasó (422 `estado`). La respuesta trae la reserva sin relaciones\nprecargadas (los montos calculados sí se incluyen).\n\n**Permiso:** `puede_cambiar_estado`.\n\n**Acceso:** `admin` o `profesional`.",
         "responses": {
           "200": {
             "description": "Reserva cancelada",
@@ -3533,7 +3595,28 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/ForbiddenAgenda"
+            "description": "Rol sin permiso, o la reserva pertenece a la agenda de otro profesional, o la administración no habilitó el permiso necesario",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "agenda_ajena": {
+                    "summary": "Reserva de otra agenda",
+                    "value": {
+                      "message": "Esta reserva pertenece a la agenda de otro profesional."
+                    }
+                  },
+                  "sin_rol": {
+                    "summary": "Rol no permitido",
+                    "value": {
+                      "message": "No tienes permiso para realizar esta acción."
+                    }
+                  }
+                }
+              }
+            }
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -3565,7 +3648,7 @@
           "Reservas"
         ],
         "summary": "Agregar servicio en el momento",
-        "description": "Suma una línea a una reserva activa (pendiente o confirmada) con el precio vigente a la fecha de la reserva y\n`agregado_en_el_momento = true`. Se emite `DetalleReservaCreado` (precarga del consumo estándar de insumos).\n422 `estado` si la reserva está cancelada, completada o no_asistio; 422 `servicio_id` si el servicio está inactivo.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "Suma una línea a una reserva activa (pendiente o confirmada) con el precio vigente a la fecha de la reserva y\n`agregado_en_el_momento = true`.\n422 `estado` si la reserva está cancelada, completada o no_asistio; 422 `servicio_id` si el servicio está inactivo.\n\n**Permiso:** `puede_crear_reservas`.\n\n**Acceso:** `admin` o `profesional`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -3641,7 +3724,28 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/ForbiddenAgenda"
+            "description": "Rol sin permiso, o la reserva pertenece a la agenda de otro profesional, o la administración no habilitó el permiso necesario",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                },
+                "examples": {
+                  "agenda_ajena": {
+                    "summary": "Reserva de otra agenda",
+                    "value": {
+                      "message": "Esta reserva pertenece a la agenda de otro profesional."
+                    }
+                  },
+                  "sin_rol": {
+                    "summary": "Rol no permitido",
+                    "value": {
+                      "message": "No tienes permiso para realizar esta acción."
+                    }
+                  }
+                }
+              }
+            }
           },
           "404": {
             "$ref": "#/components/responses/NotFound"
@@ -3678,7 +3782,7 @@
           "Disponibilidad"
         ],
         "summary": "Horarios libres de un profesional",
-        "description": "HU-02. Recorre el **horario del salón** en esa fecha (franjas contiguas unidas) cada `intervalo` minutos y marca\ncada hora de inicio posible para una cita de la duración pedida:\n\n- `null` (disponible), `pasado` (más de 30 minutos atrás) u `ocupado` (choca con otra reserva activa del profesional).\n\nCon `fuera_de_horario=true` recorre la jornada máxima de **06:00 a 22:00**, aunque el salón no abra ese día.\n\nLa duración se indica con `duracion_minutos` o se calcula sumando la de los `servicios[]` elegidos (uno de los dos\nes obligatorio). Si el salón no abre ese día (y no es fuera de horario) devuelve `franjas` y `horarios` vacíos.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "HU-02. Recorre el **horario del salón** en esa fecha (franjas contiguas unidas) cada `intervalo` minutos y marca\ncada hora de inicio posible para una cita de la duración pedida:\n\n- `null` (disponible), `pasado` (más de 30 minutos atrás) u `ocupado` (choca con otra reserva activa del profesional\n  o su traslado, comparando `[inicio − traslado, fin + traslado]`).\n\nCon `fuera_de_horario=true` recorre la jornada máxima de **06:00 a 22:00**, aunque el salón no abra ese día.\n\nLa duración se indica con `duracion_minutos` o se calcula sumando la de los `servicios[]` elegidos (uno de los dos\nes obligatorio). `minutos_traslado` solo se considera si `a_domicilio` es verdadero. Si el salón no abre ese día (y no es fuera de horario) devuelve `franjas` y `horarios` vacíos.\n\n**Permiso:** `puede_crear_reservas`.\n\n**Acceso:** `admin` o `profesional`.",
         "parameters": [
           {
             "name": "personal_id",
@@ -3735,6 +3839,37 @@
             "schema": {
               "type": "boolean",
               "default": false
+            }
+          },
+          {
+            "name": "a_domicilio",
+            "in": "query",
+            "required": false,
+            "description": "Cita a domicilio: habilita el traslado.",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "name": "minutos_traslado",
+            "in": "query",
+            "required": false,
+            "description": "Viaje antes y después de la cita (solo a domicilio).",
+            "schema": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 240,
+              "default": 0
+            }
+          },
+          {
+            "name": "excluir_reserva_id",
+            "in": "query",
+            "required": false,
+            "description": "Al modificar una reserva: su propio horario no cuenta como ocupado.",
+            "schema": {
+              "type": "integer"
             }
           },
           {
@@ -3811,7 +3946,7 @@
             "$ref": "#/components/responses/Unauthenticated"
           },
           "403": {
-            "$ref": "#/components/responses/Forbidden"
+            "$ref": "#/components/responses/SinPermiso"
           },
           "422": {
             "description": "Error de validación",
@@ -4873,1064 +5008,6 @@
         }
       }
     },
-    "/api/recursos": {
-      "get": {
-        "tags": [
-          "Inventario"
-        ],
-        "summary": "Listar insumos",
-        "description": "HU-15. Insumos por nombre con su existencia y si están bajo el mínimo.\n\n**Acceso:** `admin` o `profesional`.",
-        "parameters": [
-          {
-            "name": "bajo_minimo",
-            "in": "query",
-            "required": false,
-            "description": "Con `1`/`true`: solo existencia ≤ mínimo.",
-            "schema": {
-              "type": "boolean",
-              "default": false
-            }
-          },
-          {
-            "name": "buscar",
-            "in": "query",
-            "required": false,
-            "description": "Búsqueda parcial en el nombre (sin distinguir mayúsculas).",
-            "schema": {
-              "type": "string"
-            },
-            "example": "tinte"
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Insumos",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/StockRecurso"
-                      }
-                    }
-                  },
-                  "required": [
-                    "data"
-                  ]
-                },
-                "example": {
-                  "data": [
-                    {
-                      "id": 1,
-                      "nombre": "Tinte en crema",
-                      "descripcion": null,
-                      "unidad_medida": "ml",
-                      "cantidad_actual": "1200.00",
-                      "stock_minimo": "300.00",
-                      "created_at": "2026-10-15T12:00:00.000000Z",
-                      "updated_at": "2026-10-15T12:00:00.000000Z",
-                      "bajo_minimo": false
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Inventario"
-        ],
-        "summary": "Registrar insumo",
-        "description": "HU-15. Si `cantidad_actual` > 0 se registra un movimiento de entrada \"Existencia inicial\".\n\n**Acceso:** solo `admin`.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "nombre": {
-                    "type": "string",
-                    "maxLength": 255,
-                    "example": "Tinte en crema"
-                  },
-                  "descripcion": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "unidad_medida": {
-                    "type": "string",
-                    "maxLength": 50,
-                    "nullable": true,
-                    "example": "ml"
-                  },
-                  "cantidad_actual": {
-                    "type": "number",
-                    "minimum": 0,
-                    "default": 0,
-                    "example": 1200
-                  },
-                  "stock_minimo": {
-                    "type": "number",
-                    "minimum": 0,
-                    "default": 0,
-                    "example": 300
-                  }
-                },
-                "required": [
-                  "nombre"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Insumo registrado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Insumo registrado exitosamente."
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/StockRecurso"
-                    }
-                  },
-                  "required": [
-                    "message",
-                    "data"
-                  ]
-                },
-                "example": {
-                  "message": "Insumo registrado exitosamente.",
-                  "data": {
-                    "id": 1,
-                    "nombre": "Tinte en crema",
-                    "descripcion": null,
-                    "unidad_medida": "ml",
-                    "cantidad_actual": "1200.00",
-                    "stock_minimo": "300.00",
-                    "created_at": "2026-10-15T12:00:00.000000Z",
-                    "updated_at": "2026-10-15T12:00:00.000000Z",
-                    "bajo_minimo": false
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "422": {
-            "description": "Error de validación",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationError"
-                },
-                "example": {
-                  "message": "El stock mínimo no puede ser negativo.",
-                  "errors": {
-                    "stock_minimo": [
-                      "El stock mínimo no puede ser negativo."
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/recursos/{recurso}": {
-      "get": {
-        "tags": [
-          "Inventario"
-        ],
-        "summary": "Detalle de insumo",
-        "description": "HU-15. Insumo con los servicios que lo usan (cantidad estándar en `pivot`) y sus últimos 10 movimientos.\n\n**Acceso:** solo `admin`.",
-        "responses": {
-          "200": {
-            "description": "Insumo",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "allOf": [
-                        {
-                          "$ref": "#/components/schemas/StockRecurso"
-                        },
-                        {
-                          "type": "object",
-                          "properties": {
-                            "servicios": {
-                              "type": "array",
-                              "items": {
-                                "type": "object",
-                                "properties": {
-                                  "id": {
-                                    "type": "integer"
-                                  },
-                                  "nombre": {
-                                    "type": "string"
-                                  },
-                                  "pivot": {
-                                    "type": "object",
-                                    "properties": {
-                                      "recurso_id": {
-                                        "type": "integer"
-                                      },
-                                      "servicio_id": {
-                                        "type": "integer"
-                                      },
-                                      "cantidad_utilizada": {
-                                        "type": "string",
-                                        "pattern": "^-?\\d+(\\.\\d{2})$"
-                                      }
-                                    }
-                                  }
-                                }
-                              }
-                            },
-                            "movimientos": {
-                              "type": "array",
-                              "items": {
-                                "$ref": "#/components/schemas/MovimientoStock"
-                              }
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  "required": [
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/recurso"
-        }
-      ],
-      "put": {
-        "tags": [
-          "Inventario"
-        ],
-        "summary": "Actualizar insumo",
-        "description": "HU-15. La existencia no se edita aquí: enviar `cantidad_actual` responde 422 (usar movimientos de stock).\n\n**Acceso:** solo `admin`.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "nombre": {
-                    "type": "string",
-                    "maxLength": 255
-                  },
-                  "descripcion": {
-                    "type": "string",
-                    "nullable": true
-                  },
-                  "unidad_medida": {
-                    "type": "string",
-                    "maxLength": 50,
-                    "nullable": true
-                  },
-                  "stock_minimo": {
-                    "type": "number",
-                    "minimum": 0
-                  }
-                }
-              },
-              "example": {
-                "stock_minimo": 400
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Insumo actualizado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Insumo actualizado exitosamente."
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/StockRecurso"
-                    }
-                  },
-                  "required": [
-                    "message",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "422": {
-            "description": "Error de validación",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationError"
-                },
-                "example": {
-                  "message": "La existencia no se edita directamente: registra una entrada o una salida de stock.",
-                  "errors": {
-                    "cantidad_actual": [
-                      "La existencia no se edita directamente: registra una entrada o una salida de stock."
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "delete": {
-        "tags": [
-          "Inventario"
-        ],
-        "summary": "Eliminar insumo",
-        "description": "HU-15. Sus movimientos y su presencia en plantillas de servicio se borran en cascada. 422 en `recurso` si ya se usó en atenciones registradas.\n\n**Acceso:** solo `admin`.",
-        "responses": {
-          "200": {
-            "description": "Insumo eliminado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Insumo eliminado exitosamente."
-                    }
-                  },
-                  "required": [
-                    "message"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "422": {
-            "description": "Error de validación",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationError"
-                },
-                "example": {
-                  "message": "El insumo ya se usó en atenciones registradas y no se puede eliminar.",
-                  "errors": {
-                    "recurso": [
-                      "El insumo ya se usó en atenciones registradas y no se puede eliminar."
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/movimientos-stock": {
-      "get": {
-        "tags": [
-          "Inventario"
-        ],
-        "summary": "Listar movimientos de stock (paginado)",
-        "description": "HU-16. Entradas y salidas con su insumo, por fecha descendente.\n\n**Acceso:** solo `admin`.",
-        "parameters": [
-          {
-            "name": "recurso_id",
-            "in": "query",
-            "required": false,
-            "description": "Filtra por insumo.",
-            "schema": {
-              "type": "integer"
-            }
-          },
-          {
-            "name": "tipo",
-            "in": "query",
-            "required": false,
-            "description": "Filtra por tipo.",
-            "schema": {
-              "type": "string",
-              "enum": [
-                "entrada",
-                "salida"
-              ]
-            }
-          },
-          {
-            "name": "fecha_desde",
-            "in": "query",
-            "required": false,
-            "description": "Desde este día.",
-            "schema": {
-              "type": "string",
-              "format": "date"
-            }
-          },
-          {
-            "name": "fecha_hasta",
-            "in": "query",
-            "required": false,
-            "description": "Hasta este día; no anterior a `fecha_desde`.",
-            "schema": {
-              "type": "string",
-              "format": "date"
-            }
-          },
-          {
-            "name": "per_page",
-            "in": "query",
-            "required": false,
-            "description": "Movimientos por página.",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "maximum": 100,
-              "default": 15
-            }
-          },
-          {
-            "name": "page",
-            "in": "query",
-            "required": false,
-            "description": "Número de página.",
-            "schema": {
-              "type": "integer",
-              "minimum": 1,
-              "default": 1
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "Página de movimientos",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "allOf": [
-                    {
-                      "$ref": "#/components/schemas/Paginador"
-                    },
-                    {
-                      "type": "object",
-                      "properties": {
-                        "data": {
-                          "type": "array",
-                          "items": {
-                            "$ref": "#/components/schemas/MovimientoStock"
-                          }
-                        }
-                      }
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "422": {
-            "description": "Error de validación",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationError"
-                },
-                "example": {
-                  "message": "El tipo de movimiento debe ser entrada o salida.",
-                  "errors": {
-                    "tipo": [
-                      "El tipo de movimiento debe ser entrada o salida."
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "post": {
-        "tags": [
-          "Inventario"
-        ],
-        "summary": "Registrar entrada o salida",
-        "description": "HU-16. Actualiza la existencia del insumo. Una salida no puede superar la existencia (422 `cantidad`).\n\n**Acceso:** solo `admin`.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "recurso_id": {
-                    "type": "integer",
-                    "example": 1
-                  },
-                  "tipo": {
-                    "type": "string",
-                    "enum": [
-                      "entrada",
-                      "salida"
-                    ]
-                  },
-                  "cantidad": {
-                    "type": "number",
-                    "exclusiveMinimum": true,
-                    "minimum": 0,
-                    "example": 500
-                  },
-                  "motivo": {
-                    "type": "string",
-                    "maxLength": 255,
-                    "nullable": true,
-                    "example": "Compra al proveedor"
-                  },
-                  "fecha": {
-                    "type": "string",
-                    "description": "No futura; por defecto, ahora.",
-                    "format": "date-time",
-                    "nullable": true
-                  }
-                },
-                "required": [
-                  "recurso_id",
-                  "tipo",
-                  "cantidad"
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "201": {
-            "description": "Movimiento registrado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Entrada de stock registrada exitosamente."
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/MovimientoStock"
-                    }
-                  },
-                  "required": [
-                    "message",
-                    "data"
-                  ]
-                },
-                "example": {
-                  "message": "Entrada de stock registrada exitosamente.",
-                  "data": {
-                    "id": 31,
-                    "recurso_id": 1,
-                    "tipo": "entrada",
-                    "cantidad": "500.00",
-                    "fecha": "2026-10-16T13:00:00.000000Z",
-                    "motivo": "Compra al proveedor",
-                    "created_at": "2026-10-16T13:00:00.000000Z",
-                    "updated_at": "2026-10-16T13:00:00.000000Z",
-                    "recurso": {
-                      "id": 1,
-                      "nombre": "Tinte en crema",
-                      "descripcion": null,
-                      "unidad_medida": "ml",
-                      "cantidad_actual": "1700.00",
-                      "stock_minimo": "300.00",
-                      "created_at": "2026-10-15T12:00:00.000000Z",
-                      "updated_at": "2026-10-15T12:00:00.000000Z",
-                      "bajo_minimo": false
-                    }
-                  }
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "422": {
-            "description": "Error de validación",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationError"
-                },
-                "example": {
-                  "message": "No hay suficiente existencia: quedan 1.299,5 ml.",
-                  "errors": {
-                    "cantidad": [
-                      "No hay suficiente existencia: quedan 1.299,5 ml."
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/servicios/{servicio}/recursos": {
-      "get": {
-        "tags": [
-          "Inventario"
-        ],
-        "summary": "Consumo estándar de un servicio",
-        "description": "HU-17. Plantilla de insumos que consume una unidad del servicio, por nombre del insumo.\n\n**Acceso:** `admin` o `profesional`.",
-        "responses": {
-          "200": {
-            "description": "Plantilla",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/ConsumoItem"
-                      }
-                    }
-                  },
-                  "required": [
-                    "data"
-                  ]
-                },
-                "example": {
-                  "data": [
-                    {
-                      "recurso_id": 5,
-                      "nombre": "Champú profesional",
-                      "unidad_medida": "ml",
-                      "cantidad_utilizada": 20
-                    },
-                    {
-                      "recurso_id": 2,
-                      "nombre": "Oxidante 20 vol.",
-                      "unidad_medida": "ml",
-                      "cantidad_utilizada": 90
-                    },
-                    {
-                      "recurso_id": 1,
-                      "nombre": "Tinte en crema",
-                      "unidad_medida": "ml",
-                      "cantidad_utilizada": 60
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/servicio"
-        }
-      ],
-      "put": {
-        "tags": [
-          "Inventario"
-        ],
-        "summary": "Definir consumo estándar de un servicio",
-        "description": "HU-17. Reemplaza la plantilla (sync). Lista obligatoria, puede ir vacía; insumos sin repetir y cantidad > 0.\n\n**Acceso:** solo `admin`.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "recursos": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "recurso_id": {
-                          "type": "integer"
-                        },
-                        "cantidad_utilizada": {
-                          "type": "number",
-                          "exclusiveMinimum": true,
-                          "minimum": 0
-                        }
-                      },
-                      "required": [
-                        "recurso_id",
-                        "cantidad_utilizada"
-                      ]
-                    }
-                  }
-                },
-                "required": [
-                  "recursos"
-                ]
-              },
-              "example": {
-                "recursos": [
-                  {
-                    "recurso_id": 1,
-                    "cantidad_utilizada": 60
-                  },
-                  {
-                    "recurso_id": 2,
-                    "cantidad_utilizada": 90
-                  },
-                  {
-                    "recurso_id": 5,
-                    "cantidad_utilizada": 20
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Plantilla guardada",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Consumo estándar del servicio actualizado exitosamente."
-                    },
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/ConsumoItem"
-                      }
-                    }
-                  },
-                  "required": [
-                    "message",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "422": {
-            "description": "Error de validación",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationError"
-                },
-                "example": {
-                  "message": "Un insumo no puede repetirse en la plantilla del servicio.",
-                  "errors": {
-                    "recursos.1.recurso_id": [
-                      "Un insumo no puede repetirse en la plantilla del servicio."
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/api/reservas/{reserva}/consumos": {
-      "get": {
-        "tags": [
-          "Inventario"
-        ],
-        "summary": "Consumo de insumos de una reserva",
-        "description": "HU-18. Por cada línea de la reserva, los insumos consumidos (precargados con la plantilla y ajustables). Un profesional solo consulta su propia agenda.\n\n**Acceso:** `admin` o `profesional`.",
-        "responses": {
-          "200": {
-            "description": "Consumos",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "data": {
-                      "type": "array",
-                      "items": {
-                        "$ref": "#/components/schemas/LineaConsumo"
-                      }
-                    }
-                  },
-                  "required": [
-                    "data"
-                  ]
-                },
-                "example": {
-                  "data": [
-                    {
-                      "detalle_reserva_id": 77,
-                      "servicio": {
-                        "id": 10,
-                        "nombre": "Balayage"
-                      },
-                      "cantidad": 1,
-                      "consumos": [
-                        {
-                          "recurso_id": 5,
-                          "nombre": "Champú profesional",
-                          "unidad_medida": "ml",
-                          "cantidad_utilizada": 20
-                        },
-                        {
-                          "recurso_id": 2,
-                          "nombre": "Oxidante 20 vol.",
-                          "unidad_medida": "ml",
-                          "cantidad_utilizada": 120
-                        },
-                        {
-                          "recurso_id": 3,
-                          "nombre": "Polvo decolorante",
-                          "unidad_medida": "g",
-                          "cantidad_utilizada": 50
-                        },
-                        {
-                          "recurso_id": 1,
-                          "nombre": "Tinte en crema",
-                          "unidad_medida": "ml",
-                          "cantidad_utilizada": 30
-                        }
-                      ]
-                    }
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/ForbiddenAgenda"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          }
-        }
-      },
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/reserva"
-        }
-      ]
-    },
-    "/api/detalles-reserva/{detalle}/consumos": {
-      "put": {
-        "tags": [
-          "Inventario"
-        ],
-        "summary": "Ajustar consumo real de una línea",
-        "description": "HU-18. Reemplaza los consumos de la línea de detalle con lo realmente usado (cantidad ≥ 0; insumos sin repetir).\nNo se modifica si la reserva está completada, cancelada o no_asistio (422 `estado`). El descuento del stock ocurre\nal pasar la reserva a `completada`. Un profesional solo opera su propia agenda.\n\n**Acceso:** `admin` o `profesional`.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "consumos": {
-                    "type": "array",
-                    "items": {
-                      "type": "object",
-                      "properties": {
-                        "recurso_id": {
-                          "type": "integer"
-                        },
-                        "cantidad_utilizada": {
-                          "type": "number",
-                          "minimum": 0
-                        }
-                      },
-                      "required": [
-                        "recurso_id",
-                        "cantidad_utilizada"
-                      ]
-                    }
-                  }
-                },
-                "required": [
-                  "consumos"
-                ]
-              },
-              "example": {
-                "consumos": [
-                  {
-                    "recurso_id": 3,
-                    "cantidad_utilizada": 60
-                  },
-                  {
-                    "recurso_id": 2,
-                    "cantidad_utilizada": 140
-                  },
-                  {
-                    "recurso_id": 1,
-                    "cantidad_utilizada": 30
-                  },
-                  {
-                    "recurso_id": 5,
-                    "cantidad_utilizada": 25
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Consumo actualizado",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Consumo de insumos actualizado exitosamente."
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/LineaConsumo"
-                    }
-                  },
-                  "required": [
-                    "message",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/ForbiddenAgenda"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "422": {
-            "description": "Error de validación",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationError"
-                },
-                "example": {
-                  "message": "La reserva está completada: su consumo de insumos ya no se puede modificar.",
-                  "errors": {
-                    "estado": [
-                      "La reserva está completada: su consumo de insumos ya no se puede modificar."
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/detalle"
-        }
-      ]
-    },
     "/api/reportes/resumen": {
       "get": {
         "tags": [
@@ -6394,103 +5471,166 @@
         }
       }
     },
-    "/api/reportes/stock": {
+    "/api/configuracion/permisos": {
       "get": {
         "tags": [
-          "Reportes"
+          "Configuración"
         ],
-        "summary": "Existencias y consumo de insumos",
-        "description": "HU-24. Existencia actual de cada insumo con lo que entró y salió en el período (bajo mínimo primero).\n\n**Acceso:** solo `admin`.",
-        "parameters": [
-          {
-            "name": "fecha_desde",
-            "in": "query",
-            "required": false,
-            "description": "Inicio del período. Por defecto, el primer día del mes de `fecha_hasta`.",
-            "schema": {
-              "type": "string",
-              "format": "date"
-            },
-            "example": "2026-10-01"
-          },
-          {
-            "name": "fecha_hasta",
-            "in": "query",
-            "required": false,
-            "description": "Fin del período. Por defecto, hoy. Período máximo: 366 días.",
-            "schema": {
-              "type": "string",
-              "format": "date"
-            },
-            "example": "2026-10-31"
-          }
-        ],
+        "summary": "Permisos del equipo",
+        "description": "Cuentas con rol `profesional` (ordenadas por nombre) con sus permisos, y el `catalogo` de permisos con\nnombre y descripción para mostrarlos en pantalla.\n\n**Acceso:** solo `admin`.",
         "responses": {
           "200": {
-            "description": "Stock",
+            "description": "Cuentas y catálogo",
             "content": {
               "application/json": {
                 "schema": {
                   "type": "object",
                   "properties": {
                     "data": {
-                      "type": "object",
-                      "properties": {
-                        "recursos": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "id": {
-                                "type": "integer"
-                              },
-                              "nombre": {
-                                "type": "string"
-                              },
-                              "unidad_medida": {
-                                "type": "string",
-                                "nullable": true
-                              },
-                              "cantidad_actual": {
-                                "type": "number"
-                              },
-                              "stock_minimo": {
-                                "type": "number"
-                              },
-                              "bajo_minimo": {
-                                "type": "boolean"
-                              },
-                              "entradas": {
-                                "type": "number"
-                              },
-                              "consumido": {
-                                "type": "number",
-                                "description": "Suma de salidas del período."
-                              }
-                            }
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CuentaConPermisos"
+                      }
+                    },
+                    "catalogo": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "clave": {
+                            "type": "string"
+                          },
+                          "nombre": {
+                            "type": "string"
+                          },
+                          "descripcion": {
+                            "type": "string"
                           }
                         }
                       }
                     }
-                  },
-                  "required": [
-                    "data"
-                  ]
+                  }
                 },
                 "example": {
-                  "data": {
-                    "recursos": [
-                      {
-                        "id": 6,
-                        "nombre": "Cera depilatoria",
-                        "unidad_medida": "g",
-                        "cantidad_actual": 380,
-                        "stock_minimo": 400,
-                        "bajo_minimo": true,
-                        "entradas": 0,
-                        "consumido": 1120
+                  "data": [
+                    {
+                      "id": 2,
+                      "name": "Carla",
+                      "email": "carla@meninacoiffure.com",
+                      "personal": {
+                        "id": 2,
+                        "nombre": "Carla",
+                        "apellido": "Estilista"
+                      },
+                      "permisos": {
+                        "puede_crear_reservas": true,
+                        "puede_cambiar_estado": true,
+                        "puede_reservar_fuera_de_horario": true,
+                        "puede_ver_clientes": true
                       }
-                    ]
+                    }
+                  ],
+                  "catalogo": [
+                    {
+                      "clave": "puede_crear_reservas",
+                      "nombre": "Crear y reprogramar reservas",
+                      "descripcion": "Agendar citas en su agenda, cambiarles fecha, hora o servicios y consultar la disponibilidad."
+                    },
+                    {
+                      "clave": "puede_cambiar_estado",
+                      "nombre": "Cambiar el estado de las citas",
+                      "descripcion": "Confirmar, completar, marcar como no asistida o cancelar sus citas."
+                    },
+                    {
+                      "clave": "puede_reservar_fuera_de_horario",
+                      "nombre": "Atender fuera del horario del salón",
+                      "descripcion": "Marcar una cita como fuera de horario (entre las 06:00 y las 22:00)."
+                    },
+                    {
+                      "clave": "puede_ver_clientes",
+                      "nombre": "Ver el expediente de las clientas",
+                      "descripcion": "Datos de contacto, preferencias, alergias e historial de visitas."
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/configuracion/permisos/{user}": {
+      "put": {
+        "tags": [
+          "Configuración"
+        ],
+        "summary": "Cambiar permisos de una profesional",
+        "description": "Habilita o quita uno o varios permisos. Solo para cuentas con rol `profesional`: la administración siempre\ntiene todos (422 en `user`). El cambio rige desde el siguiente pedido de la profesional.\n\n**Acceso:** solo `admin`.",
+        "parameters": [
+          {
+            "name": "user",
+            "in": "path",
+            "required": true,
+            "description": "Id de la cuenta (tabla users), no de la ficha de personal.",
+            "schema": {
+              "type": "integer"
+            },
+            "example": 2
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PermisosInput"
+              },
+              "example": {
+                "puede_cambiar_estado": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Permisos guardados",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string",
+                      "example": "Permisos de Carla actualizados."
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/CuentaConPermisos"
+                    }
+                  }
+                },
+                "example": {
+                  "message": "Permisos de Carla actualizados.",
+                  "data": {
+                    "id": 2,
+                    "name": "Carla",
+                    "email": "carla@meninacoiffure.com",
+                    "personal": {
+                      "id": 2,
+                      "nombre": "Carla",
+                      "apellido": "Estilista"
+                    },
+                    "permisos": {
+                      "puede_crear_reservas": true,
+                      "puede_cambiar_estado": false,
+                      "puede_reservar_fuera_de_horario": true,
+                      "puede_ver_clientes": true
+                    }
                   }
                 }
               }
@@ -6502,18 +5642,21 @@
           "403": {
             "$ref": "#/components/responses/Forbidden"
           },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
           "422": {
-            "description": "Error de validación",
+            "description": "Valor no booleano o cuenta que no es de una profesional",
             "content": {
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ValidationError"
                 },
                 "example": {
-                  "message": "El período del reporte no puede superar los 366 días.",
+                  "message": "Solo se configuran los permisos de las cuentas de profesionales.",
                   "errors": {
-                    "fecha_hasta": [
-                      "El período del reporte no puede superar los 366 días."
+                    "user": [
+                      "Solo se configuran los permisos de las cuentas de profesionales."
                     ]
                   }
                 }
@@ -6660,17 +5803,6 @@
         "in": "path",
         "required": true,
         "description": "Id del descuento.",
-        "schema": {
-          "type": "integer",
-          "minimum": 1
-        },
-        "example": 1
-      },
-      "recurso": {
-        "name": "recurso",
-        "in": "path",
-        "required": true,
-        "description": "Id del insumo.",
         "schema": {
           "type": "integer",
           "minimum": 1
@@ -7434,6 +6566,12 @@
             "type": "string",
             "nullable": true
           },
+          "minutos_traslado": {
+            "type": "integer",
+            "description": "0 en el salón; 0–240 a domicilio.",
+            "minimum": 0,
+            "maximum": 240
+          },
           "fuera_de_horario": {
             "type": "boolean",
             "default": false,
@@ -7572,6 +6710,13 @@
             "maxLength": 255,
             "nullable": true
           },
+          "minutos_traslado": {
+            "type": "integer",
+            "description": "Solo a domicilio (en el salón se guarda 0).",
+            "minimum": 0,
+            "maximum": 240,
+            "nullable": true
+          },
           "fuera_de_horario": {
             "type": "boolean",
             "default": false,
@@ -7624,6 +6769,12 @@
             "maxLength": 255,
             "nullable": true
           },
+          "minutos_traslado": {
+            "type": "integer",
+            "minimum": 0,
+            "maximum": 240,
+            "nullable": true
+          },
           "fuera_de_horario": {
             "type": "boolean",
             "default": false,
@@ -7634,6 +6785,15 @@
             "description": "Observaciones de la atención; al completar quedan en el historial del cliente.",
             "maxLength": 2000,
             "nullable": true
+          },
+          "servicios": {
+            "type": "array",
+            "minItems": 1,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer"
+            },
+            "description": "Reemplaza los servicios de la reserva. Los que ya estaban conservan su precio congelado."
           }
         }
       },
@@ -7854,136 +7014,6 @@
           }
         ]
       },
-      "StockRecurso": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "nombre": {
-            "type": "string"
-          },
-          "descripcion": {
-            "type": "string",
-            "nullable": true
-          },
-          "unidad_medida": {
-            "type": "string",
-            "nullable": true,
-            "example": "ml"
-          },
-          "cantidad_actual": {
-            "type": "string",
-            "pattern": "^-?\\d+(\\.\\d{2})$",
-            "example": "1200.00"
-          },
-          "stock_minimo": {
-            "type": "string",
-            "pattern": "^-?\\d+(\\.\\d{2})$",
-            "example": "300.00"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "bajo_minimo": {
-            "type": "boolean",
-            "description": "cantidad_actual ≤ stock_minimo."
-          }
-        }
-      },
-      "MovimientoStock": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "recurso_id": {
-            "type": "integer"
-          },
-          "tipo": {
-            "type": "string",
-            "enum": [
-              "entrada",
-              "salida"
-            ]
-          },
-          "cantidad": {
-            "type": "string",
-            "pattern": "^-?\\d+(\\.\\d{2})$"
-          },
-          "fecha": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "motivo": {
-            "type": "string",
-            "nullable": true
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "recurso": {
-            "$ref": "#/components/schemas/StockRecurso"
-          }
-        }
-      },
-      "ConsumoItem": {
-        "type": "object",
-        "properties": {
-          "recurso_id": {
-            "type": "integer"
-          },
-          "nombre": {
-            "type": "string"
-          },
-          "unidad_medida": {
-            "type": "string",
-            "nullable": true
-          },
-          "cantidad_utilizada": {
-            "type": "number"
-          }
-        }
-      },
-      "LineaConsumo": {
-        "type": "object",
-        "properties": {
-          "detalle_reserva_id": {
-            "type": "integer"
-          },
-          "servicio": {
-            "type": "object",
-            "properties": {
-              "id": {
-                "type": "integer"
-              },
-              "nombre": {
-                "type": "string"
-              }
-            },
-            "nullable": true
-          },
-          "cantidad": {
-            "type": "integer"
-          },
-          "consumos": {
-            "type": "array",
-            "items": {
-              "$ref": "#/components/schemas/ConsumoItem"
-            }
-          }
-        }
-      },
       "ReporteResumen": {
         "type": "object",
         "properties": {
@@ -8132,6 +7162,97 @@
             }
           }
         ]
+      },
+      "Permisos": {
+        "type": "object",
+        "description": "Permisos de la cuenta. La administración los tiene todos en true siempre.",
+        "properties": {
+          "puede_crear_reservas": {
+            "type": "boolean",
+            "example": true,
+            "description": "Crear y reprogramar reservas. Agendar citas en su agenda, cambiarles fecha, hora o servicios y consultar la disponibilidad."
+          },
+          "puede_cambiar_estado": {
+            "type": "boolean",
+            "example": true,
+            "description": "Cambiar el estado de las citas. Confirmar, completar, marcar como no asistida o cancelar sus citas."
+          },
+          "puede_reservar_fuera_de_horario": {
+            "type": "boolean",
+            "example": true,
+            "description": "Atender fuera del horario del salón. Marcar una cita como fuera de horario (entre las 06:00 y las 22:00)."
+          },
+          "puede_ver_clientes": {
+            "type": "boolean",
+            "example": true,
+            "description": "Ver el expediente de las clientas. Datos de contacto, preferencias, alergias e historial de visitas."
+          }
+        }
+      },
+      "PermisosInput": {
+        "type": "object",
+        "description": "Uno o varios permisos; los que no se envían quedan como estaban. Las claves desconocidas se ignoran.",
+        "properties": {
+          "puede_crear_reservas": {
+            "type": "boolean",
+            "example": true,
+            "description": "Crear y reprogramar reservas. Agendar citas en su agenda, cambiarles fecha, hora o servicios y consultar la disponibilidad."
+          },
+          "puede_cambiar_estado": {
+            "type": "boolean",
+            "example": true,
+            "description": "Cambiar el estado de las citas. Confirmar, completar, marcar como no asistida o cancelar sus citas."
+          },
+          "puede_reservar_fuera_de_horario": {
+            "type": "boolean",
+            "example": true,
+            "description": "Atender fuera del horario del salón. Marcar una cita como fuera de horario (entre las 06:00 y las 22:00)."
+          },
+          "puede_ver_clientes": {
+            "type": "boolean",
+            "example": true,
+            "description": "Ver el expediente de las clientas. Datos de contacto, preferencias, alergias e historial de visitas."
+          }
+        }
+      },
+      "CuentaConPermisos": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 2
+          },
+          "name": {
+            "type": "string",
+            "example": "Carla"
+          },
+          "email": {
+            "type": "string",
+            "format": "email",
+            "example": "carla@meninacoiffure.com"
+          },
+          "personal": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "integer",
+                "example": 2
+              },
+              "nombre": {
+                "type": "string",
+                "example": "Carla"
+              },
+              "apellido": {
+                "type": "string",
+                "example": "Estilista"
+              }
+            }
+          },
+          "permisos": {
+            "$ref": "#/components/schemas/Permisos"
+          }
+        }
       }
     },
     "responses": {
@@ -8212,6 +7333,19 @@
                   "La fecha es obligatoria."
                 ]
               }
+            }
+          }
+        }
+      },
+      "SinPermiso": {
+        "description": "La administración no habilitó este permiso para la profesional (middleware `permiso`).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            },
+            "example": {
+              "message": "La administración no te habilitó para esta acción."
             }
           }
         }

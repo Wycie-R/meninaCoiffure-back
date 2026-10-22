@@ -51,6 +51,7 @@ class AuthController extends Controller
                         'id' => $user->personal->id,
                         'nombre_completo' => $user->personal->nombre . ' ' . $user->personal->apellido,
                     ] : null,
+                    'permisos' => $user->permisos(),
                 ],
             ],
         ], 200);
@@ -95,6 +96,8 @@ class AuthController extends Controller
                 'email' => $user->email,
                 'rol' => $user->role ? $user->role->nombre : null,
                 'personal' => $user->personal,
+                // Lo que la dueña le habilitó (todo en true para la administración)
+                'permisos' => $user->permisos(),
             ],
         ]);
     }

@@ -6,12 +6,12 @@ import Modal from './Modal.vue'
 import StatusBadge from './StatusBadge.vue'
 import Dropdown from './Dropdown.vue'
 import Icono from './Icono.vue'
-import ReagendarReserva from './ReagendarReserva.vue'
+import ModificarReserva from './ModificarReserva.vue'
 import PagosReserva from './PagosReserva.vue'
 import { mensajeError, primerosErrores } from '../api'
 import { claseEntrada } from '../ui'
 import { useCatalogo } from '../catalogo'
-import { cambiarEstadoReserva, cancelarReserva, agregarServicioReserva, reagendarReserva, useReservas } from '../reservas'
+import { cambiarEstadoReserva, cancelarReserva, agregarServicioReserva, modificarReserva, useReservas } from '../reservas'
 import {
     aDomicilio,
     accionesDe,
@@ -24,8 +24,10 @@ import {
     notaAcciones,
     sinCerrar,
     fueraDeHorario,
+    textoTraslado,
 } from '../agenda'
 import { capitalizar, duracion, fechaLarga, guaranies, hora } from '../formato'
+import { usePermisos } from '../auth'
 
 const props = defineProps({
     reservaId: {
@@ -42,6 +44,7 @@ const emit = defineEmits(['cerrar', 'aviso'])
 
 const { reservas } = useReservas()
 const { servicios, cargarCatalogo } = useCatalogo()
+const { puedeCrearReservas, puedeCambiarEstado } = usePermisos()
 
 const reserva = computed(() =>
     props.reservaId === null ? null : reservas.value.find((r) => r.id === props.reservaId) ?? null
@@ -58,14 +61,25 @@ watch(
 )
 
 const abierto = computed(() => props.reservaId !== null && mostrada.value !== null)
-const acciones = computed(() => (mostrada.value ? accionesDe(mostrada.value, props.ahora) : []))
+// Lo que la reserva admite según su estado y su hora
+const accionesPosibles = computed(() => (mostrada.value ? accionesDe(mostrada.value, props.ahora) : []))
+// Confirmar, completar, no asistió y cancelar cambian el estado: requieren ese permiso
+const acciones = computed(() => (puedeCambiarEstado.value ? accionesPosibles.value : []))
 const nota = computed(() => (mostrada.value ? notaAcciones(mostrada.value, props.ahora) : ''))
-const puedeAgregar = computed(() => (mostrada.value ? admiteServicios(mostrada.value) : false))
+const sinPermisosDeAccion = computed(
+    () => accionesPosibles.value.length > 0 && !puedeCambiarEstado.value && !puedeCrearReservas.value
+)
 const abandonada = computed(() => (mostrada.value ? sinCerrar(mostrada.value, props.ahora) : false))
 const montos = computed(() => (mostrada.value ? montosReserva(mostrada.value) : { subtotal: 0, descuento: 0, total: 0 }))
 const tieneDescuento = computed(() => Boolean(mostrada.value && (mostrada.value.descuento || mostrada.value.descuento_id || montos.value.descuento)))
 const detalles = computed(() => mostrada.value?.detalles ?? [])
-const puedeReagendar = computed(() => acciones.value.includes('cancelar'))
+const traslado = computed(() => (mostrada.value ? textoTraslado(mostrada.value) : ''))
+// Se modifica mientras la cita no empezó (las mismas condiciones que para cancelarla)
+const puedeModificar = computed(() => accionesPosibles.value.includes('cancelar') && puedeCrearReservas.value)
+// Agregar un servicio suelto queda para la cita ya empezada: antes, se hace desde Modificar
+const puedeAgregar = computed(() =>
+    mostrada.value ? admiteServicios(mostrada.value) && puedeCrearReservas.value && !puedeModificar.value : false
+)
 
 const opcionesServicio = computed(() =>
     servicios.value
@@ -100,7 +114,7 @@ watch(
         servicioElegido.value = null
         confirmacion.value = null
         notasAtencion.value = ''
-        cerrarReagenda()
+        cerrarModificacion()
         if (id !== null) cargarCatalogo()
     }
 )
@@ -155,76 +169,87 @@ async function ejecutar(accion) {
     emit('aviso', `La reserva de ${nombreCliente(actual)} ${accionAviso[accion]}`)
 }
 
-const reagendando = ref(false)
-const eleccion = ref({ personal_id: null, fecha: '', hora_inicio: '', fuera_de_horario: false })
-const selectorHorario = ref(null)
+const modificando = ref(false)
+const eleccion = ref({})
+const formulario = ref(null)
 const guardandoCambio = ref(false)
-const errorReagenda = ref('')
+const errorModificacion = ref('')
+const erroresModificacion = ref({})
 
-const cambioListo = computed(() => {
-    const actual = mostrada.value
-    const elegido = eleccion.value
-    if (!actual || !elegido.hora_inicio) return false
-    return (
-        elegido.personal_id !== actual.personal_id ||
-        elegido.fecha !== String(actual.fecha).slice(0, 10) ||
-        elegido.hora_inicio !== hora(actual.hora_inicio) ||
-        elegido.fuera_de_horario !== Boolean(actual.fuera_de_horario)
-    )
-})
+// El formulario expone lo que cambió (null si no hay nada que guardar o falta un dato)
+const cambioListo = computed(() => Boolean(formulario.value?.datosCambio))
 
-function abrirReagenda() {
+function abrirModificacion() {
     const actual = mostrada.value
+    const idsServicios = []
+    for (const detalle of actual.detalles ?? []) {
+        if (!idsServicios.includes(detalle.servicio_id)) idsServicios.push(detalle.servicio_id)
+    }
+
     eleccion.value = {
         personal_id: actual.personal_id,
         fecha: String(actual.fecha).slice(0, 10),
-        hora_inicio: '',
+        hora_inicio: hora(actual.hora_inicio),
         fuera_de_horario: Boolean(actual.fuera_de_horario),
+        servicios: idsServicios,
+        a_domicilio: Boolean(actual.a_domicilio),
+        direccion_domicilio: actual.direccion_domicilio ?? '',
+        minutos_traslado: actual.a_domicilio ? Number(actual.minutos_traslado) || 0 : 0,
     }
-    errorReagenda.value = ''
-    reagendando.value = true
+    errorModificacion.value = ''
+    erroresModificacion.value = {}
+    modificando.value = true
 }
 
-function cerrarReagenda() {
-    reagendando.value = false
-    errorReagenda.value = ''
+function cerrarModificacion() {
+    modificando.value = false
+    errorModificacion.value = ''
+    erroresModificacion.value = {}
     guardandoCambio.value = false
 }
 
-watch(acciones, (lista) => {
-    if (reagendando.value && !lista.includes('cancelar')) cerrarReagenda()
+watch(accionesPosibles, (lista) => {
+    if (modificando.value && !lista.includes('cancelar')) cerrarModificacion()
 })
 
+// Los errores que el formulario muestra junto a cada sección; el resto va al pie
+const CAMPOS_DEL_FORMULARIO = [
+    'servicios', 'servicio_id', 'precio', 'direccion_domicilio', 'minutos_traslado', 'horario', 'hora_inicio', 'hora_fin', 'fecha',
+]
+
 async function guardarCambio() {
-    if (!cambioListo.value) return
+    const datos = formulario.value?.datosCambio
+    if (!datos) return
 
     const actual = mostrada.value
-    const elegido = eleccion.value
-    const datos = {
-        fecha: elegido.fecha,
-        hora_inicio: elegido.hora_inicio,
-        hora_fin: selectorHorario.value.horaFin,
-        fuera_de_horario: elegido.fuera_de_horario,
-    }
-    if (elegido.personal_id !== actual.personal_id) datos.personal_id = elegido.personal_id
-
     guardandoCambio.value = true
-    errorReagenda.value = ''
+    errorModificacion.value = ''
+    erroresModificacion.value = {}
 
-    const respuesta = await reagendarReserva(actual.id, datos)
+    const respuesta = await modificarReserva(actual.id, datos)
 
     guardandoCambio.value = false
 
     if (!respuesta.ok) {
-        errorReagenda.value =
-            respuesta.status === 422
-                ? Object.values(primerosErrores(respuesta.cuerpo))[0] ?? mensajeError(respuesta, 'reagendar la reserva')
-                : mensajeError(respuesta, 'reagendar la reserva')
+        if (respuesta.status === 422) {
+            const errores = primerosErrores(respuesta.cuerpo)
+            erroresModificacion.value = errores
+
+            const otros = []
+            for (const [campo, mensaje] of Object.entries(errores)) {
+                if (!CAMPOS_DEL_FORMULARIO.includes(campo)) otros.push(mensaje)
+            }
+            errorModificacion.value = otros.length
+                ? otros[0]
+                : 'Revisa los datos marcados en el formulario.'
+        } else {
+            errorModificacion.value = mensajeError(respuesta, 'modificar la reserva')
+        }
         return
     }
 
-    cerrarReagenda()
-    emit('aviso', `La reserva de ${nombreCliente(actual)} se reagendó para el ${fechaLarga(elegido.fecha)} a las ${elegido.hora_inicio}.`)
+    cerrarModificacion()
+    emit('aviso', `Reserva de ${nombreCliente(actual)} actualizada.`)
 }
 
 async function agregarServicio() {
@@ -254,12 +279,13 @@ async function agregarServicio() {
         :subtitulo="mostrada ? capitalizar(fechaLarga(mostrada.fecha, true)) : ''"
         @cerrar="emit('cerrar')"
     >
-        <ReagendarReserva
-            v-if="mostrada && reagendando"
-            ref="selectorHorario"
+        <ModificarReserva
+            v-if="mostrada && modificando"
+            ref="formulario"
             v-model="eleccion"
             :reserva="mostrada"
             :ahora="ahora"
+            :errores="erroresModificacion"
         />
 
         <div v-else-if="mostrada" class="space-y-10">
@@ -295,6 +321,10 @@ async function agregarServicio() {
                             :class="mostrada.direccion_domicilio ? 'text-bruma' : 'text-niebla'"
                         >
                             {{ mostrada.direccion_domicilio || 'Sin dirección registrada' }}
+                        </span>
+                        <span v-if="traslado" class="mt-1 flex items-center gap-1.5 text-bruma">
+                            <Icono name="pendiente" class="h-4 w-4 shrink-0 text-niebla" />
+                            {{ traslado }}
                         </span>
                     </dd>
                 </dl>
@@ -388,7 +418,7 @@ async function agregarServicio() {
                 <div v-if="puedeAgregar" class="mt-6 rounded-[24px] border border-hilo p-5">
                     <h4 class="text-lg">Agregar un servicio</h4>
                     <p class="mt-1 text-sm text-bruma">
-                        Se suma al total con el precio vigente en la fecha de la cita. El horario de la cita no cambia.
+                        Para la cita en curso: se suma al total con el precio vigente en la fecha de la cita y el horario no cambia.
                     </p>
 
                     <div class="mt-4 flex flex-col gap-3 sm:flex-row sm:items-start">
@@ -413,30 +443,34 @@ async function agregarServicio() {
         </div>
 
         <template #pie>
-            <div v-if="mostrada && reagendando">
-                <p v-if="errorReagenda" role="alert" class="mb-3 text-sm text-borgona">{{ errorReagenda }}</p>
+            <div v-if="mostrada && modificando">
+                <p v-if="errorModificacion" role="alert" class="mb-3 text-sm text-borgona">{{ errorModificacion }}</p>
+                <p v-else-if="formulario?.falta" class="mb-3 text-sm text-bruma">{{ formulario.falta }}</p>
                 <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-                    <Button label="Volver" variant="secondary" :disabled="guardandoCambio" @click="cerrarReagenda" />
+                    <Button label="Volver" variant="secondary" :disabled="guardandoCambio" @click="cerrarModificacion" />
                     <Button :disabled="guardandoCambio || !cambioListo" @click="guardarCambio">
-                        {{ guardandoCambio ? 'Guardando…' : 'Guardar cambio' }}
+                        {{ guardandoCambio ? 'Guardando…' : 'Guardar cambios' }}
                     </Button>
                 </div>
             </div>
             <div v-else-if="mostrada">
                 <p v-if="errorAccion" role="alert" class="mb-3 text-sm text-borgona">{{ errorAccion }}</p>
                 <p v-if="nota" class="mb-3 text-sm text-bruma">{{ nota }}</p>
+                <p v-if="sinPermisosDeAccion" class="mb-3 text-sm text-bruma">
+                    La administración no te habilitó para cambiar el estado ni modificar esta cita.
+                </p>
 
-                <div v-if="acciones.length" class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <div v-if="acciones.length || puedeModificar" class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                     <Button
                         v-if="acciones.includes('cancelar')"
                         variant="danger"
                         :disabled="procesando"
                         @click="confirmacion = 'cancelar'"
                     >
-                        Cancelar reserva
+                        Cancelar
                     </Button>
-                    <Button v-if="puedeReagendar" variant="secondary" :disabled="procesando" @click="abrirReagenda">
-                        Reagendar
+                    <Button v-if="puedeModificar" variant="secondary" :disabled="procesando" @click="abrirModificacion">
+                        Modificar
                     </Button>
                     <Button v-if="acciones.includes('confirmar')" :disabled="procesando" @click="ejecutar('confirmar')">
                         {{ procesando ? 'Confirmando…' : 'Confirmar reserva' }}
@@ -450,7 +484,7 @@ async function agregarServicio() {
                         Marcar que no asistió
                     </Button>
                     <Button v-if="acciones.includes('completar')" :disabled="procesando" @click="confirmacion = 'completar'">
-                        Completar reserva
+                        Completar
                     </Button>
                 </div>
             </div>

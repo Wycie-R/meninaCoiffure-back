@@ -28,12 +28,25 @@ export function useUsuario() {
 export function usePermisos() {
     const usuario = useUsuario()
 
+    // Lo mismo vale para los permisos que la dueña habilita en Configuración:
+    // sin usuario cargado, ninguno cuenta. La administración los tiene todos.
+    function puede(clave) {
+        if (!usuario.value) return false
+        if (usuario.value.rol === 'admin') return true
+        return usuario.value.permisos?.[clave] === true
+    }
+
     return {
         usuario,
         cargado: computed(() => usuario.value !== null),
         esAdmin: computed(() => usuario.value?.rol === 'admin'),
         esProfesional: computed(() => usuario.value?.rol === 'profesional'),
         personalPropio: computed(() => usuario.value?.personal ?? null),
+        puede,
+        puedeCrearReservas: computed(() => puede('puede_crear_reservas')),
+        puedeCambiarEstado: computed(() => puede('puede_cambiar_estado')),
+        puedeFueraDeHorario: computed(() => puede('puede_reservar_fuera_de_horario')),
+        puedeVerClientes: computed(() => puede('puede_ver_clientes')),
     }
 }
 

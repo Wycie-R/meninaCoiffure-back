@@ -9,10 +9,12 @@ import HorarioLocal from '../../Components/HorarioLocal.vue'
 import MetodosPagoConfig from '../../Components/MetodosPagoConfig.vue'
 import DescuentosConfig from '../../Components/DescuentosConfig.vue'
 import EspecialidadesConfig from '../../Components/EspecialidadesConfig.vue'
+import PermisosEquipo from '../../Components/PermisosEquipo.vue'
 import { claseEnfoque } from '../../ui'
 
 const SECCIONES = [
-    { id: 'horario', label: 'Horario del local', icono: 'reservas', componente: HorarioLocal },
+    { id: 'horario', label: 'Horario del salón', icono: 'reservas', componente: HorarioLocal },
+    { id: 'permisos', label: 'Permisos del equipo', icono: 'usuario', componente: PermisosEquipo },
     { id: 'metodos', label: 'Métodos de pago', icono: 'billete', componente: MetodosPagoConfig },
     { id: 'descuentos', label: 'Promociones', icono: 'etiqueta', componente: DescuentosConfig },
     { id: 'especialidades', label: 'Especialidades', icono: 'destello', componente: EspecialidadesConfig },

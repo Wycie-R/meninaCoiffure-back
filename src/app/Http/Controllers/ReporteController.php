@@ -49,13 +49,6 @@ class ReporteController extends Controller
         return response()->json(['data' => $this->reportes->ingresosDiarios($desde, $hasta)]);
     }
 
-    public function stock(Request $request): JsonResponse
-    {
-        [$desde, $hasta] = $this->periodo($request);
-
-        return response()->json(['data' => $this->reportes->stock($desde, $hasta)]);
-    }
-
     /**
      * Valida y completa el período del reporte.
      *

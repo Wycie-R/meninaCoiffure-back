@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Events\ReservaCompletada;
 use App\Models\Cliente;
 use App\Models\DetalleReserva;
+use App\Models\MetodoPago;
+use App\Models\Pago;
 use App\Models\Personal;
 use App\Models\PrecioServicio;
 use App\Models\Reserva;
@@ -585,27 +587,117 @@ class ReservaTest extends TestCase
     }
 
     /**
-     * Sin traslado: una cita a domicilio ocupa exactamente su horario, igual que en el salón.
+     * HU-14: el traslado de una cita a domicilio también ocupa la agenda de la profesional.
      */
-    public function test_cita_a_domicilio_ocupa_solo_su_horario(): void
+    public function test_traslado_a_domicilio_ocupa_la_agenda(): void
     {
-        $creada = $this->postJson('/api/reservas', $this->payload([
+        $this->postJson('/api/reservas', $this->payload([
             'hora_inicio' => '10:00',
             'hora_fin' => '11:00',
             'a_domicilio' => true,
             'direccion_domicilio' => 'Calle Ejemplo 123, Villa Elisa',
             'minutos_traslado' => 30,
-        ]))->assertStatus(201);
+        ]))->assertStatus(201)->assertJsonPath('data.minutos_traslado', 30);
 
-        // El campo de traslado ya no existe: se ignora si alguien lo envía
-        $this->assertArrayNotHasKey('minutos_traslado', $creada->json('data'));
+        // 11:15 cae dentro de la vuelta del traslado (hasta las 11:30)
+        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '11:15', 'hora_fin' => '12:00']))
+            ->assertStatus(422)->assertJsonValidationErrors(['horario']);
 
-        // 11:00 empieza justo cuando termina la cita a domicilio
-        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '11:00', 'hora_fin' => '11:45']))
+        // 09:00 a 09:45 se cruza con la ida del traslado (desde las 09:30)
+        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '09:00', 'hora_fin' => '09:45']))
+            ->assertStatus(422)->assertJsonValidationErrors(['horario']);
+
+        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '11:30', 'hora_fin' => '12:15']))
             ->assertStatus(201);
 
-        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '10:30', 'hora_fin' => '11:00']))
+        // En el salón el traslado se ignora
+        $this->postJson('/api/reservas', $this->payload([
+            'personal_id' => 2, 'minutos_traslado' => 45,
+        ]))->assertStatus(201)->assertJsonPath('data.minutos_traslado', 0);
+    }
+
+    /**
+     * HU-14: el traslado de la cita nueva tampoco puede pisar otra cita ya agendada.
+     */
+    public function test_traslado_de_la_cita_nueva_choca_con_las_existentes(): void
+    {
+        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '12:00', 'hora_fin' => '13:00']))
+            ->assertStatus(201);
+
+        $aDomicilio = ['a_domicilio' => true, 'direccion_domicilio' => 'Calle Ejemplo 123, Villa Elisa'];
+
+        // 13:30 a 14:30 con 30 min de traslado: sale a las 13:00, justo cuando termina la cita de las 12:00
+        $this->postJson('/api/reservas', $this->payload([...$aDomicilio, 'hora_inicio' => '13:30', 'hora_fin' => '14:30', 'minutos_traslado' => 30]))
+            ->assertStatus(201);
+
+        // 10:30 a 11:30 con 60 min de traslado: la vuelta llega hasta las 12:30 y pisa la cita de las 12:00
+        $this->postJson('/api/reservas', $this->payload([...$aDomicilio, 'hora_inicio' => '10:30', 'hora_fin' => '11:30', 'minutos_traslado' => 60]))
             ->assertStatus(422)->assertJsonValidationErrors(['horario']);
+    }
+
+    /**
+     * HU-14: el viaje puede empezar antes de abrir; lo que debe caber en el horario es la cita.
+     */
+    public function test_el_traslado_puede_quedar_fuera_del_horario_del_salon(): void
+    {
+        $this->postJson('/api/reservas', $this->payload([
+            'hora_inicio' => '08:00',
+            'hora_fin' => '09:00',
+            'a_domicilio' => true,
+            'direccion_domicilio' => 'Calle Ejemplo 123, Villa Elisa',
+            'minutos_traslado' => 45,
+        ]))->assertStatus(201);
+    }
+
+    /**
+     * HU-14: cambiar el traslado de una reserva revalida la agenda.
+     */
+    public function test_ampliar_el_traslado_revalida_el_solapamiento(): void
+    {
+        $id = $this->postJson('/api/reservas', $this->payload([
+            'hora_inicio' => '10:00',
+            'hora_fin' => '11:00',
+            'a_domicilio' => true,
+            'direccion_domicilio' => 'Calle Ejemplo 123, Villa Elisa',
+            'minutos_traslado' => 15,
+        ]))->assertStatus(201)->json('data.id');
+
+        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '11:30', 'hora_fin' => '12:00']))
+            ->assertStatus(201);
+
+        $this->putJson("/api/reservas/{$id}", ['minutos_traslado' => 60])
+            ->assertStatus(422)->assertJsonValidationErrors(['horario']);
+        $this->putJson("/api/reservas/{$id}", ['minutos_traslado' => 30])
+            ->assertStatus(200)->assertJsonPath('data.minutos_traslado', 30);
+    }
+
+    /**
+     * HU-02: la disponibilidad a domicilio descuenta el traslado de la cita nueva.
+     */
+    public function test_disponibilidad_a_domicilio_considera_el_traslado(): void
+    {
+        $lunes = $this->obtenerProximoLunes();
+        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '12:00', 'hora_fin' => '13:00']))->assertStatus(201);
+
+        $horarios = collect(
+            $this->getJson("/api/disponibilidad?personal_id=1&fecha={$lunes}&duracion_minutos=60&a_domicilio=1&minutos_traslado=30")
+                ->assertStatus(200)
+                ->json('data.horarios')
+        )->keyBy('hora');
+
+        // 10:30–11:30 vuelve a las 12:00 (justo); 11:00–12:00 vuelve a las 12:30 y pisa la cita
+        $this->assertTrue($horarios['10:30']['disponible']);
+        $this->assertSame('ocupado', $horarios['11:00']['motivo']);
+        // 13:30 sale a las 13:00, justo cuando termina la cita
+        $this->assertTrue($horarios['13:30']['disponible']);
+        $this->assertSame('ocupado', $horarios['13:00']['motivo']);
+
+        // Sin domicilio, el traslado se ignora
+        $enSalon = collect(
+            $this->getJson("/api/disponibilidad?personal_id=1&fecha={$lunes}&duracion_minutos=60&minutos_traslado=30")
+                ->json('data.horarios')
+        )->keyBy('hora');
+        $this->assertTrue($enSalon['11:00']['disponible']);
     }
 
     /**
@@ -825,6 +917,115 @@ class ReservaTest extends TestCase
 
         $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '13:30', 'hora_fin' => '14:30']))
             ->assertStatus(422)->assertJsonValidationErrors(['horario']);
+    }
+
+    /**
+     * Modificar reserva: la lista de servicios reemplaza a la actual. Los que siguen conservan
+     * su precio congelado (Regla 4) y los nuevos toman el precio vigente.
+     */
+    public function test_modificar_los_servicios_de_una_reserva(): void
+    {
+        $id = $this->postJson('/api/reservas', $this->payload(['servicios' => [1]]))->assertStatus(201)->json('data.id');
+
+        // Simula que el corte se reservó cuando costaba menos
+        DetalleReserva::where('reserva_id', $id)->update(['precio_aplicado' => 1000]);
+        $precioServicio2 = (float) Servicio::find(2)->precioVigente($this->obtenerProximoLunes())->precio;
+
+        $respuesta = $this->putJson("/api/reservas/{$id}", ['servicios' => [1, 2], 'hora_fin' => '12:00'])
+            ->assertStatus(200)
+            ->assertJsonCount(2, 'data.detalles')
+            ->assertJsonPath('data.hora_fin', '12:00:00');
+
+        $this->assertEquals(1000 + $precioServicio2, $respuesta->json('data.subtotal'));
+
+        // Quitar el corte deja solo el servicio 2
+        $this->putJson("/api/reservas/{$id}", ['servicios' => [2]])
+            ->assertStatus(200)
+            ->assertJsonCount(1, 'data.detalles')
+            ->assertJsonPath('data.detalles.0.servicio_id', 2);
+    }
+
+    public function test_modificar_servicios_valida_la_lista(): void
+    {
+        $id = $this->postJson('/api/reservas', $this->payload())->assertStatus(201)->json('data.id');
+
+        $this->putJson("/api/reservas/{$id}", ['servicios' => []])->assertStatus(422)->assertJsonValidationErrors(['servicios']);
+        $this->putJson("/api/reservas/{$id}", ['servicios' => [1, 1]])->assertStatus(422)->assertJsonValidationErrors(['servicios.1']);
+        $this->putJson("/api/reservas/{$id}", ['servicios' => [999]])->assertStatus(422)->assertJsonValidationErrors(['servicios.0']);
+
+        // Servicio 4 está inactivo (Regla 3): no se agrega y la reserva queda como estaba
+        $this->putJson("/api/reservas/{$id}", ['servicios' => [1, 4]])->assertStatus(422)->assertJsonValidationErrors(['servicio_id']);
+        $this->assertSame([1], DetalleReserva::where('reserva_id', $id)->pluck('servicio_id')->all());
+    }
+
+    public function test_no_se_sacan_servicios_por_debajo_de_lo_pagado(): void
+    {
+        $id = $this->postJson('/api/reservas', $this->payload(['servicios' => [1, 2], 'hora_fin' => '12:00']))
+            ->assertStatus(201)->json('data.id');
+        $total = Reserva::with(['detalles', 'descuento', 'pagos'])->find($id)->total;
+
+        Pago::create([
+            'reserva_id' => $id,
+            'metodo_pago_id' => MetodoPago::first()->id,
+            'monto' => $total,
+            'fecha' => now(),
+        ]);
+
+        $this->putJson("/api/reservas/{$id}", ['servicios' => [1]])
+            ->assertStatus(422)->assertJsonValidationErrors(['servicios']);
+        $this->assertCount(2, DetalleReserva::where('reserva_id', $id)->get());
+    }
+
+    public function test_no_se_modifican_los_servicios_de_una_reserva_cerrada(): void
+    {
+        $reserva = $this->reservaDirecta(Carbon::yesterday()->toDateString(), 'completada');
+
+        $this->putJson("/api/reservas/{$reserva->id}", ['servicios' => [2]])
+            ->assertStatus(422)->assertJsonValidationErrors(['estado']);
+    }
+
+    /**
+     * Modificar reserva: pasar del salón al domicilio (con traslado) y volver.
+     */
+    public function test_modificar_domicilio_y_traslado(): void
+    {
+        $id = $this->postJson('/api/reservas', $this->payload())->assertStatus(201)->json('data.id');
+
+        $this->putJson("/api/reservas/{$id}", ['a_domicilio' => true, 'minutos_traslado' => 30])
+            ->assertStatus(422)->assertJsonValidationErrors(['direccion_domicilio']);
+
+        $this->putJson("/api/reservas/{$id}", [
+            'a_domicilio' => true,
+            'direccion_domicilio' => 'Calle Ejemplo 123, Villa Elisa',
+            'minutos_traslado' => 30,
+        ])->assertStatus(200)
+            ->assertJsonPath('data.a_domicilio', true)
+            ->assertJsonPath('data.minutos_traslado', 30);
+
+        // De vuelta al salón: la dirección y el traslado se limpian
+        $this->putJson("/api/reservas/{$id}", ['a_domicilio' => false])
+            ->assertStatus(200)
+            ->assertJsonPath('data.a_domicilio', false)
+            ->assertJsonPath('data.direccion_domicilio', null)
+            ->assertJsonPath('data.minutos_traslado', 0);
+    }
+
+    /**
+     * HU-02: al modificar una reserva, su propio horario no cuenta como ocupado.
+     */
+    public function test_disponibilidad_puede_excluir_la_propia_reserva(): void
+    {
+        $lunes = $this->obtenerProximoLunes();
+        $id = $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '10:00', 'hora_fin' => '11:00']))
+            ->assertStatus(201)->json('data.id');
+
+        $url = "/api/disponibilidad?personal_id=1&fecha={$lunes}&duracion_minutos=60";
+
+        $conLaPropia = collect($this->getJson($url)->json('data.horarios'))->keyBy('hora');
+        $this->assertSame('ocupado', $conLaPropia['10:00']['motivo']);
+
+        $sinLaPropia = collect($this->getJson($url . "&excluir_reserva_id={$id}")->json('data.horarios'))->keyBy('hora');
+        $this->assertTrue($sinLaPropia['10:00']['disponible']);
     }
 
     /**

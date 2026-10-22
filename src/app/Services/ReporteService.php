@@ -198,44 +198,6 @@ class ReporteService
     }
 
     /**
-     * HU-24: Existencias actuales con lo que entró y se consumió en el período;
-     * los insumos en el mínimo o por debajo aparecen primero.
-     */
-    public function stock(string $desde, string $hasta): array
-    {
-        [$inicio, $fin] = $this->limitesDeTiempo($desde, $hasta);
-
-        $movimientos = DB::table('movimientos_stock')
-            ->where('fecha', '>=', $inicio)
-            ->where('fecha', '<', $fin)
-            ->selectRaw("recurso_id,
-                SUM(CASE WHEN tipo = 'entrada' THEN cantidad ELSE 0 END) AS entradas,
-                SUM(CASE WHEN tipo = 'salida' THEN cantidad ELSE 0 END) AS consumido")
-            ->groupBy('recurso_id');
-
-        $recursos = DB::table('stock_recursos as s')
-            ->leftJoinSub($movimientos, 'm', 'm.recurso_id', '=', 's.id')
-            ->select(['s.id', 's.nombre', 's.unidad_medida', 's.cantidad_actual', 's.stock_minimo'])
-            ->selectRaw('COALESCE(m.entradas, 0) AS entradas, COALESCE(m.consumido, 0) AS consumido')
-            ->orderByRaw('CASE WHEN s.cantidad_actual <= s.stock_minimo THEN 0 ELSE 1 END')
-            ->orderBy('s.nombre')
-            ->get()
-            ->map(fn ($fila) => [
-                'id' => (int) $fila->id,
-                'nombre' => $fila->nombre,
-                'unidad_medida' => $fila->unidad_medida,
-                'cantidad_actual' => $this->monto($fila->cantidad_actual),
-                'stock_minimo' => $this->monto($fila->stock_minimo),
-                'bajo_minimo' => (float) $fila->cantidad_actual <= (float) $fila->stock_minimo,
-                'entradas' => $this->monto($fila->entradas),
-                'consumido' => $this->monto($fila->consumido),
-            ])
-            ->all();
-
-        return ['recursos' => $recursos];
-    }
-
-    /**
      * Reservas del período con el subtotal de sus líneas (alias l) y su descuento (alias d),
      * listas para calcular el total con expresionTotal().
      */

@@ -22,7 +22,7 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/reservas/crear', function () {
         return Inertia::render('Reservas/Create');
-    });
+    })->middleware('permiso:puede_crear_reservas');
 
     Route::get('/servicios', function () {
         return Inertia::render('Servicios/Index');

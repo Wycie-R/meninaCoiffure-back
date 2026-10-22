@@ -11,7 +11,6 @@ use App\Models\MetodoPago;
 use App\Models\Personal;
 use App\Models\PrecioServicio;
 use App\Models\Servicio;
-use App\Models\StockRecurso;
 use Illuminate\Database\Seeder;
 
 /**
@@ -31,7 +30,6 @@ class AvanceDosSeeder extends Seeder
         $personal = $this->personal();
         $this->horarioDelLocal();
         $servicios = $this->catalogo();
-        $this->insumos($servicios);
 
         Descuento::firstOrCreate(['nombre' => 'Promo Primavera'], ['tipo' => 'porcentaje', 'valor' => 10, 'activo' => true]);
 
@@ -147,47 +145,6 @@ class AvanceDosSeeder extends Seeder
         }
 
         return $servicios;
-    }
-
-    /**
-     * Insumos con su existencia inicial y el consumo estándar por servicio (HU-15 y HU-17).
-     *
-     * @param array<string, Servicio> $servicios
-     */
-    protected function insumos(array $servicios): void
-    {
-        $insumos = [];
-        foreach ([
-            'tinte' => ['Tinte en crema', 'ml', 1200, 300],
-            'oxidante' => ['Oxidante 20 vol.', 'ml', 3000, 1000],
-            'decolorante' => ['Polvo decolorante', 'g', 800, 250],
-            'crema' => ['Crema de tratamiento', 'ml', 2000, 500],
-            'champu' => ['Champú profesional', 'ml', 5000, 1000],
-            'cera' => ['Cera depilatoria', 'g', 1500, 400],
-        ] as $clave => [$nombre, $unidad, $cantidad, $minimo]) {
-            $insumos[$clave] = StockRecurso::firstOrCreate(['nombre' => $nombre], [
-                'unidad_medida' => $unidad, 'cantidad_actual' => $cantidad, 'stock_minimo' => $minimo,
-            ]);
-        }
-
-        $consumos = [
-            'coloracion' => ['tinte' => 60, 'oxidante' => 90, 'champu' => 20],
-            'mechas' => ['decolorante' => 40, 'oxidante' => 80, 'champu' => 20],
-            'balayage' => ['decolorante' => 50, 'tinte' => 30, 'oxidante' => 120, 'champu' => 20],
-            'nutricion' => ['crema' => 40, 'champu' => 20],
-            'brushing' => ['champu' => 20],
-            'corte_dama' => ['champu' => 15],
-            'depilacion_facial' => ['cera' => 15],
-            'depilacion_corporal' => ['cera' => 80],
-        ];
-
-        foreach ($consumos as $servicio => $recursos) {
-            $servicios[$servicio]->recursos()->syncWithoutDetaching(
-                collect($recursos)->mapWithKeys(fn ($cantidad, $insumo) => [
-                    $insumos[$insumo]->id => ['cantidad_utilizada' => $cantidad],
-                ])->all()
-            );
-        }
     }
 
     /**

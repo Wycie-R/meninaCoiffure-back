@@ -115,6 +115,7 @@ class ReservaController extends Controller
                 new OA\Property(property: 'estado', type: 'string', enum: ['pendiente', 'confirmada'], example: 'pendiente'),
                 new OA\Property(property: 'a_domicilio', type: 'boolean', example: false, description: 'true si la cita se atiende fuera del salón'),
                 new OA\Property(property: 'direccion_domicilio', type: 'string', nullable: true, example: null, description: 'Obligatoria si a_domicilio es true'),
+                new OA\Property(property: 'minutos_traslado', type: 'integer', example: 0, description: 'Viaje antes y después de una cita a domicilio (0–240); en el salón se guarda 0'),
                 new OA\Property(property: 'fuera_de_horario', type: 'boolean', example: false, description: 'true si la dueña autoriza atender fuera del horario del salón (dentro de 06:00–22:00)')
             ]
         )
@@ -132,6 +133,10 @@ class ReservaController extends Controller
         $usuario = $request->user();
         if (!$usuario->esAdmin() && (int) $request->input('personal_id') !== (int) $usuario->personal_id) {
             abort(403, 'Solo puedes agendar reservas en tu propia agenda.');
+        }
+
+        if ($request->boolean('fuera_de_horario') && !$usuario->tienePermiso('puede_reservar_fuera_de_horario')) {
+            abort(403, 'La administración no te habilitó para atender fuera del horario del salón.');
         }
 
         $reserva = $this->reservaService->crearReserva($request->validated());
@@ -205,7 +210,9 @@ class ReservaController extends Controller
                 new OA\Property(property: 'descuento_id', type: 'integer', nullable: true, example: null),
                 new OA\Property(property: 'a_domicilio', type: 'boolean', example: false),
                 new OA\Property(property: 'direccion_domicilio', type: 'string', nullable: true, example: null),
-                new OA\Property(property: 'fuera_de_horario', type: 'boolean', example: false)
+                new OA\Property(property: 'minutos_traslado', type: 'integer', example: 0),
+                new OA\Property(property: 'fuera_de_horario', type: 'boolean', example: false),
+                new OA\Property(property: 'servicios', type: 'array', description: 'Reemplaza los servicios de la reserva', items: new OA\Items(type: 'integer', example: 1))
             ]
         )
     )]
@@ -229,6 +236,8 @@ class ReservaController extends Controller
         if (!$request->user()->esAdmin() && $request->has('personal_id') && (int) $request->input('personal_id') !== (int) $reserva->personal_id) {
             abort(403, 'Solo la administración puede reasignar una reserva a otro profesional.');
         }
+
+        $this->autorizarCambios($request, $reserva);
 
         $reservaActualizada = $this->reservaService->actualizarReserva($reserva, $request->validated());
 
@@ -350,7 +359,7 @@ class ReservaController extends Controller
     #[OA\Get(
         path: '/api/disponibilidad',
         summary: 'Horarios disponibles de un profesional',
-        description: 'Recorre el horario del salón ese día (o la jornada 06:00–22:00 si fuera_de_horario es true) y marca cada inicio como disponible, ocupado (otra reserva) o pasado.',
+        description: 'Recorre el horario del salón ese día (o la jornada 06:00–22:00 si fuera_de_horario es true) y marca cada inicio como disponible, ocupado (otra reserva o su traslado) o pasado.',
         tags: ['Reservas']
     )]
     #[OA\Response(response: 200, description: 'Franjas del salón y horarios con su disponibilidad')]
@@ -363,6 +372,10 @@ class ReservaController extends Controller
             'servicios' => ['required_without:duracion_minutos', 'array'],
             'servicios.*' => ['integer', 'exists:servicios,id'],
             'fuera_de_horario' => ['nullable', 'boolean'],
+            'a_domicilio' => ['nullable', 'boolean'],
+            'minutos_traslado' => ['nullable', 'integer', 'min:0', 'max:240'],
+            // Al modificar una reserva, su propio horario no cuenta como ocupado
+            'excluir_reserva_id' => ['nullable', 'integer', 'exists:reservas,id'],
             'intervalo' => ['nullable', 'integer', Rule::in([15, 30, 60])],
         ], [
             'duracion_minutos.required_without' => 'Indica la duración de la cita o los servicios elegidos.',
@@ -380,7 +393,10 @@ class ReservaController extends Controller
             $fecha,
             max($duracion, 5),
             (bool) ($datos['fuera_de_horario'] ?? false),
+            (bool) ($datos['a_domicilio'] ?? false),
+            (int) ($datos['minutos_traslado'] ?? 0),
             (int) ($datos['intervalo'] ?? 30),
+            isset($datos['excluir_reserva_id']) ? (int) $datos['excluir_reserva_id'] : null,
         );
 
         return response()->json([
@@ -392,5 +408,38 @@ class ReservaController extends Controller
             ],
         ]);
     }
-}
 
+    /**
+     * PUT sirve tanto para reprogramar como para cambiar el estado: el permiso depende de lo que cambia.
+     * Las notas de la atención acompañan al cambio de estado y no piden permiso propio.
+     */
+    protected function autorizarCambios(Request $request, Reserva $reserva): void
+    {
+        $usuario = $request->user();
+
+        $cambiaEstado = $request->has('estado') && $request->input('estado') !== $reserva->estado;
+        if ($cambiaEstado && !$usuario->tienePermiso('puede_cambiar_estado')) {
+            abort(403, 'La administración no te habilitó para cambiar el estado de las citas.');
+        }
+
+        $camposDeAgenda = [
+            'cliente_id', 'personal_id', 'fecha', 'hora_inicio', 'hora_fin',
+            'descuento_id', 'a_domicilio', 'direccion_domicilio', 'minutos_traslado', 'fuera_de_horario', 'servicios',
+        ];
+        $reprograma = false;
+        foreach ($camposDeAgenda as $campo) {
+            if ($request->has($campo)) {
+                $reprograma = true;
+            }
+        }
+        if ($reprograma && !$usuario->tienePermiso('puede_crear_reservas')) {
+            abort(403, 'La administración no te habilitó para reprogramar citas.');
+        }
+
+        // Solo se exige al marcarla: mover una cita que ya estaba fuera de horario no pide el permiso
+        $marcaFueraDeHorario = $request->boolean('fuera_de_horario') && !$reserva->fuera_de_horario;
+        if ($marcaFueraDeHorario && !$usuario->tienePermiso('puede_reservar_fuera_de_horario')) {
+            abort(403, 'La administración no te habilitó para atender fuera del horario del salón.');
+        }
+    }
+}

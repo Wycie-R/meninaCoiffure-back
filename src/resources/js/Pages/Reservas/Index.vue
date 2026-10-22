@@ -24,6 +24,7 @@ import {
     dia as diaDe,
     filtrarBase,
     fueraDeHorario,
+    minutosTraslado,
     montosReserva,
     nombreCliente,
     nombrePersonal,
@@ -31,10 +32,11 @@ import {
     ordenar,
     porAtender,
     sinCerrar,
+    textoTraslado,
 } from '../../agenda'
 
 const { reservas, cargando, cargado, error, cargarReservas } = useReservas()
-const { esProfesional } = usePermisos()
+const { esProfesional, puedeCrearReservas } = usePermisos()
 
 const page = usePage()
 const reservaNueva = Number(new URL(page.url, window.location.origin).searchParams.get('nueva')) || null
@@ -252,7 +254,7 @@ function verTodas() {
 }
 
 function etiquetaReserva(reserva) {
-    const lugar = aDomicilio(reserva) ? ', a domicilio' : ''
+    const lugar = aDomicilio(reserva) ? `, a domicilio${minutosTraslado(reserva) ? `. ${textoTraslado(reserva)}` : ''}` : ''
     const horario = fueraDeHorario(reserva) ? ', fuera del horario del salón' : ''
     return `Ver la reserva de ${nombreCliente(reserva)} a las ${hora(reserva.hora_inicio)}${lugar}${horario}`
 }
@@ -269,7 +271,7 @@ function abrir(reserva) {
                 <Button variant="secondary" :disabled="cargando" @click="cargarReservas({ forzar: true })">
                     {{ cargando && reservas.length ? 'Actualizando…' : 'Actualizar' }}
                 </Button>
-                <Button href="/reservas/crear">
+                <Button v-if="puedeCrearReservas" href="/reservas/crear">
                     <Icono name="agregar" class="h-4 w-4" />
                     Nueva reserva
                 </Button>
@@ -382,7 +384,7 @@ function abrir(reserva) {
                 titulo="Todavía no hay reservas"
                 descripcion="Cuando se registre la primera cita, va a aparecer aquí agrupada por día."
             >
-                <Button href="/reservas/crear" label="Nueva reserva" />
+                <Button v-if="puedeCrearReservas" href="/reservas/crear" label="Nueva reserva" />
             </EstadoVacio>
 
             <EstadoVacio
@@ -454,9 +456,13 @@ function abrir(reserva) {
                                             <span
                                                 v-if="aDomicilio(reserva)"
                                                 class="inline-flex shrink-0 items-center gap-1 rounded-full bg-orquidea/12 px-2 py-0.5 text-xs text-orquidea-claro"
+                                                :title="textoTraslado(reserva) || undefined"
                                             >
                                                 <Icono name="casa" class="h-3.5 w-3.5" />
                                                 A domicilio
+                                                <span v-if="minutosTraslado(reserva)" class="hidden text-orquidea-claro/80 sm:inline">
+                                                    · +{{ minutosTraslado(reserva) }} min de traslado
+                                                </span>
                                             </span>
                                             <span
                                                 v-if="fueraDeHorario(reserva)"

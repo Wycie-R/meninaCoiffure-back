@@ -67,28 +67,30 @@ class ReservasDemoSeeder extends Seeder
         $efectivo = MetodoPago::where('nombre', 'Efectivo')->first();
         $transferencia = MetodoPago::where('nombre', 'Transferencia bancaria')->first();
 
-        // [días hábiles desde hoy, profesional, cliente, inicio, servicios, estado, a domicilio, fuera de horario]
+        // [días hábiles desde hoy, profesional, cliente, inicio, servicios, estado, minutos de traslado si es a domicilio, fuera de horario]
         // La atención fuera de horario cae el próximo sábado, día en que el salón no abre
         $agenda = [
-            [-6, $monica, 0, '09:00', [$corte, $color], 'completada', false, false],
-            [-6, $carla, 1, '10:00', [$peinado, $maquillaje], 'completada', true, false],
-            [-5, $monica, 2, '14:00', [$corte, $nutricion], 'completada', false, false],
-            [-4, $carla, 3, '11:00', [$nutricion], 'no_asistio', false, false],
-            [-3, $monica, 4, '15:00', [$depilacion], 'cancelada', false, false],
-            [-2, $carla, 5, '09:00', [$corte], 'completada', false, false],
-            [-1, $monica, 1, '10:30', [$caballero], 'completada', false, false],
-            [0, $monica, 0, '09:00', [$nutricion], 'completada', false, false],
-            [0, $carla, 2, '13:00', [$peinado], 'confirmada', false, false],
-            [0, $monica, 3, '15:00', [$corte, $nutricion], 'pendiente', false, false],
-            [1, $carla, 4, '09:30', [$maquillaje], 'confirmada', true, false],
-            [1, $monica, 5, '11:00', [$color], 'pendiente', false, false],
-            [2, $monica, 2, '08:30', [$corte, $nutricion], 'confirmada', false, false],
-            [3, $carla, 0, '14:00', [$peinado, $maquillaje], 'pendiente', true, false],
-            [5, $monica, 1, '16:00', [$depilacion], 'pendiente', false, false],
-            [null, $carla, 3, '10:00', [$peinado, $maquillaje], 'confirmada', true, true],
+            [-6, $monica, 0, '09:00', [$corte, $color], 'completada', null, false],
+            [-6, $carla, 1, '10:00', [$peinado, $maquillaje], 'completada', 30, false],
+            [-5, $monica, 2, '14:00', [$corte, $nutricion], 'completada', null, false],
+            [-4, $carla, 3, '11:00', [$nutricion], 'no_asistio', null, false],
+            [-3, $monica, 4, '15:00', [$depilacion], 'cancelada', null, false],
+            [-2, $carla, 5, '09:00', [$corte], 'completada', null, false],
+            [-1, $monica, 1, '10:30', [$caballero], 'completada', null, false],
+            [0, $monica, 0, '09:00', [$nutricion], 'completada', null, false],
+            [0, $carla, 2, '13:00', [$peinado], 'confirmada', null, false],
+            [0, $monica, 3, '15:00', [$corte, $nutricion], 'pendiente', null, false],
+            [1, $carla, 4, '09:30', [$maquillaje], 'confirmada', 20, false],
+            [1, $monica, 5, '11:00', [$color], 'pendiente', null, false],
+            [2, $monica, 2, '08:30', [$corte, $nutricion], 'confirmada', null, false],
+            [3, $carla, 0, '14:00', [$peinado, $maquillaje], 'pendiente', 30, false],
+            [5, $monica, 1, '16:00', [$depilacion], 'pendiente', null, false],
+            [null, $carla, 3, '10:00', [$peinado, $maquillaje], 'confirmada', 45, true],
         ];
 
-        foreach ($agenda as [$dias, $personal, $indiceCliente, $inicio, $servicios, $estado, $aDomicilio, $fueraDeHorario]) {
+        foreach ($agenda as [$dias, $personal, $indiceCliente, $inicio, $servicios, $estado, $traslado, $fueraDeHorario]) {
+            $aDomicilio = $traslado !== null;
+
             if ($fueraDeHorario) {
                 $fecha = now()->startOfDay()->next(Carbon::SATURDAY);
             } else {
@@ -99,7 +101,7 @@ class ReservasDemoSeeder extends Seeder
             $horaInicio = "{$inicio}:00";
             $horaFin = Carbon::parse($inicio)->addMinutes($minutos)->format('H:i:s');
 
-            if (!$this->cabe($personal, $fecha, $horaInicio, $horaFin, $fueraDeHorario)) {
+            if (!$this->cabe($personal, $fecha, $horaInicio, $horaFin, (int) $traslado, $fueraDeHorario)) {
                 continue;
             }
 
@@ -112,6 +114,7 @@ class ReservasDemoSeeder extends Seeder
                 'estado' => $estado,
                 'a_domicilio' => $aDomicilio,
                 'direccion_domicilio' => $aDomicilio ? 'Calle Ejemplo 123 c/ Las Palmeras, Villa Elisa (portón verde)' : null,
+                'minutos_traslado' => (int) $traslado,
                 'fuera_de_horario' => $fueraDeHorario,
             ]);
 
@@ -159,9 +162,9 @@ class ReservasDemoSeeder extends Seeder
 
     /**
      * Reglas 1 y 2: la cita entra en el horario del salón (salvo fuera de horario)
-     * y no choca con otra cita de la misma profesional.
+     * y no choca con otra cita de la misma profesional (traslados incluidos).
      */
-    protected function cabe(Personal $personal, Carbon $fecha, string $horaInicio, string $horaFin, bool $fueraDeHorario): bool
+    protected function cabe(Personal $personal, Carbon $fecha, string $horaInicio, string $horaFin, int $traslado, bool $fueraDeHorario): bool
     {
         if (!$fueraDeHorario) {
             $enHorario = HorarioAtencion::where('dia_semana', $fecha->dayOfWeekIso)
@@ -174,14 +177,24 @@ class ReservasDemoSeeder extends Seeder
             }
         }
 
-        $ocupado = Reserva::where('personal_id', $personal->id)
+        $inicioConTraslado = Carbon::parse($horaInicio)->subMinutes($traslado)->format('H:i:s');
+        $finConTraslado = Carbon::parse($horaFin)->addMinutes($traslado)->format('H:i:s');
+
+        $citasDelDia = Reserva::where('personal_id', $personal->id)
             ->where('fecha', $fecha->toDateString())
             ->whereIn('estado', Reserva::ESTADOS_QUE_OCUPAN)
-            ->where('hora_inicio', '<', $horaFin)
-            ->where('hora_fin', '>', $horaInicio)
-            ->exists();
+            ->get(['hora_inicio', 'hora_fin', 'minutos_traslado']);
 
-        return !$ocupado;
+        foreach ($citasDelDia as $cita) {
+            $inicioOcupado = Carbon::parse($cita->hora_inicio)->subMinutes($cita->minutos_traslado)->format('H:i:s');
+            $finOcupado = Carbon::parse($cita->hora_fin)->addMinutes($cita->minutos_traslado)->format('H:i:s');
+
+            if ($inicioConTraslado < $finOcupado && $finConTraslado > $inicioOcupado) {
+                return false;
+            }
+        }
+
+        return true;
     }
 
     /**
