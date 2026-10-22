@@ -23,7 +23,7 @@ import {
     descartada,
     dia as diaDe,
     filtrarBase,
-    minutosTraslado,
+    fueraDeHorario,
     montosReserva,
     nombreCliente,
     nombrePersonal,
@@ -31,7 +31,6 @@ import {
     ordenar,
     porAtender,
     sinCerrar,
-    textoTraslado,
 } from '../../agenda'
 
 const { reservas, cargando, cargado, error, cargarReservas } = useReservas()
@@ -253,8 +252,9 @@ function verTodas() {
 }
 
 function etiquetaReserva(reserva) {
-    const lugar = aDomicilio(reserva) ? `, a domicilio${minutosTraslado(reserva) ? `. ${textoTraslado(reserva)}` : ''}` : ''
-    return `Ver la reserva de ${nombreCliente(reserva)} a las ${hora(reserva.hora_inicio)}${lugar}`
+    const lugar = aDomicilio(reserva) ? ', a domicilio' : ''
+    const horario = fueraDeHorario(reserva) ? ', fuera del horario del salón' : ''
+    return `Ver la reserva de ${nombreCliente(reserva)} a las ${hora(reserva.hora_inicio)}${lugar}${horario}`
 }
 
 function abrir(reserva) {
@@ -454,13 +454,17 @@ function abrir(reserva) {
                                             <span
                                                 v-if="aDomicilio(reserva)"
                                                 class="inline-flex shrink-0 items-center gap-1 rounded-full bg-orquidea/12 px-2 py-0.5 text-xs text-orquidea-claro"
-                                                :title="textoTraslado(reserva) || undefined"
                                             >
                                                 <Icono name="casa" class="h-3.5 w-3.5" />
                                                 A domicilio
-                                                <span v-if="minutosTraslado(reserva)" class="hidden text-orquidea-claro/80 sm:inline">
-                                                    · {{ minutosTraslado(reserva) }} min de traslado
-                                                </span>
+                                            </span>
+                                            <span
+                                                v-if="fueraDeHorario(reserva)"
+                                                class="inline-flex shrink-0 items-center gap-1 rounded-full bg-miel/12 px-2 py-0.5 text-xs text-miel"
+                                                title="Autorizada fuera del horario del salón"
+                                            >
+                                                <Icono name="pendiente" class="h-3.5 w-3.5" />
+                                                Fuera de horario
                                             </span>
                                         </span>
                                         <span class="block truncate text-sm text-bruma">

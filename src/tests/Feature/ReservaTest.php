@@ -11,7 +11,7 @@ use App\Models\Reserva;
 use App\Models\Servicio;
 use App\Models\Descuento;
 use App\Models\Role;
-use App\Models\TurnoPersonal;
+use App\Models\HorarioAtencion;
 use App\Models\User;
 use App\Services\ReservaService;
 use Carbon\Carbon;
@@ -28,7 +28,7 @@ class ReservaTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        // Ejecutar los seeders del módulo para contar con el personal, turnos y servicios base
+        // Ejecutar los seeders del módulo para contar con el personal, el horario del salón y los servicios base
         $this->seed(AvanceDosSeeder::class);
         $this->actingAs(User::factory()->create(['rol_id' => Role::firstOrCreate(['nombre' => 'admin'])->id]));
     }
@@ -42,7 +42,7 @@ class ReservaTest extends TestCase
     }
 
     /**
-     * Helper para obtener el próximo domingo (día sin turnos laborales).
+     * Helper para obtener el próximo domingo (día en que el salón no atiende).
      */
     protected function obtenerProximoDomingo(): string
     {
@@ -142,16 +142,16 @@ class ReservaTest extends TestCase
     }
 
     /**
-     * Test 3: Falla por horario fuera del turno laboral del personal (Regla 2).
+     * Test 3: Falla por horario fuera del horario del salón (Regla 2).
      */
-    public function test_falla_por_horario_fuera_del_turno_laboral_del_personal_regla_2(): void
+    public function test_falla_fuera_del_horario_del_salon_regla_2(): void
     {
         $fechaLunes = $this->obtenerProximoLunes();
         $fechaDomingo = $this->obtenerProximoDomingo();
 
-        // Personal 1 trabaja de 08:00 a 18:00 de Lunes a Viernes.
-        // Caso A: Lunes antes de comenzar su turno (06:30 a 07:30)
-        $antesTurnoResponse = $this->postJson('/api/reservas', [
+        // El salón atiende de lunes a viernes de 08:00 a 17:00.
+        // Caso A: Lunes antes de que abra el salón (06:30 a 07:30)
+        $antesDeAbrirResponse = $this->postJson('/api/reservas', [
             'cliente_id' => 1,
             'personal_id' => 1,
             'fecha' => $fechaLunes,
@@ -160,11 +160,11 @@ class ReservaTest extends TestCase
             'servicios' => [1],
         ]);
 
-        $antesTurnoResponse->assertStatus(422)
+        $antesDeAbrirResponse->assertStatus(422)
             ->assertJsonValidationErrors(['horario']);
 
-        // Caso B: Lunes después de finalizar su turno (18:00 a 19:00)
-        $despuesTurnoResponse = $this->postJson('/api/reservas', [
+        // Caso B: Lunes después del cierre (18:00 a 19:00)
+        $despuesDelCierreResponse = $this->postJson('/api/reservas', [
             'cliente_id' => 1,
             'personal_id' => 1,
             'fecha' => $fechaLunes,
@@ -173,10 +173,10 @@ class ReservaTest extends TestCase
             'servicios' => [1],
         ]);
 
-        $despuesTurnoResponse->assertStatus(422)
+        $despuesDelCierreResponse->assertStatus(422)
             ->assertJsonValidationErrors(['horario']);
 
-        // Caso C: Domingo (día en el que no tiene turnos asignados)
+        // Caso C: Domingo (el salón no atiende)
         $domingoResponse = $this->postJson('/api/reservas', [
             'cliente_id' => 1,
             'personal_id' => 1,
@@ -565,7 +565,7 @@ class ReservaTest extends TestCase
         $this->postJson('/api/reservas', $this->payload(['personal_id' => 2]))
             ->assertStatus(422)->assertJsonValidationErrors(['personal_id']);
 
-        // Lunes a las 10:00: las 09:00 ya pasaron; las 09:45 entran en la tolerancia para quien llega sin turno
+        // Lunes a las 10:00: las 09:00 ya pasaron; las 09:45 entran en la tolerancia para quien llega sin cita
         $lunes = $this->obtenerProximoLunes();
         $this->travelTo(Carbon::parse("{$lunes} 10:00"));
 
@@ -585,47 +585,138 @@ class ReservaTest extends TestCase
     }
 
     /**
-     * HU-14: el traslado de una cita a domicilio también ocupa la agenda del profesional.
+     * Sin traslado: una cita a domicilio ocupa exactamente su horario, igual que en el salón.
      */
-    public function test_traslado_a_domicilio_ocupa_la_agenda(): void
+    public function test_cita_a_domicilio_ocupa_solo_su_horario(): void
     {
-        $this->postJson('/api/reservas', $this->payload([
+        $creada = $this->postJson('/api/reservas', $this->payload([
             'hora_inicio' => '10:00',
             'hora_fin' => '11:00',
             'a_domicilio' => true,
             'direccion_domicilio' => 'Calle Ejemplo 123, Villa Elisa',
             'minutos_traslado' => 30,
-        ]))->assertStatus(201)->assertJsonPath('data.minutos_traslado', 30);
+        ]))->assertStatus(201);
 
-        // 11:15 cae dentro de la vuelta del traslado (hasta las 11:30)
-        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '11:15', 'hora_fin' => '12:00']))
-            ->assertStatus(422)->assertJsonValidationErrors(['horario']);
+        // El campo de traslado ya no existe: se ignora si alguien lo envía
+        $this->assertArrayNotHasKey('minutos_traslado', $creada->json('data'));
 
-        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '11:30', 'hora_fin' => '12:15']))
+        // 11:00 empieza justo cuando termina la cita a domicilio
+        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '11:00', 'hora_fin' => '11:45']))
             ->assertStatus(201);
 
-        // En el salón el traslado se ignora
-        $this->postJson('/api/reservas', $this->payload([
-            'personal_id' => 2, 'minutos_traslado' => 45,
-        ]))->assertStatus(201)->assertJsonPath('data.minutos_traslado', 0);
+        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '10:30', 'hora_fin' => '11:00']))
+            ->assertStatus(422)->assertJsonValidationErrors(['horario']);
     }
 
     /**
-     * Regla 2 (local): en el salón la cita debe caber en el horario del local; a domicilio, no.
+     * Regla 2: a domicilio también se respeta el horario del salón, salvo fuera de horario.
      */
-    public function test_horario_del_local_aplica_solo_en_el_salon(): void
+    public function test_domicilio_tambien_respeta_el_horario_del_salon(): void
     {
-        TurnoPersonal::where('personal_id', 1)->where('dia_semana', 1)->update(['hora_fin' => '19:00:00']);
-
-        $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '17:30', 'hora_fin' => '18:15']))
-            ->assertStatus(422)->assertJsonValidationErrors(['horario']);
-
-        $this->postJson('/api/reservas', $this->payload([
+        $aDomicilio = [
             'hora_inicio' => '17:30',
             'hora_fin' => '18:15',
             'a_domicilio' => true,
             'direccion_domicilio' => 'Calle Ejemplo 123, Villa Elisa',
+        ];
+
+        $this->postJson('/api/reservas', $this->payload($aDomicilio))
+            ->assertStatus(422)->assertJsonValidationErrors(['horario']);
+
+        $this->postJson('/api/reservas', $this->payload([...$aDomicilio, 'fuera_de_horario' => true]))
+            ->assertStatus(201)
+            ->assertJsonPath('data.fuera_de_horario', true);
+    }
+
+    /**
+     * Fuera de horario: se puede atender un día en que el salón no abre.
+     */
+    public function test_fuera_de_horario_permite_atender_un_domingo(): void
+    {
+        $this->postJson('/api/reservas', $this->payload([
+            'fecha' => $this->obtenerProximoDomingo(),
+            'fuera_de_horario' => true,
+        ]))->assertStatus(201)->assertJsonPath('data.fuera_de_horario', true);
+
+        // Una cita normal (dentro del horario) queda sin la marca
+        $this->postJson('/api/reservas', $this->payload(['personal_id' => 2]))
+            ->assertStatus(201)->assertJsonPath('data.fuera_de_horario', false);
+    }
+
+    /**
+     * Fuera de horario: la cita debe quedar dentro de la jornada máxima (06:00 a 22:00).
+     */
+    public function test_fuera_de_horario_respeta_la_jornada_maxima(): void
+    {
+        $this->postJson('/api/reservas', $this->payload([
+            'hora_inicio' => '21:30',
+            'hora_fin' => '22:30',
+            'fuera_de_horario' => true,
+        ]))->assertStatus(422)->assertJsonValidationErrors(['horario']);
+
+        $this->postJson('/api/reservas', $this->payload([
+            'hora_inicio' => '05:30',
+            'hora_fin' => '06:30',
+            'fuera_de_horario' => true,
+        ]))->assertStatus(422)->assertJsonValidationErrors(['horario']);
+
+        $this->postJson('/api/reservas', $this->payload([
+            'hora_inicio' => '21:00',
+            'hora_fin' => '22:00',
+            'fuera_de_horario' => true,
         ]))->assertStatus(201);
+    }
+
+    /**
+     * Fuera de horario: la Regla 1 sigue valiendo (una profesional, una cita a la vez).
+     */
+    public function test_fuera_de_horario_respeta_el_solapamiento(): void
+    {
+        $nocturna = ['hora_inicio' => '19:00', 'hora_fin' => '20:00', 'fuera_de_horario' => true];
+
+        $this->postJson('/api/reservas', $this->payload($nocturna))->assertStatus(201);
+
+        $this->postJson('/api/reservas', $this->payload([...$nocturna, 'hora_inicio' => '19:30', 'hora_fin' => '20:30']))
+            ->assertStatus(422)->assertJsonValidationErrors(['horario']);
+
+        // Otra profesional sí puede a la misma hora
+        $this->postJson('/api/reservas', $this->payload([...$nocturna, 'personal_id' => 2]))->assertStatus(201);
+    }
+
+    /**
+     * Reprogramar: la marca se conserva; sin ella no se puede mover la cita fuera del horario.
+     */
+    public function test_reprogramar_fuera_del_horario_exige_la_marca(): void
+    {
+        $id = $this->postJson('/api/reservas', $this->payload())->assertStatus(201)->json('data.id');
+
+        $this->putJson("/api/reservas/{$id}", ['hora_inicio' => '18:00', 'hora_fin' => '19:00'])
+            ->assertStatus(422)->assertJsonValidationErrors(['horario']);
+
+        $this->putJson("/api/reservas/{$id}", ['hora_inicio' => '18:00', 'hora_fin' => '19:00', 'fuera_de_horario' => true])
+            ->assertStatus(200)->assertJsonPath('data.fuera_de_horario', true);
+
+        // Sin enviar la marca, se conserva la que tenía al moverla otra vez fuera del horario
+        $this->putJson("/api/reservas/{$id}", ['hora_inicio' => '18:30', 'hora_fin' => '19:30'])
+            ->assertStatus(200)->assertJsonPath('data.fuera_de_horario', true);
+
+        // Quitar la marca con la cita fuera del horario no se permite
+        $this->putJson("/api/reservas/{$id}", ['fuera_de_horario' => false])
+            ->assertStatus(422)->assertJsonValidationErrors(['horario']);
+    }
+
+    /**
+     * Bajo demanda: cualquier profesional activa recibe citas dentro del horario del salón,
+     * sin cargar un horario propio.
+     */
+    public function test_profesional_nueva_recibe_citas_sin_horario_propio(): void
+    {
+        $nueva = Personal::create(['nombre' => 'Lucía', 'apellido' => 'Vera', 'fecha_ingreso' => now()->toDateString(), 'activo' => true]);
+
+        $this->postJson('/api/reservas', $this->payload(['personal_id' => $nueva->id, 'hora_inicio' => '08:00', 'hora_fin' => '09:00']))
+            ->assertStatus(201);
+        $this->postJson('/api/reservas', $this->payload(['personal_id' => $nueva->id, 'hora_inicio' => '16:00', 'hora_fin' => '17:00']))
+            ->assertStatus(201);
     }
 
     /**
@@ -676,9 +767,12 @@ class ReservaTest extends TestCase
         $horarios = collect(
             $this->getJson("/api/disponibilidad?personal_id=1&fecha={$lunes}&duracion_minutos=60")
                 ->assertStatus(200)
-                ->assertJsonPath('data.franjas.0', ['08:00', '17:00'])
+                ->assertJsonPath('data.franjas', [['08:00', '17:00']])
                 ->json('data.horarios')
         )->keyBy('hora');
+
+        // Ya no existe el motivo local_cerrado: solo se ofrecen horarios dentro del salón
+        $this->assertSame([], $horarios->where('motivo', 'local_cerrado')->all());
 
         $this->assertTrue($horarios['08:00']['disponible']);
         $this->assertSame('ocupado', $horarios['09:30']['motivo']);
@@ -689,13 +783,42 @@ class ReservaTest extends TestCase
     }
 
     /**
-     * Regla 2: una cita puede ocupar dos franjas contiguas del mismo día.
+     * HU-02: fuera de horario, la disponibilidad recorre la jornada máxima.
      */
-    public function test_cita_en_franjas_contiguas_del_turno(): void
+    public function test_disponibilidad_fuera_de_horario_usa_la_jornada_maxima(): void
     {
-        TurnoPersonal::where('personal_id', 1)->where('dia_semana', 1)->delete();
-        TurnoPersonal::create(['personal_id' => 1, 'dia_semana' => 1, 'hora_inicio' => '08:00:00', 'hora_fin' => '12:00:00']);
-        TurnoPersonal::create(['personal_id' => 1, 'dia_semana' => 1, 'hora_inicio' => '12:00:00', 'hora_fin' => '14:00:00']);
+        $domingo = $this->obtenerProximoDomingo();
+
+        $datos = $this->getJson("/api/disponibilidad?personal_id=1&fecha={$domingo}&duracion_minutos=60&fuera_de_horario=1")
+            ->assertStatus(200)
+            ->assertJsonPath('data.franjas', [['06:00', '22:00']])
+            ->json('data.horarios');
+
+        $this->assertSame('06:00', $datos[0]['hora']);
+        $this->assertSame('21:00', $datos[count($datos) - 1]['hora']);
+    }
+
+    /**
+     * HU-02: si el salón no abre ese día (y no es fuera de horario), no hay horarios.
+     */
+    public function test_disponibilidad_vacia_cuando_el_salon_no_abre(): void
+    {
+        $domingo = $this->obtenerProximoDomingo();
+
+        $this->getJson("/api/disponibilidad?personal_id=1&fecha={$domingo}&duracion_minutos=60")
+            ->assertStatus(200)
+            ->assertJsonPath('data.franjas', [])
+            ->assertJsonPath('data.horarios', []);
+    }
+
+    /**
+     * Regla 2: una cita puede ocupar dos franjas contiguas del horario del salón.
+     */
+    public function test_cita_en_franjas_contiguas_del_horario_del_salon(): void
+    {
+        HorarioAtencion::where('dia_semana', 1)->delete();
+        HorarioAtencion::create(['dia_semana' => 1, 'hora_apertura' => '08:00:00', 'hora_cierre' => '12:00:00']);
+        HorarioAtencion::create(['dia_semana' => 1, 'hora_apertura' => '12:00:00', 'hora_cierre' => '14:00:00']);
 
         $this->postJson('/api/reservas', $this->payload(['hora_inicio' => '11:30', 'hora_fin' => '12:30']))
             ->assertStatus(201);

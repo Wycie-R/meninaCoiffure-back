@@ -2,6 +2,7 @@
 
 namespace Database\Seeders;
 
+use App\Models\HorarioAtencion;
 use App\Models\Personal;
 use App\Models\Servicio;
 use Carbon\Carbon;
@@ -12,7 +13,7 @@ use Illuminate\Support\Facades\DB;
  * Datos de volumen para el benchmark del Avance 4 (RPS y latencia, Arquitectura A vs B).
  * No se ejecuta con db:seed; se carga a pedido:
  *   docker compose exec app php artisan db:seed --class=VolumenReservasSeeder
- * Genera clientes y unas 5.000 reservas sin solapamientos, dentro de los turnos de lunes a viernes.
+ * Genera clientes y unas 5.000 reservas sin solapamientos, dentro del horario del salón.
  */
 class VolumenReservasSeeder extends Seeder
 {
@@ -22,13 +23,12 @@ class VolumenReservasSeeder extends Seeder
 
     public function run(): void
     {
-        $profesionales = Personal::with('turnos')->where('activo', true)->get()
-            ->filter(fn (Personal $p) => $p->turnos->isNotEmpty())
-            ->values();
+        $profesionales = Personal::where('activo', true)->get();
         $servicios = Servicio::where('activo', true)->get();
+        $horarioDelSalon = HorarioAtencion::orderBy('hora_apertura')->get();
 
-        if ($profesionales->isEmpty() || $servicios->isEmpty()) {
-            $this->command?->warn('Faltan personal con turnos o servicios activos: ejecuta primero php artisan db:seed.');
+        if ($profesionales->isEmpty() || $servicios->isEmpty() || $horarioDelSalon->isEmpty()) {
+            $this->command?->warn('Faltan personal activo, servicios activos o el horario del salón: ejecuta primero php artisan db:seed.');
             return;
         }
 
@@ -58,11 +58,11 @@ class VolumenReservasSeeder extends Seeder
                     continue;
                 }
 
-                foreach ($personal->turnos->where('dia_semana', $fecha->dayOfWeekIso) as $turno) {
-                    $inicio = Carbon::parse($fecha->toDateString() . ' ' . $turno->hora_inicio);
-                    $finTurno = Carbon::parse($fecha->toDateString() . ' ' . $turno->hora_fin);
+                foreach ($horarioDelSalon->where('dia_semana', $fecha->dayOfWeekIso) as $franja) {
+                    $inicio = Carbon::parse($fecha->toDateString() . ' ' . $franja->hora_apertura);
+                    $cierre = Carbon::parse($fecha->toDateString() . ' ' . $franja->hora_cierre);
 
-                    for ($hora = $inicio->copy(); $hora->copy()->addHour() <= $finTurno; $hora->addHour()) {
+                    for ($hora = $inicio->copy(); $hora->copy()->addHour() <= $cierre; $hora->addHour()) {
                         if ($creadas >= self::RESERVAS || random_int(1, 100) > 70) {
                             continue;
                         }

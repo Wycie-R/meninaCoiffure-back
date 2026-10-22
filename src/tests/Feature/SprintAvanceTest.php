@@ -172,53 +172,29 @@ class SprintAvanceTest extends TestCase
     }
 
     /**
-     * HU-07: Gestión de personal y asignación de turnos laborales
+     * HU-07: Gestión de personal. Las profesionales atienden bajo demanda, sin turnos fijos.
      */
-    public function test_gestion_de_personal_y_turnos_laborales_hu_07(): void
+    public function test_gestion_de_personal_bajo_demanda_hu_07(): void
     {
         $this->comoAdmin();
 
-        // 1. Alta de nueva profesional con turnos
+        // 1. Alta de nueva profesional: solo sus datos, sin horario propio
         $crearPersonalResponse = $this->postJson('/api/personal', [
             'nombre' => 'Elena',
             'apellido' => 'Peinadora',
             'telefono' => '0981999888',
             'email' => 'elena@meninacoiffure.com',
-            'turnos' => [
-                [
-                    'dia_semana' => 1, // Lunes
-                    'hora_inicio' => '09:00',
-                    'hora_fin' => '17:00',
-                ],
-                [
-                    'dia_semana' => 2, // Martes
-                    'hora_inicio' => '09:00',
-                    'hora_fin' => '17:00',
-                ],
-            ],
         ]);
 
         $crearPersonalResponse->assertStatus(201)
             ->assertJsonPath('data.nombre', 'Elena')
             ->assertJsonPath('data.apellido', 'Peinadora')
-            ->assertJsonCount(2, 'data.turnos');
+            ->assertJsonMissingPath('data.turnos');
 
         $personalId = $crearPersonalResponse->json('data.id');
 
-        // 2. Modificar turnos laborales del profesional
-        $nuevosTurnosResponse = $this->postJson("/api/personal/{$personalId}/turnos", [
-            'turnos' => [
-                [
-                    'dia_semana' => 3, // Miércoles
-                    'hora_inicio' => '10:00',
-                    'hora_fin' => '18:00',
-                ],
-            ],
-        ]);
-
-        $nuevosTurnosResponse->assertStatus(200)
-            ->assertJsonCount(1, 'data.turnos')
-            ->assertJsonPath('data.turnos.0.dia_semana', 3);
+        // 2. El endpoint de turnos ya no existe
+        $this->postJson("/api/personal/{$personalId}/turnos", ['turnos' => []])->assertStatus(404);
 
         // 3. Inactivación lógica del profesional
         $desactivarResponse = $this->deleteJson("/api/personal/{$personalId}");
@@ -355,39 +331,6 @@ class SprintAvanceTest extends TestCase
             'precio' => 60000,
             'vigente_desde' => now()->subDay()->toDateString(),
         ])->assertStatus(422)->assertJsonValidationErrors(['vigente_desde']);
-    }
-
-    /**
-     * HU-08: Los turnos validan horas invertidas y franjas solapadas, y pueden quedar vacíos.
-     */
-    public function test_turnos_validan_horas_y_solapamientos(): void
-    {
-        $this->comoAdmin();
-        $carla = Personal::where('email', 'carla@meninacoiffure.com')->first();
-
-        $this->postJson("/api/personal/{$carla->id}/turnos", [
-            'turnos' => [['dia_semana' => 1, 'hora_inicio' => '18:00', 'hora_fin' => '09:00']],
-        ])->assertStatus(422)->assertJsonValidationErrors(['turnos.0.hora_fin']);
-
-        $this->postJson("/api/personal/{$carla->id}/turnos", [
-            'turnos' => [
-                ['dia_semana' => 1, 'hora_inicio' => '09:00', 'hora_fin' => '12:00'],
-                ['dia_semana' => 1, 'hora_inicio' => '11:00', 'hora_fin' => '15:00'],
-            ],
-        ])->assertStatus(422)->assertJsonValidationErrors(['turnos']);
-
-        // Franjas contiguas sí se aceptan
-        $this->postJson("/api/personal/{$carla->id}/turnos", [
-            'turnos' => [
-                ['dia_semana' => 1, 'hora_inicio' => '09:00', 'hora_fin' => '12:00'],
-                ['dia_semana' => 1, 'hora_inicio' => '12:00', 'hora_fin' => '15:00'],
-            ],
-        ])->assertStatus(200)->assertJsonCount(2, 'data.turnos');
-
-        // Lista vacía: queda sin turnos
-        $this->postJson("/api/personal/{$carla->id}/turnos", ['turnos' => []])
-            ->assertStatus(200)
-            ->assertJsonCount(0, 'data.turnos');
     }
 
     protected function comoAdmin(): void

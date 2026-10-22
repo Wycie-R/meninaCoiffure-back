@@ -53,8 +53,8 @@ class AvanceDosSeeder extends Seeder
     }
 
     /**
-     * El equipo que atiende con turno: la propietaria (que también presta servicios) y la
-     * estilista y maquilladora. La asistente de salón apoya en el lavacabezas y no recibe reservas.
+     * El equipo que atiende por cita, bajo demanda y dentro del horario del salón: la propietaria
+     * (que también presta servicios) y la estilista y maquilladora. La asistente de salón apoya en el lavacabezas y no recibe reservas.
      *
      * @return array<string, Personal>
      */
@@ -72,19 +72,15 @@ class AvanceDosSeeder extends Seeder
                 'fecha_ingreso' => $ingreso, 'activo' => true,
             ]);
 
-            // Lunes a viernes de 08:00 a 17:00, como el horario del local
-            if (!$persona->turnos()->exists()) {
-                foreach (range(1, 5) as $dia) {
-                    $persona->turnos()->create(['dia_semana' => $dia, 'hora_inicio' => '08:00:00', 'hora_fin' => '17:00:00']);
-                }
-            }
-
             $personal[$clave] = $persona;
         }
 
         return $personal;
     }
 
+    /**
+     * Horario confirmado por la propietaria: lunes a viernes de 08:00 a 17:00.
+     */
     protected function horarioDelLocal(): void
     {
         if (HorarioAtencion::exists()) {

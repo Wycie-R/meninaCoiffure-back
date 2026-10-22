@@ -13,23 +13,11 @@ import Interruptor from '../../Components/Interruptor.vue'
 import PanelLateral from '../../Components/PanelLateral.vue'
 import Campo from '../../Components/Campo.vue'
 import Modal from '../../Components/Modal.vue'
-import EditorTurnos from '../../Components/EditorTurnos.vue'
 import { api, primerosErrores, mensajeError } from '../../api'
-import { aMinutos, duracion, fechaCorta, hoyISO, iniciales, normalizar, plural } from '../../formato'
+import { fechaCorta, hoyISO, iniciales, normalizar, plural } from '../../formato'
 import { usePersonal } from '../../personal'
 import { usePermisos } from '../../auth'
 import { claseEntrada, claseEnfoque } from '../../ui'
-import {
-    DIAS,
-    semanaDesdeTurnos,
-    semanaPorDefecto,
-    turnosDesdeSemana,
-    firmaSemana,
-    validarSemana,
-    semanaTieneErrores,
-    erroresVacios,
-    erroresTurnosDesdeServidor,
-} from '../../turnos'
 
 const { personal, cargando, error, cargarPersonal } = usePersonal()
 const { esAdmin } = usePermisos()
@@ -75,17 +63,11 @@ const lista = computed(() => {
 
     return personal.value
         .filter((p) => (verInactivos.value || p.activo) && normalizar(`${p.nombre} ${p.apellido} ${p.email ?? ''} ${(p.especialidades ?? []).map((e) => e.nombre).join(' ')}`).includes(texto))
-        .map((p) => {
-            const turnos = p.turnos ?? []
-
-            return {
-                ...p,
-                nombreCompleto: `${p.nombre} ${p.apellido}`,
-                dias: new Set(turnos.map((t) => t.dia_semana)),
-                minutos: turnos.reduce((total, t) => total + aMinutos(t.hora_fin) - aMinutos(t.hora_inicio), 0),
-                especialidadesOrdenadas: especialidadesDe(p),
-            }
-        })
+        .map((p) => ({
+            ...p,
+            nombreCompleto: `${p.nombre} ${p.apellido}`,
+            especialidadesOrdenadas: especialidadesDe(p),
+        }))
         .sort(
             (a, b) =>
                 Number(b.activo) - Number(a.activo) ||
@@ -98,14 +80,9 @@ const resumen = computed(() => {
     const total = personal.value.length
     if (!total) return 'Todavía no hay profesionales en el equipo.'
     const activos = personal.value.filter((p) => p.activo).length
-    const accion = esAdmin.value ? 'ver o cambiar sus datos, su horario y sus especialidades' : 'ver sus datos, su horario y sus especialidades'
+    const accion = esAdmin.value ? 'ver o cambiar sus datos y sus especialidades' : 'ver sus datos y sus especialidades'
     return `${plural(activos, 'profesional activo', 'profesionales activos')} de ${total}. Toca a cada persona para ${accion}.`
 })
-
-function descripcionDias(persona) {
-    const nombres = DIAS.filter((d) => persona.dias.has(d.dia)).map((d) => d.nombre.toLowerCase())
-    return nombres.length ? `Trabaja ${nombres.join(', ')}` : 'Sin días asignados'
-}
 
 function limpiarFiltros() {
     busqueda.value = ''
@@ -119,11 +96,8 @@ const persona = computed(() => (typeof modo.value === 'number' ? personal.value.
 
 const form = ref({ nombre: '', apellido: '', telefono: '', email: '', fecha_ingreso: '' })
 const erroresDatos = ref({})
-const semana = ref([])
-const erroresSemana = ref(erroresVacios())
 
 const guardandoDatos = ref(false)
-const guardandoHorario = ref(false)
 const guardandoNuevo = ref(false)
 
 const seleccion = ref([])
@@ -149,11 +123,6 @@ function sincronizarDatos(p) {
     erroresDatos.value = {}
 }
 
-function sincronizarHorario(p) {
-    semana.value = semanaDesdeTurnos(p.turnos ?? [])
-    erroresSemana.value = erroresVacios()
-}
-
 function sincronizarEspecialidades(p) {
     seleccion.value = idsDe(p)
     errorEspecialidades.value = ''
@@ -170,16 +139,10 @@ function limpiarError(campo) {
     erroresDatos.value = Object.fromEntries(Object.entries(erroresDatos.value).filter(([clave]) => clave !== campo))
 }
 
-watch(semana, () => {
-    if (semanaTieneErrores(erroresSemana.value)) erroresSemana.value = erroresVacios()
-})
-
 function abrirNuevo() {
     if (!esAdmin.value) return
     form.value = { nombre: '', apellido: '', telefono: '', email: '', fecha_ingreso: hoyISO() }
     erroresDatos.value = {}
-    semana.value = semanaPorDefecto()
-    erroresSemana.value = erroresVacios()
     seleccion.value = []
     errorEspecialidades.value = ''
     errorEstado.value = ''
@@ -188,7 +151,6 @@ function abrirNuevo() {
 
 function abrirPersona(p) {
     sincronizarDatos(p)
-    sincronizarHorario(p)
     sincronizarEspecialidades(p)
     errorEstado.value = ''
     modo.value = p.id
@@ -202,11 +164,6 @@ const cambiosDatos = computed(() => {
     if (!persona.value) return false
     const base = datosDe(persona.value)
     return Object.keys(base).some((clave) => String(form.value[clave] ?? '').trim() !== base[clave])
-})
-
-const cambiosHorario = computed(() => {
-    if (!persona.value) return false
-    return firmaSemana(semana.value) !== firmaSemana(semanaDesdeTurnos(persona.value.turnos ?? []))
 })
 
 const cambiosEspecialidades = computed(() => {
@@ -306,53 +263,23 @@ async function guardarDatos() {
     aviso.value = 'Datos guardados.'
 }
 
-async function guardarHorario() {
-    erroresSemana.value = validarSemana(semana.value)
-    if (semanaTieneErrores(erroresSemana.value)) return
-
-    guardandoHorario.value = true
-    const turnos = turnosDesdeSemana(semana.value)
-    const respuesta = await api(`/api/personal/${persona.value.id}/turnos`, {
-        metodo: 'POST',
-        datos: { turnos },
-    })
-    guardandoHorario.value = false
-
-    if (!respuesta.ok) {
-        const delServidor = respuesta.status === 422
-            ? erroresTurnosDesdeServidor(primerosErrores(respuesta.cuerpo), turnos)
-            : erroresVacios()
-        erroresSemana.value = semanaTieneErrores(delServidor)
-            ? delServidor
-            : { general: mensajeError(respuesta, 'guardar el horario'), dias: {} }
-        return
-    }
-
-    await cargarPersonal({ forzar: true })
-    if (persona.value) sincronizarHorario(persona.value)
-    aviso.value = 'Horario actualizado.'
-}
-
 async function registrar() {
     erroresDatos.value = validarDatos()
-    erroresSemana.value = validarSemana(semana.value)
-    if (Object.keys(erroresDatos.value).length || semanaTieneErrores(erroresSemana.value)) return
+    if (Object.keys(erroresDatos.value).length) return
 
     guardandoNuevo.value = true
-    const turnos = turnosDesdeSemana(semana.value)
     const respuesta = await api('/api/personal', {
         metodo: 'POST',
-        datos: { ...cargaUtilDatos(), activo: true, turnos },
+        datos: { ...cargaUtilDatos(), activo: true },
     })
 
     if (!respuesta.ok) {
         guardandoNuevo.value = false
         if (respuesta.status === 422) {
             const errores = primerosErrores(respuesta.cuerpo)
-            const deTurnos = Object.fromEntries(Object.entries(errores).filter(([clave]) => clave.startsWith('turnos')))
-            erroresDatos.value = Object.fromEntries(Object.entries(errores).filter(([clave]) => !clave.startsWith('turnos')))
-            erroresSemana.value = erroresTurnosDesdeServidor(deTurnos, turnos)
-            if (!Object.keys(errores).length) erroresDatos.value = { general: mensajeError(respuesta, 'registrar al profesional') }
+            erroresDatos.value = Object.keys(errores).length
+                ? errores
+                : { general: mensajeError(respuesta, 'registrar al profesional') }
         } else {
             erroresDatos.value = { general: mensajeError(respuesta, 'registrar al profesional') }
         }
@@ -485,26 +412,8 @@ watch(aviso, (valor) => {
                                 <StatusBadge v-if="!p.activo" status="inactivo" class="shrink-0" />
                             </span>
 
-                            <span class="mt-6 flex gap-1.5" role="img" :aria-label="descripcionDias(p)">
-                                <span
-                                    v-for="d in DIAS"
-                                    :key="d.dia"
-                                    class="flex h-9 min-w-0 flex-1 items-center justify-center rounded-full border text-xs font-medium"
-                                    :class="
-                                        p.dias.has(d.dia)
-                                            ? p.activo
-                                                ? 'border-orquidea/40 bg-orquidea/12 text-orquidea-claro'
-                                                : 'border-hilo-fuerte bg-raso text-bruma'
-                                            : 'border-hilo text-niebla'
-                                    "
-                                    aria-hidden="true"
-                                >
-                                    {{ d.corto }}
-                                </span>
-                            </span>
-
-                            <span class="mt-3 block text-sm text-bruma">
-                                {{ p.minutos ? `${duracion(p.minutos)} por semana` : 'Sin horario asignado' }}
+                            <span class="mt-6 block text-sm text-bruma">
+                                {{ p.activo ? 'Atiende por cita dentro del horario del salón' : 'No recibe citas mientras esté inactivo' }}
                             </span>
 
                             <span v-if="p.especialidadesOrdenadas.length" class="mt-4 flex flex-wrap gap-1.5">
@@ -535,12 +444,12 @@ watch(aviso, (valor) => {
         <PanelLateral
             :abierto="panelAbierto"
             :titulo="esNuevo ? 'Nuevo profesional' : persona ? `${persona.nombre} ${persona.apellido}` : 'Profesional'"
-            :subtitulo="esNuevo ? 'Datos, horario semanal y especialidades' : persona?.fecha_ingreso ? `Ingresó el ${fechaCorta(persona.fecha_ingreso)}` : ''"
+            :subtitulo="esNuevo ? 'Datos y especialidades' : persona?.fecha_ingreso ? `Ingresó el ${fechaCorta(persona.fecha_ingreso)}` : ''"
             @cerrar="cerrarPanel"
         >
             <div v-if="esNuevo || persona" class="space-y-10">
                 <p v-if="!esAdmin" class="rounded-xl bg-terciopelo px-4 py-3 text-sm text-bruma">
-                    Solo la administración del salón puede cambiar los datos, los horarios y las especialidades del equipo.
+                    Solo la administración del salón puede cambiar los datos y las especialidades del equipo.
                 </p>
 
                 <section aria-labelledby="titulo-datos">
@@ -584,20 +493,19 @@ watch(aviso, (valor) => {
                 </section>
 
                 <section aria-labelledby="titulo-horario">
-                    <h3 id="titulo-horario" class="text-xl">Horario semanal</h3>
-                    <p class="mt-1 text-sm text-bruma">Las reservas solo se pueden agendar dentro de estas franjas.</p>
-                    <p v-if="esNuevo" class="mt-1 text-sm text-niebla">
-                        Punto de partida: lunes a viernes de 09:00 a 18:00. Ajusta lo que necesites.
+                    <h3 id="titulo-horario" class="text-xl">Horario</h3>
+                    <p class="mt-1 text-sm text-bruma">
+                        Atiende por cita dentro del horario del salón. La administración le asigna las citas y, si hace falta,
+                        puede agendarle una fuera de horario.
                     </p>
-
-                    <fieldset :disabled="!esAdmin" class="mt-4 min-w-0">
-                        <legend class="sr-only">Horario semanal</legend>
-                        <EditorTurnos v-model="semana" :errores="erroresSemana" />
-                    </fieldset>
-
-                    <Button v-if="!esNuevo && esAdmin" class="mt-5" :disabled="guardandoHorario || !cambiosHorario" @click="guardarHorario">
-                        {{ guardandoHorario ? 'Guardando…' : 'Guardar horario' }}
-                    </Button>
+                    <Link
+                        v-if="esAdmin"
+                        href="/configuracion?seccion=horario"
+                        class="mt-2 inline-block rounded text-sm font-medium text-orquidea underline underline-offset-4 hover:text-orquidea-claro"
+                        :class="claseEnfoque"
+                    >
+                        Ver el horario del salón
+                    </Link>
                 </section>
 
                 <section aria-labelledby="titulo-especialidades">
@@ -687,7 +595,7 @@ watch(aviso, (valor) => {
                         <p class="max-w-xs text-sm text-bruma">
                             {{
                                 persona.activo
-                                    ? 'Este perfil aparece al crear reservas. Para desactivarlo no debe tener citas próximas pendientes o confirmadas; el historial y el horario se conservan.'
+                                    ? 'Este perfil aparece al crear reservas. Para desactivarlo no debe tener citas próximas pendientes o confirmadas; el historial se conserva.'
                                     : 'Este perfil no aparece al crear reservas. Puedes reactivarlo cuando quieras.'
                             }}
                         </p>
@@ -718,7 +626,7 @@ watch(aviso, (valor) => {
             <h2 class="text-2xl">¿Desactivar el perfil de {{ persona?.nombre }} {{ persona?.apellido }}?</h2>
             <p class="mt-2 text-sm text-bruma">
                 Dejará de aparecer al crear reservas. Si tiene citas próximas pendientes o confirmadas, primero hay que
-                cancelarlas. El historial y el horario quedan guardados por si reactivas el perfil.
+                cancelarlas. El historial queda guardado por si reactivas el perfil.
             </p>
             <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                 <Button label="Cancelar" variant="secondary" @click="confirmarDesactivar = false" />

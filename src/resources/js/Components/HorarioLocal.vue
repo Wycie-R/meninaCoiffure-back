@@ -1,20 +1,21 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
 import Button from './Button.vue'
-import EditorTurnos from './EditorTurnos.vue'
+import EditorSemana from './EditorSemana.vue'
 import Icono from './Icono.vue'
 import { api, mensajeError, primerosErrores } from '../api'
-import { hora } from '../formato'
+import { fechaCorta, hora } from '../formato'
 import {
-    DIAS,
-    semanaDesdeTurnos,
-    turnosDesdeSemana,
+    comoFranjas,
+    semanaDesdeFranjas,
+    franjasDesdeSemana,
     firmaSemana,
     validarSemana,
     semanaTieneErrores,
     erroresVacios,
-    erroresTurnosDesdeServidor,
-} from '../turnos'
+    erroresSemanaDesdeServidor,
+    actualizarHorarioSalon,
+} from '../horarios'
 
 const emit = defineEmits(['aviso'])
 
@@ -26,12 +27,8 @@ const errores = ref(erroresVacios())
 const guardando = ref(false)
 const fueraDeHorario = ref([])
 
-function comoTurnos(horarios) {
-    return horarios.map((h) => ({ dia_semana: Number(h.dia_semana), hora_inicio: hora(h.hora_apertura), hora_fin: hora(h.hora_cierre) }))
-}
-
 function aplicar(horarios) {
-    semana.value = semanaDesdeTurnos(comoTurnos(horarios))
+    semana.value = semanaDesdeFranjas(comoFranjas(horarios))
     base.value = firmaSemana(semana.value)
     errores.value = erroresVacios()
 }
@@ -58,18 +55,19 @@ watch(semana, () => {
 
 const cambios = computed(() => !cargando.value && firmaSemana(semana.value) !== base.value)
 
-const porPersona = computed(() => {
-    const grupos = new Map()
-    for (const t of fueraDeHorario.value) {
-        const clave = t.personal_id
-        if (!grupos.has(clave)) grupos.set(clave, { nombre: `${t.nombre} ${t.apellido}`, turnos: [] })
-        grupos.get(clave).turnos.push(`${DIAS.find((d) => d.dia === Number(t.dia_semana))?.nombre.toLowerCase()} de ${hora(t.hora_inicio)} a ${hora(t.hora_fin)}`)
-    }
-    return [...grupos.values()]
-})
+// Reservas futuras que quedaron fuera del nuevo horario (aviso informativo de la API)
+const reservasAfectadas = computed(() =>
+    fueraDeHorario.value.map((r) => {
+        const persona = r.personal ? `${r.personal.nombre} ${r.personal.apellido ?? ''}`.trim() : 'Sin profesional'
+        return {
+            id: r.id,
+            texto: `${fechaCorta(String(r.fecha).slice(0, 10))}, de ${hora(r.hora_inicio)} a ${hora(r.hora_fin)} · ${persona}`,
+        }
+    })
+)
 
 function descartar() {
-    semana.value = semanaDesdeTurnos(JSON.parse(base.value))
+    semana.value = semanaDesdeFranjas(JSON.parse(base.value))
     errores.value = erroresVacios()
 }
 
@@ -77,8 +75,15 @@ async function guardar() {
     errores.value = validarSemana(semana.value)
     if (semanaTieneErrores(errores.value)) return
 
-    const turnos = turnosDesdeSemana(semana.value)
-    const horarios = turnos.map((t) => ({ dia_semana: t.dia_semana, hora_apertura: t.hora_inicio, hora_cierre: t.hora_fin }))
+    const franjas = franjasDesdeSemana(semana.value)
+
+    // El salón siempre debe tener horario: la API rechaza una semana sin días
+    if (!franjas.length) {
+        errores.value = { general: 'El salón debe atender al menos un día.', dias: {} }
+        return
+    }
+
+    const horarios = franjas.map((f) => ({ dia_semana: f.dia_semana, hora_apertura: f.hora_inicio, hora_cierre: f.hora_fin }))
 
     guardando.value = true
     const respuesta = await api('/api/horarios-atencion', { metodo: 'PUT', datos: { horarios } })
@@ -87,8 +92,7 @@ async function guardar() {
     if (!respuesta.ok) {
         if (respuesta.status === 422) {
             const crudos = primerosErrores(respuesta.cuerpo)
-            const adaptados = Object.fromEntries(Object.entries(crudos).map(([clave, mensaje]) => [clave.replace(/^horarios/, 'turnos'), mensaje]))
-            const resultado = erroresTurnosDesdeServidor(adaptados, turnos)
+            const resultado = erroresSemanaDesdeServidor(crudos, franjas)
             errores.value = semanaTieneErrores(resultado) ? resultado : { general: mensajeError(respuesta, 'guardar el horario'), dias: {} }
         } else {
             errores.value = { general: mensajeError(respuesta, 'guardar el horario'), dias: {} }
@@ -97,7 +101,8 @@ async function guardar() {
     }
 
     aplicar(respuesta.cuerpo?.data ?? [])
-    fueraDeHorario.value = respuesta.cuerpo?.turnos_fuera_de_horario ?? []
+    actualizarHorarioSalon(respuesta.cuerpo?.data ?? [])
+    fueraDeHorario.value = respuesta.cuerpo?.reservas_fuera_de_horario ?? []
     emit('aviso', 'Horario del local actualizado.')
 }
 </script>
@@ -107,8 +112,8 @@ async function guardar() {
         <div class="max-w-2xl">
             <h2 id="config-horario" class="text-3xl">Horario del local</h2>
             <p class="mt-2 text-sm leading-relaxed text-bruma">
-                Los días y horas en que el salón abre. Las citas en el local solo se pueden agendar dentro de estas franjas;
-                las citas a domicilio pueden quedar fuera.
+                Los días y horas en que el salón atiende. Las citas, en el local o a domicilio, se agendan dentro de estas franjas;
+                solo las marcadas como fuera de horario pueden quedar afuera.
             </p>
         </div>
 
@@ -123,27 +128,25 @@ async function guardar() {
 
         <div v-else class="mt-6 max-w-2xl">
             <div
-                v-if="porPersona.length"
+                v-if="reservasAfectadas.length"
                 role="note"
                 class="mb-6 flex gap-3 rounded-2xl border border-miel/40 bg-miel/10 px-4 py-3.5 text-sm"
             >
                 <Icono name="alerta" class="mt-0.5 h-5 w-5 shrink-0 text-miel" />
                 <div class="min-w-0">
-                    <p class="font-medium text-miel">Hay turnos del equipo fuera del nuevo horario</p>
-                    <p class="mt-1 text-perla">Esas horas solo servirán para citas a domicilio. Si no es lo que quieres, ajusta su horario en Personal.</p>
+                    <p class="font-medium text-miel">Hay citas agendadas fuera del nuevo horario</p>
+                    <p class="mt-1 text-perla">Siguen en pie. Si no se atenderán, reprográmalas o márcalas como fuera de horario desde Reservas.</p>
                     <ul class="mt-2 space-y-1 text-bruma">
-                        <li v-for="p in porPersona" :key="p.nombre">
-                            <span class="text-perla">{{ p.nombre }}:</span> {{ p.turnos.join('; ') }}
-                        </li>
+                        <li v-for="r in reservasAfectadas" :key="r.id">{{ r.texto }}</li>
                     </ul>
                     <button type="button" class="mt-2 rounded text-sm text-miel underline underline-offset-4" @click="fueraDeHorario = []">Entendido</button>
                 </div>
             </div>
 
-            <EditorTurnos
+            <EditorSemana
                 v-model="semana"
                 :errores="errores"
-                texto-vacio="Sin horario cargado: el sistema no limita las citas por horario del local."
+                texto-vacio="Sin días de atención: el salón debe atender al menos un día para recibir citas."
                 texto-descanso="Cerrado"
             />
 

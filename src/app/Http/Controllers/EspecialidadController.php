@@ -105,7 +105,7 @@ class EspecialidadController extends Controller
 
         return response()->json([
             'message' => 'Especialidades del profesional actualizadas exitosamente.',
-            'data' => $personal->fresh(['turnos', 'especialidades']),
+            'data' => $personal->fresh('especialidades'),
         ]);
     }
 

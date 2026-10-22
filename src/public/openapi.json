@@ -35,7 +35,7 @@
     },
     {
       "name": "Especialidades y horarios",
-      "description": "Especialidades del personal, turnos semanales de cada profesional y horario de atención del local (HU-07, HU-08)."
+      "description": "Especialidades del personal y horario de atención del salón (HU-07, HU-08). Las profesionales trabajan bajo demanda, sin turnos fijos."
     },
     {
       "name": "Clientes",
@@ -1198,7 +1198,7 @@
           "Personal"
         ],
         "summary": "Listar personal",
-        "description": "HU-07. Lista el equipo ordenado por nombre, con sus turnos semanales y especialidades.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "HU-07. Lista el equipo ordenado por nombre, con sus especialidades. Todas atienden por cita, bajo demanda, dentro del horario del salón.\n\n**Acceso:** `admin` o `profesional`.",
         "parameters": [
           {
             "name": "solo_activos",
@@ -1222,7 +1222,7 @@
                     "data": {
                       "type": "array",
                       "items": {
-                        "$ref": "#/components/schemas/PersonalConTurnos"
+                        "$ref": "#/components/schemas/PersonalDetalle"
                       }
                     }
                   },
@@ -1242,53 +1242,6 @@
                       "activo": true,
                       "created_at": "2026-09-02T19:20:00.000000Z",
                       "updated_at": "2026-09-02T19:20:00.000000Z",
-                      "turnos": [
-                        {
-                          "id": 11,
-                          "personal_id": 2,
-                          "dia_semana": 1,
-                          "hora_inicio": "08:00:00",
-                          "hora_fin": "17:00:00",
-                          "created_at": "2026-09-02T19:20:00.000000Z",
-                          "updated_at": "2026-09-02T19:20:00.000000Z"
-                        },
-                        {
-                          "id": 12,
-                          "personal_id": 2,
-                          "dia_semana": 2,
-                          "hora_inicio": "08:00:00",
-                          "hora_fin": "17:00:00",
-                          "created_at": "2026-09-02T19:20:00.000000Z",
-                          "updated_at": "2026-09-02T19:20:00.000000Z"
-                        },
-                        {
-                          "id": 13,
-                          "personal_id": 2,
-                          "dia_semana": 3,
-                          "hora_inicio": "08:00:00",
-                          "hora_fin": "17:00:00",
-                          "created_at": "2026-09-02T19:20:00.000000Z",
-                          "updated_at": "2026-09-02T19:20:00.000000Z"
-                        },
-                        {
-                          "id": 14,
-                          "personal_id": 2,
-                          "dia_semana": 4,
-                          "hora_inicio": "08:00:00",
-                          "hora_fin": "17:00:00",
-                          "created_at": "2026-09-02T19:20:00.000000Z",
-                          "updated_at": "2026-09-02T19:20:00.000000Z"
-                        },
-                        {
-                          "id": 15,
-                          "personal_id": 2,
-                          "dia_semana": 5,
-                          "hora_inicio": "08:00:00",
-                          "hora_fin": "17:00:00",
-                          "created_at": "2026-09-02T19:20:00.000000Z",
-                          "updated_at": "2026-09-02T19:20:00.000000Z"
-                        }
-                      ],
                       "especialidades": []
                     }
                   ]
@@ -1309,7 +1262,7 @@
           "Personal"
         ],
         "summary": "Registrar personal",
-        "description": "HU-07. Alta de un miembro del equipo, opcionalmente con sus turnos. El correo se guarda en minúsculas y es único\n**sin distinguir mayúsculas** (`Carla@...` y `carla@...` son el mismo): si ya existe responde 422 en `email`\n\"Ya hay una persona del equipo registrada con ese correo.\". Las franjas de un mismo día no pueden superponerse\n(las contiguas sí) y cada una debe terminar después de empezar.\n\n**Acceso:** solo `admin`.",
+        "description": "HU-07. Alta de un miembro del equipo. El correo se guarda en minúsculas y es único\n**sin distinguir mayúsculas** (`Carla@...` y `carla@...` son el mismo): si ya existe responde 422 en `email`\n\"Ya hay una persona del equipo registrada con ese correo.\".\n\n**Acceso:** solo `admin`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1349,13 +1302,6 @@
                   "activo": {
                     "type": "boolean",
                     "default": true
-                  },
-                  "turnos": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/TurnoInput"
-                    },
-                    "nullable": true
                   }
                 },
                 "required": [
@@ -1366,34 +1312,7 @@
               "example": {
                 "nombre": "Laura",
                 "apellido": "Benítez",
-                "email": "laura@meninacoiffure.com",
-                "turnos": [
-                  {
-                    "dia_semana": 1,
-                    "hora_inicio": "08:00",
-                    "hora_fin": "17:00"
-                  },
-                  {
-                    "dia_semana": 2,
-                    "hora_inicio": "08:00",
-                    "hora_fin": "17:00"
-                  },
-                  {
-                    "dia_semana": 3,
-                    "hora_inicio": "08:00",
-                    "hora_fin": "17:00"
-                  },
-                  {
-                    "dia_semana": 4,
-                    "hora_inicio": "08:00",
-                    "hora_fin": "17:00"
-                  },
-                  {
-                    "dia_semana": 5,
-                    "hora_inicio": "08:00",
-                    "hora_fin": "17:00"
-                  }
-                ]
+                "email": "laura@meninacoiffure.com"
               }
             }
           }
@@ -1411,7 +1330,7 @@
                       "example": "Personal registrado exitosamente."
                     },
                     "data": {
-                      "$ref": "#/components/schemas/PersonalConTurnos"
+                      "$ref": "#/components/schemas/PersonalDetalle"
                     }
                   },
                   "required": [
@@ -1455,7 +1374,7 @@
           "Personal"
         ],
         "summary": "Detalle de personal",
-        "description": "HU-07. Datos de un profesional con turnos y especialidades.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "HU-07. Datos de un profesional con sus especialidades.\n\n**Acceso:** `admin` o `profesional`.",
         "responses": {
           "200": {
             "description": "Personal",
@@ -1465,7 +1384,7 @@
                   "type": "object",
                   "properties": {
                     "data": {
-                      "$ref": "#/components/schemas/PersonalConTurnos"
+                      "$ref": "#/components/schemas/PersonalDetalle"
                     }
                   },
                   "required": [
@@ -1496,7 +1415,7 @@
           "Personal"
         ],
         "summary": "Actualizar personal",
-        "description": "HU-07. Modifica datos del profesional (campos opcionales; los turnos se guardan con `POST .../turnos`). Mismo\ncontrol de correo único sin distinguir mayúsculas. No se puede desactivar (`activo: false`) a quien tiene\nreservas pendientes o confirmadas por atender (422 en `activo`).\n\n**Acceso:** solo `admin`.",
+        "description": "HU-07. Modifica datos del profesional (campos opcionales). Mismo\ncontrol de correo único sin distinguir mayúsculas. No se puede desactivar (`activo: false`) a quien tiene\nreservas pendientes o confirmadas por atender (422 en `activo`).\n\n**Acceso:** solo `admin`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -1552,7 +1471,7 @@
                       "example": "Datos de personal actualizados exitosamente."
                     },
                     "data": {
-                      "$ref": "#/components/schemas/PersonalConTurnos"
+                      "$ref": "#/components/schemas/PersonalDetalle"
                     }
                   },
                   "required": [
@@ -1648,112 +1567,6 @@
         }
       }
     },
-    "/api/personal/{personal}/turnos": {
-      "post": {
-        "tags": [
-          "Especialidades y horarios"
-        ],
-        "summary": "Guardar turnos semanales",
-        "description": "HU-08. **Reemplaza** todos los turnos del profesional por la lista enviada. La lista es obligatoria pero puede ir\nvacía (el profesional queda sin turnos y no recibe reservas). Varias franjas por día son válidas si no se\nsuperponen (las contiguas, como 08:00–12:00 y 12:00–17:00, se tratan como una sola al reservar).\n\n**Acceso:** solo `admin`.",
-        "requestBody": {
-          "required": true,
-          "content": {
-            "application/json": {
-              "schema": {
-                "type": "object",
-                "properties": {
-                  "turnos": {
-                    "type": "array",
-                    "items": {
-                      "$ref": "#/components/schemas/TurnoInput"
-                    }
-                  }
-                },
-                "required": [
-                  "turnos"
-                ]
-              },
-              "example": {
-                "turnos": [
-                  {
-                    "dia_semana": 1,
-                    "hora_inicio": "08:00",
-                    "hora_fin": "12:00"
-                  },
-                  {
-                    "dia_semana": 1,
-                    "hora_inicio": "13:00",
-                    "hora_fin": "17:00"
-                  },
-                  {
-                    "dia_semana": 3,
-                    "hora_inicio": "08:00",
-                    "hora_fin": "17:00"
-                  }
-                ]
-              }
-            }
-          }
-        },
-        "responses": {
-          "200": {
-            "description": "Turnos guardados",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "type": "object",
-                  "properties": {
-                    "message": {
-                      "type": "string",
-                      "example": "Turnos de trabajo actualizados exitosamente."
-                    },
-                    "data": {
-                      "$ref": "#/components/schemas/PersonalConTurnos"
-                    }
-                  },
-                  "required": [
-                    "message",
-                    "data"
-                  ]
-                }
-              }
-            }
-          },
-          "401": {
-            "$ref": "#/components/responses/Unauthenticated"
-          },
-          "403": {
-            "$ref": "#/components/responses/Forbidden"
-          },
-          "404": {
-            "$ref": "#/components/responses/NotFound"
-          },
-          "422": {
-            "description": "Error de validación",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ValidationError"
-                },
-                "example": {
-                  "message": "Las franjas 08:00–12:00 y 11:00–14:00 del mismo día se superponen.",
-                  "errors": {
-                    "turnos": [
-                      "Las franjas 08:00–12:00 y 11:00–14:00 del mismo día se superponen."
-                    ]
-                  }
-                }
-              }
-            }
-          }
-        }
-      },
-      "parameters": [
-        {
-          "$ref": "#/components/parameters/personal"
-        }
-      ]
-    },
     "/api/personal/{personal}/especialidades": {
       "put": {
         "tags": [
@@ -1803,7 +1616,7 @@
                       "example": "Especialidades del profesional actualizadas exitosamente."
                     },
                     "data": {
-                      "$ref": "#/components/schemas/PersonalConTurnos"
+                      "$ref": "#/components/schemas/PersonalDetalle"
                     }
                   },
                   "required": [
@@ -2172,11 +1985,11 @@
         "tags": [
           "Especialidades y horarios"
         ],
-        "summary": "Horario del local",
+        "summary": "Horario del salón",
         "description": "HU-08. Franjas de atención del salón por día (1 = lunes … 7 = domingo). Lista vacía: el local no restringe el horario.\n\n**Acceso:** `admin` o `profesional`.",
         "responses": {
           "200": {
-            "description": "Horario del local",
+            "description": "Horario del salón",
             "content": {
               "application/json": {
                 "schema": {
@@ -2242,8 +2055,8 @@
         "tags": [
           "Especialidades y horarios"
         ],
-        "summary": "Guardar horario del local",
-        "description": "HU-08. **Reemplaza** todo el horario del local. Lista obligatoria; vacía = sin restricción de horario del local.\nFranjas del mismo día sin superponerse (contiguas sí) y con cierre posterior a la apertura.\n\n`turnos_fuera_de_horario` es **informativo** (no bloquea): turnos del personal activo que no caben en el nuevo\nhorario; esas horas siguen sirviendo para citas a domicilio.\n\n**Acceso:** solo `admin`.",
+        "summary": "Guardar horario del salón",
+        "description": "HU-08. **Reemplaza** todo el horario del salón. Debe tener **al menos una franja** (422 `horarios` \"El salón\ndebe tener al menos un día de atención.\"). Franjas del mismo día sin superponerse (contiguas sí) y con cierre\nposterior a la apertura.\n\n`reservas_fuera_de_horario` es **informativo** (no bloquea): reservas pendientes o confirmadas desde hoy, sin la\nmarca `fuera_de_horario`, que no caben en el horario nuevo. La dueña decide si las reprograma o las marca como\nfuera de horario.\n\n**Acceso:** solo `admin`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -2275,7 +2088,8 @@
                         "hora_apertura",
                         "hora_cierre"
                       ]
-                    }
+                    },
+                    "minItems": 1
                   }
                 },
                 "required": [
@@ -2332,30 +2146,41 @@
                         "$ref": "#/components/schemas/HorarioAtencion"
                       }
                     },
-                    "turnos_fuera_de_horario": {
+                    "reservas_fuera_de_horario": {
                       "type": "array",
                       "items": {
                         "type": "object",
                         "properties": {
-                          "personal_id": {
-                            "type": "integer"
+                          "id": {
+                            "type": "integer",
+                            "example": 42
                           },
-                          "nombre": {
-                            "type": "string"
-                          },
-                          "apellido": {
-                            "type": "string"
-                          },
-                          "dia_semana": {
-                            "type": "integer"
+                          "fecha": {
+                            "type": "string",
+                            "format": "date",
+                            "example": "2026-10-27"
                           },
                           "hora_inicio": {
                             "type": "string",
-                            "example": "17:00:00"
+                            "example": "15:00:00"
                           },
                           "hora_fin": {
                             "type": "string",
-                            "example": "19:00:00"
+                            "example": "16:00:00"
+                          },
+                          "personal": {
+                            "type": "object",
+                            "properties": {
+                              "id": {
+                                "type": "integer"
+                              },
+                              "nombre": {
+                                "type": "string"
+                              },
+                              "apellido": {
+                                "type": "string"
+                              }
+                            }
                           }
                         }
                       }
@@ -3306,7 +3131,7 @@
           "Reservas"
         ],
         "summary": "Crear reserva",
-        "description": "HU-03 / HU-04 / HU-14. Registra la reserva con sus líneas de servicio y precios congelados. Al crear cada línea se emite `DetalleReservaCreado` y se **precarga el consumo estándar** de insumos (plantilla × cantidad).\n\n**Reglas de negocio** (`ReservaService`):\n\n- **Agenda propia:** un profesional solo ve y opera su agenda. Sobre una reserva ajena responde **403**\n  \"Esta reserva pertenece a la agenda de otro profesional.\"; no puede crear en otra agenda ni reasignar a otro profesional (403).\n- **Regla 1, sin solapamiento:** el profesional no puede tener otra reserva pendiente, confirmada o completada que\n  se cruce. Se comparan bloques `[inicio − minutos_traslado, fin + minutos_traslado]`, de la cita nueva y de las\n  existentes (422 `horario`).\n- **Regla 2, turno y local:** la cita debe caber completa en una franja del turno del profesional para ese día\n  (franjas contiguas unidas; 422 `horario` \"…fuera del turno laboral…\"). Además, si `horarios_atencion` está\n  cargado, una cita **en el salón** debe caber en el horario del local (422 `horario` \"El salón está cerrado en\n  ese horario. Para atender fuera del horario del local, registra la cita a domicilio.\"); a domicilio no aplica.\n- **Reglas 3 y 4:** solo servicios activos (422 `servicio_id`) y con precio vigente en la fecha de la cita\n  (422 `precio`); el precio queda **congelado** en `detalle_reserva.precio_aplicado`.\n- **Horario pasado:** se tolera registrar una cita que empezó hace hasta **30 minutos** (clientes por orden de\n  llegada); más atrás responde 422 `horario` \"El horario seleccionado ya pasó…\".\n- **Profesional activo:** 422 `personal_id` si está inactivo.\n- **Domicilio (HU-14):** `a_domicilio = true` exige `direccion_domicilio`; `minutos_traslado` (0–240) solo aplica\n  a domicilio: en el salón se guarda 0 (CHECK `reservas_traslado_solo_domicilio`). El profesional queda ocupado\n  esos minutos antes y después de la cita.\n- **Descuento (HU-22):** debe estar activo y vigente en la fecha de la cita (422 `descuento_id`).\n- Las respuestas incluyen `subtotal`, `monto_descuento`, `total`, `pagado` y `saldo` (calculados, en guaraníes) y\n  las relaciones `cliente`, `personal`, `detalles.servicio`, `descuento` y `pagos`.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "HU-03 / HU-04 / HU-14. Registra la reserva con sus líneas de servicio y precios congelados. Al crear cada línea se emite `DetalleReservaCreado` y se **precarga el consumo estándar** de insumos (plantilla × cantidad).\n\n**Reglas de negocio** (`ReservaService`):\n\n- **Agenda propia:** un profesional solo ve y opera su agenda. Sobre una reserva ajena responde **403**\n  \"Esta reserva pertenece a la agenda de otro profesional.\"; no puede crear en otra agenda ni reasignar a otro profesional (403).\n- **Regla 1, sin solapamiento:** el profesional no puede tener otra reserva pendiente, confirmada o completada que\n  se cruce. Cada cita ocupa exactamente `[hora_inicio, hora_fin]` (no hay tiempo de traslado) (422 `horario`).\n- **Regla 2, horario del salón:** las profesionales trabajan bajo demanda (sin turnos fijos). Toda cita, en el\n  salón o a domicilio, debe caber completa en el horario de atención del salón (`horarios_atencion`, franjas\n  contiguas unidas). Si el salón no abre ese día: 422 `horario` \"El salón no atiende ese día…\"; si no cabe:\n  422 `horario` \"La cita queda fuera del horario del salón…\".\n- **Fuera de horario:** con `fuera_de_horario = true` la dueña autoriza atender fuera del horario del salón (por\n  ejemplo, un sábado o a la noche). Solo se exige la jornada máxima de **06:00 a 22:00** (422 `horario`) y la\n  Regla 1. En `PUT`, si no se envía, la reserva conserva la marca que tenía.\n- **Reglas 3 y 4:** solo servicios activos (422 `servicio_id`) y con precio vigente en la fecha de la cita\n  (422 `precio`); el precio queda **congelado** en `detalle_reserva.precio_aplicado`.\n- **Horario pasado:** se tolera registrar una cita que empezó hace hasta **30 minutos** (clientes por orden de\n  llegada); más atrás responde 422 `horario` \"El horario seleccionado ya pasó…\".\n- **Profesional activo:** 422 `personal_id` si está inactivo.\n- **Domicilio (HU-14):** `a_domicilio = true` exige `direccion_domicilio`. Respeta el mismo horario que el salón.\n- **Descuento (HU-22):** debe estar activo y vigente en la fecha de la cita (422 `descuento_id`).\n- Las respuestas incluyen `subtotal`, `monto_descuento`, `total`, `pagado` y `saldo` (calculados, en guaraníes) y\n  las relaciones `cliente`, `personal`, `detalles.servicio`, `descuento` y `pagos`.\n\n**Acceso:** `admin` o `profesional`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -3364,7 +3189,7 @@
                     "descuento_id": 1,
                     "a_domicilio": false,
                     "direccion_domicilio": null,
-                    "minutos_traslado": 0,
+                    "fuera_de_horario": false,
                     "created_at": "2026-10-16T12:00:00.000000Z",
                     "updated_at": "2026-10-16T12:00:00.000000Z",
                     "subtotal": 350000,
@@ -3505,7 +3330,7 @@
                     "descuento_id": 1,
                     "a_domicilio": false,
                     "direccion_domicilio": null,
-                    "minutos_traslado": 0,
+                    "fuera_de_horario": false,
                     "created_at": "2026-10-16T12:00:00.000000Z",
                     "updated_at": "2026-10-16T12:00:00.000000Z",
                     "subtotal": 350000,
@@ -3606,7 +3431,7 @@
           "Reservas"
         ],
         "summary": "Actualizar / cambiar estado de reserva",
-        "description": "HU-04 / HU-12 / HU-13. Campos opcionales. Si cambian fecha, horas, profesional o datos de domicilio, se revalidan\ntodas las reglas (excluyendo la propia reserva del solapamiento).\n\n**Estados:** `pendiente → confirmada | completada | no_asistio | cancelada`; `confirmada → completada | no_asistio |\ncancelada`. `completada` y `no_asistio` solo después de la hora de inicio. Una reserva completada, cancelada o\nno_asistio ya no se modifica (422 `estado`). Pasar a `cancelada` por PUT sigue las reglas de `DELETE`.\n\n**Al pasar a `completada`** se emite `ReservaCompletada`: se registra la visita en el historial del cliente\n(`fecha_realizada` = hoy, con las `notas` enviadas, máx. 2000) y se **descuentan del inventario** los insumos\nconsumidos (un movimiento de salida \"Consumo en reserva #ID\" por insumo, sin dejar la existencia negativa).\n\nUn profesional no puede reasignar la reserva a otra persona (403 \"Solo la administración puede reasignar una\nreserva a otro profesional.\").\n\n**Reglas de negocio** (`ReservaService`):\n\n- **Agenda propia:** un profesional solo ve y opera su agenda. Sobre una reserva ajena responde **403**\n  \"Esta reserva pertenece a la agenda de otro profesional.\"; no puede crear en otra agenda ni reasignar a otro profesional (403).\n- **Regla 1, sin solapamiento:** el profesional no puede tener otra reserva pendiente, confirmada o completada que\n  se cruce. Se comparan bloques `[inicio − minutos_traslado, fin + minutos_traslado]`, de la cita nueva y de las\n  existentes (422 `horario`).\n- **Regla 2, turno y local:** la cita debe caber completa en una franja del turno del profesional para ese día\n  (franjas contiguas unidas; 422 `horario` \"…fuera del turno laboral…\"). Además, si `horarios_atencion` está\n  cargado, una cita **en el salón** debe caber en el horario del local (422 `horario` \"El salón está cerrado en\n  ese horario. Para atender fuera del horario del local, registra la cita a domicilio.\"); a domicilio no aplica.\n- **Reglas 3 y 4:** solo servicios activos (422 `servicio_id`) y con precio vigente en la fecha de la cita\n  (422 `precio`); el precio queda **congelado** en `detalle_reserva.precio_aplicado`.\n- **Horario pasado:** se tolera registrar una cita que empezó hace hasta **30 minutos** (clientes por orden de\n  llegada); más atrás responde 422 `horario` \"El horario seleccionado ya pasó…\".\n- **Profesional activo:** 422 `personal_id` si está inactivo.\n- **Domicilio (HU-14):** `a_domicilio = true` exige `direccion_domicilio`; `minutos_traslado` (0–240) solo aplica\n  a domicilio: en el salón se guarda 0 (CHECK `reservas_traslado_solo_domicilio`). El profesional queda ocupado\n  esos minutos antes y después de la cita.\n- **Descuento (HU-22):** debe estar activo y vigente en la fecha de la cita (422 `descuento_id`).\n- Las respuestas incluyen `subtotal`, `monto_descuento`, `total`, `pagado` y `saldo` (calculados, en guaraníes) y\n  las relaciones `cliente`, `personal`, `detalles.servicio`, `descuento` y `pagos`.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "HU-04 / HU-12 / HU-13. Campos opcionales. Si cambian fecha, horas, profesional o datos de domicilio, se revalidan\ntodas las reglas (excluyendo la propia reserva del solapamiento).\n\n**Estados:** `pendiente → confirmada | completada | no_asistio | cancelada`; `confirmada → completada | no_asistio |\ncancelada`. `completada` y `no_asistio` solo después de la hora de inicio. Una reserva completada, cancelada o\nno_asistio ya no se modifica (422 `estado`). Pasar a `cancelada` por PUT sigue las reglas de `DELETE`.\n\n**Al pasar a `completada`** se emite `ReservaCompletada`: se registra la visita en el historial del cliente\n(`fecha_realizada` = hoy, con las `notas` enviadas, máx. 2000) y se **descuentan del inventario** los insumos\nconsumidos (un movimiento de salida \"Consumo en reserva #ID\" por insumo, sin dejar la existencia negativa).\n\nUn profesional no puede reasignar la reserva a otra persona (403 \"Solo la administración puede reasignar una\nreserva a otro profesional.\").\n\n**Reglas de negocio** (`ReservaService`):\n\n- **Agenda propia:** un profesional solo ve y opera su agenda. Sobre una reserva ajena responde **403**\n  \"Esta reserva pertenece a la agenda de otro profesional.\"; no puede crear en otra agenda ni reasignar a otro profesional (403).\n- **Regla 1, sin solapamiento:** el profesional no puede tener otra reserva pendiente, confirmada o completada que\n  se cruce. Cada cita ocupa exactamente `[hora_inicio, hora_fin]` (no hay tiempo de traslado) (422 `horario`).\n- **Regla 2, horario del salón:** las profesionales trabajan bajo demanda (sin turnos fijos). Toda cita, en el\n  salón o a domicilio, debe caber completa en el horario de atención del salón (`horarios_atencion`, franjas\n  contiguas unidas). Si el salón no abre ese día: 422 `horario` \"El salón no atiende ese día…\"; si no cabe:\n  422 `horario` \"La cita queda fuera del horario del salón…\".\n- **Fuera de horario:** con `fuera_de_horario = true` la dueña autoriza atender fuera del horario del salón (por\n  ejemplo, un sábado o a la noche). Solo se exige la jornada máxima de **06:00 a 22:00** (422 `horario`) y la\n  Regla 1. En `PUT`, si no se envía, la reserva conserva la marca que tenía.\n- **Reglas 3 y 4:** solo servicios activos (422 `servicio_id`) y con precio vigente en la fecha de la cita\n  (422 `precio`); el precio queda **congelado** en `detalle_reserva.precio_aplicado`.\n- **Horario pasado:** se tolera registrar una cita que empezó hace hasta **30 minutos** (clientes por orden de\n  llegada); más atrás responde 422 `horario` \"El horario seleccionado ya pasó…\".\n- **Profesional activo:** 422 `personal_id` si está inactivo.\n- **Domicilio (HU-14):** `a_domicilio = true` exige `direccion_domicilio`. Respeta el mismo horario que el salón.\n- **Descuento (HU-22):** debe estar activo y vigente en la fecha de la cita (422 `descuento_id`).\n- Las respuestas incluyen `subtotal`, `monto_descuento`, `total`, `pagado` y `saldo` (calculados, en guaraníes) y\n  las relaciones `cliente`, `personal`, `detalles.servicio`, `descuento` y `pagos`.\n\n**Acceso:** `admin` o `profesional`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -3853,7 +3678,7 @@
           "Disponibilidad"
         ],
         "summary": "Horarios libres de un profesional",
-        "description": "HU-02. Recorre las franjas del turno del profesional en esa fecha (contiguas unidas) cada `intervalo` minutos y\nmarca cada hora de inicio posible para una cita de la duración pedida:\n\n- `null` (disponible), `pasado` (más de 30 minutos atrás), `ocupado` (choca con otra reserva o su traslado,\n  comparando `[inicio − traslado, fin + traslado]`), `local_cerrado` (en el salón, no cabe en el horario del local).\n\nLa duración se indica con `duracion_minutos` o se calcula sumando la de los `servicios[]` elegidos (uno de los dos\nes obligatorio). `minutos_traslado` solo se considera si `a_domicilio` es verdadero. Un día sin turno devuelve\n`franjas` y `horarios` vacíos.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "HU-02. Recorre el **horario del salón** en esa fecha (franjas contiguas unidas) cada `intervalo` minutos y marca\ncada hora de inicio posible para una cita de la duración pedida:\n\n- `null` (disponible), `pasado` (más de 30 minutos atrás) u `ocupado` (choca con otra reserva activa del profesional).\n\nCon `fuera_de_horario=true` recorre la jornada máxima de **06:00 a 22:00**, aunque el salón no abra ese día.\n\nLa duración se indica con `duracion_minutos` o se calcula sumando la de los `servicios[]` elegidos (uno de los dos\nes obligatorio). Si el salón no abre ese día (y no es fuera de horario) devuelve `franjas` y `horarios` vacíos.\n\n**Acceso:** `admin` o `profesional`.",
         "parameters": [
           {
             "name": "personal_id",
@@ -3903,25 +3728,13 @@
             }
           },
           {
-            "name": "a_domicilio",
+            "name": "fuera_de_horario",
             "in": "query",
             "required": false,
-            "description": "Cita a domicilio (no aplica el horario del local).",
+            "description": "Atención fuera del horario del salón: recorre la jornada de 06:00 a 22:00.",
             "schema": {
               "type": "boolean",
               "default": false
-            }
-          },
-          {
-            "name": "minutos_traslado",
-            "in": "query",
-            "required": false,
-            "description": "Traslado antes y después (solo a domicilio).",
-            "schema": {
-              "type": "integer",
-              "minimum": 0,
-              "maximum": 240,
-              "default": 0
             }
           },
           {
@@ -7184,66 +6997,6 @@
           }
         }
       },
-      "Turno": {
-        "type": "object",
-        "properties": {
-          "id": {
-            "type": "integer"
-          },
-          "personal_id": {
-            "type": "integer"
-          },
-          "dia_semana": {
-            "type": "integer",
-            "description": "1 = lunes … 7 = domingo.",
-            "minimum": 1,
-            "maximum": 7
-          },
-          "hora_inicio": {
-            "type": "string",
-            "example": "08:00:00"
-          },
-          "hora_fin": {
-            "type": "string",
-            "example": "17:00:00"
-          },
-          "created_at": {
-            "type": "string",
-            "format": "date-time"
-          },
-          "updated_at": {
-            "type": "string",
-            "format": "date-time"
-          }
-        }
-      },
-      "TurnoInput": {
-        "type": "object",
-        "properties": {
-          "dia_semana": {
-            "type": "integer",
-            "description": "1 = lunes … 7 = domingo.",
-            "minimum": 1,
-            "maximum": 7
-          },
-          "hora_inicio": {
-            "type": "string",
-            "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$",
-            "example": "08:00"
-          },
-          "hora_fin": {
-            "type": "string",
-            "pattern": "^\\d{2}:\\d{2}(:\\d{2})?$",
-            "example": "17:00",
-            "description": "Posterior a hora_inicio."
-          }
-        },
-        "required": [
-          "dia_semana",
-          "hora_inicio",
-          "hora_fin"
-        ]
-      },
       "Personal": {
         "type": "object",
         "properties": {
@@ -7285,54 +7038,6 @@
             "format": "date-time"
           }
         }
-      },
-      "PersonalConTurnos": {
-        "allOf": [
-          {
-            "$ref": "#/components/schemas/Personal"
-          },
-          {
-            "type": "object",
-            "properties": {
-              "turnos": {
-                "type": "array",
-                "items": {
-                  "$ref": "#/components/schemas/Turno"
-                }
-              },
-              "especialidades": {
-                "type": "array",
-                "items": {
-                  "type": "object",
-                  "properties": {
-                    "id": {
-                      "type": "integer"
-                    },
-                    "nombre": {
-                      "type": "string"
-                    },
-                    "descripcion": {
-                      "type": "string",
-                      "nullable": true
-                    },
-                    "pivot": {
-                      "type": "object",
-                      "properties": {
-                        "personal_id": {
-                          "type": "integer"
-                        },
-                        "especialidad_id": {
-                          "type": "integer"
-                        }
-                      }
-                    }
-                  }
-                },
-                "description": "Presente en listado, detalle y asignación."
-              }
-            }
-          }
-        ]
       },
       "Especialidad": {
         "type": "object",
@@ -7729,11 +7434,10 @@
             "type": "string",
             "nullable": true
           },
-          "minutos_traslado": {
-            "type": "integer",
-            "description": "0 en el salón; 0–240 a domicilio.",
-            "minimum": 0,
-            "maximum": 240
+          "fuera_de_horario": {
+            "type": "boolean",
+            "default": false,
+            "description": "true si la dueña autoriza atender fuera del horario del salón (dentro de 06:00–22:00)."
           },
           "created_at": {
             "type": "string",
@@ -7868,12 +7572,10 @@
             "maxLength": 255,
             "nullable": true
           },
-          "minutos_traslado": {
-            "type": "integer",
-            "description": "Solo a domicilio (en el salón se guarda 0).",
-            "minimum": 0,
-            "maximum": 240,
-            "nullable": true
+          "fuera_de_horario": {
+            "type": "boolean",
+            "default": false,
+            "description": "true si la dueña autoriza atender fuera del horario del salón (dentro de 06:00–22:00)."
           }
         },
         "required": [
@@ -7922,11 +7624,10 @@
             "maxLength": 255,
             "nullable": true
           },
-          "minutos_traslado": {
-            "type": "integer",
-            "minimum": 0,
-            "maximum": 240,
-            "nullable": true
+          "fuera_de_horario": {
+            "type": "boolean",
+            "default": false,
+            "description": "true si la dueña autoriza atender fuera del horario del salón (dentro de 06:00–22:00)."
           },
           "notas": {
             "type": "string",
@@ -7960,7 +7661,7 @@
               "minItems": 2,
               "maxItems": 2
             },
-            "description": "Franjas del turno del día [inicio, fin], contiguas unidas."
+            "description": "Franjas del horario del salón ese día [apertura, cierre], contiguas unidas; [[\"06:00\",\"22:00\"]] si es fuera de horario."
           },
           "horarios": {
             "type": "array",
@@ -7978,8 +7679,7 @@
                   "type": "string",
                   "enum": [
                     "ocupado",
-                    "pasado",
-                    "local_cerrado"
+                    "pasado"
                   ],
                   "nullable": true
                 }
@@ -8390,6 +8090,48 @@
             }
           }
         }
+      },
+      "PersonalDetalle": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/Personal"
+          },
+          {
+            "type": "object",
+            "properties": {
+              "especialidades": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": {
+                      "type": "integer"
+                    },
+                    "nombre": {
+                      "type": "string"
+                    },
+                    "descripcion": {
+                      "type": "string",
+                      "nullable": true
+                    },
+                    "pivot": {
+                      "type": "object",
+                      "properties": {
+                        "personal_id": {
+                          "type": "integer"
+                        },
+                        "especialidad_id": {
+                          "type": "integer"
+                        }
+                      }
+                    }
+                  }
+                },
+                "description": "Presente en listado, detalle y asignación."
+              }
+            }
+          }
+        ]
       }
     },
     "responses": {

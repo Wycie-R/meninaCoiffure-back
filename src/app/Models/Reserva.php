@@ -21,7 +21,7 @@ class Reserva extends Model
     protected $table = 'reservas';
     protected $fillable = [
         'cliente_id', 'personal_id', 'fecha', 'hora_inicio', 'hora_fin', 'estado', 'descuento_id',
-        'a_domicilio', 'direccion_domicilio', 'minutos_traslado',
+        'a_domicilio', 'direccion_domicilio', 'fuera_de_horario',
     ];
 
     protected $appends = ['subtotal', 'monto_descuento', 'total', 'pagado', 'saldo'];
@@ -30,7 +30,7 @@ class Reserva extends Model
     {
         return [
             'a_domicilio' => 'boolean',
-            'minutos_traslado' => 'integer',
+            'fuera_de_horario' => 'boolean',
         ];
     }
 

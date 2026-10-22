@@ -5,31 +5,18 @@ namespace App\Http\Controllers;
 use App\Models\Personal;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
 class PersonalController extends Controller
 {
-    protected const REGLAS_TURNOS = [
-        'turnos.*.dia_semana' => ['required', 'integer', 'between:1,7'],
-        'turnos.*.hora_inicio' => ['required', 'date_format:H:i,H:i:s'],
-        'turnos.*.hora_fin' => ['required', 'date_format:H:i,H:i:s'],
-    ];
-
-    protected const MENSAJES_TURNOS = [
-        'turnos.array' => 'Los turnos deben enviarse como una lista.',
-        'turnos.*.dia_semana.between' => 'El día de la semana debe ser entre 1 (Lunes) y 7 (Domingo).',
-        'turnos.*.hora_inicio.date_format' => 'La hora de inicio debe tener el formato HH:MM.',
-        'turnos.*.hora_fin.date_format' => 'La hora de fin debe tener el formato HH:MM.',
-    ];
-
     /**
-     * HU-07: Listar el personal con sus turnos de trabajo
+     * HU-07: Listar el personal con sus especialidades.
+     * Todas atienden bajo demanda dentro del horario del salón.
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Personal::with(['turnos', 'especialidades']);
+        $query = Personal::with('especialidades');
 
         if ($request->boolean('solo_activos', false)) {
             $query->where('activo', true);
@@ -56,38 +43,20 @@ class PersonalController extends Controller
             'email' => ['nullable', 'email', 'max:255', Rule::unique('personal', 'email')],
             'fecha_ingreso' => ['nullable', 'date'],
             'activo' => ['nullable', 'boolean'],
-            'turnos' => ['nullable', 'array'],
-            ...self::REGLAS_TURNOS,
         ], [
             'nombre.required' => 'El nombre es obligatorio.',
             'apellido.required' => 'El apellido es obligatorio.',
             'email.unique' => 'Ya hay una persona del equipo registrada con ese correo.',
-            ...self::MENSAJES_TURNOS,
         ]);
 
-        $turnos = $validated['turnos'] ?? [];
-        $this->validarFranjas($turnos);
-
-        $personal = DB::transaction(function () use ($validated, $turnos) {
-            $nuevoPersonal = Personal::create([
-                'nombre' => $validated['nombre'],
-                'apellido' => $validated['apellido'],
-                'telefono' => $validated['telefono'] ?? null,
-                'email' => $validated['email'] ?? null,
-                'fecha_ingreso' => $validated['fecha_ingreso'] ?? now()->toDateString(),
-                'activo' => $validated['activo'] ?? true,
-            ]);
-
-            foreach ($turnos as $turno) {
-                $nuevoPersonal->turnos()->create([
-                    'dia_semana' => $turno['dia_semana'],
-                    'hora_inicio' => $turno['hora_inicio'],
-                    'hora_fin' => $turno['hora_fin'],
-                ]);
-            }
-
-            return $nuevoPersonal->load('turnos');
-        });
+        $personal = Personal::create([
+            'nombre' => $validated['nombre'],
+            'apellido' => $validated['apellido'],
+            'telefono' => $validated['telefono'] ?? null,
+            'email' => $validated['email'] ?? null,
+            'fecha_ingreso' => $validated['fecha_ingreso'] ?? now()->toDateString(),
+            'activo' => $validated['activo'] ?? true,
+        ]);
 
         return response()->json([
             'message' => 'Personal registrado exitosamente.',
@@ -96,12 +65,12 @@ class PersonalController extends Controller
     }
 
     /**
-     * HU-07: Ver datos y turnos de un profesional
+     * HU-07: Ver datos y especialidades de un profesional
      */
     public function show(Personal $personal): JsonResponse
     {
         return response()->json([
-            'data' => $personal->load(['turnos', 'especialidades']),
+            'data' => $personal->load('especialidades'),
         ]);
     }
 
@@ -131,7 +100,7 @@ class PersonalController extends Controller
 
         return response()->json([
             'message' => 'Datos de personal actualizados exitosamente.',
-            'data' => $personal->fresh('turnos'),
+            'data' => $personal->fresh('especialidades'),
         ]);
     }
 
@@ -147,75 +116,6 @@ class PersonalController extends Controller
         return response()->json([
             'message' => "El profesional {$personal->nombre} {$personal->apellido} ha sido desactivado.",
         ]);
-    }
-
-    /**
-     * HU-08: Asignar o actualizar los turnos de trabajo del profesional.
-     * Una lista vacía deja al profesional sin turnos (no recibe reservas).
-     */
-    public function guardarTurnos(Request $request, Personal $personal): JsonResponse
-    {
-        $validated = $request->validate([
-            'turnos' => ['present', 'array'],
-            ...self::REGLAS_TURNOS,
-        ], [
-            'turnos.present' => 'Debe enviar la lista de turnos (puede estar vacía).',
-            ...self::MENSAJES_TURNOS,
-        ]);
-
-        $this->validarFranjas($validated['turnos']);
-
-        DB::transaction(function () use ($personal, $validated) {
-            // Reemplazar turnos anteriores
-            $personal->turnos()->delete();
-
-            foreach ($validated['turnos'] as $turno) {
-                $personal->turnos()->create([
-                    'dia_semana' => $turno['dia_semana'],
-                    'hora_inicio' => $turno['hora_inicio'],
-                    'hora_fin' => $turno['hora_fin'],
-                ]);
-            }
-        });
-
-        return response()->json([
-            'message' => 'Turnos de trabajo actualizados exitosamente.',
-            'data' => $personal->fresh('turnos'),
-        ]);
-    }
-
-    /**
-     * Cada franja debe terminar después de empezar y no pisarse con otra del mismo día.
-     * Las franjas contiguas (09:00-12:00 y 12:00-14:00) son válidas.
-     */
-    protected function validarFranjas(array $turnos): void
-    {
-        $porDia = [];
-
-        foreach ($turnos as $indice => $turno) {
-            $inicio = substr($turno['hora_inicio'], 0, 5);
-            $fin = substr($turno['hora_fin'], 0, 5);
-
-            if ($fin <= $inicio) {
-                throw ValidationException::withMessages([
-                    "turnos.{$indice}.hora_fin" => ['La hora de fin del turno debe ser posterior a la hora de inicio.'],
-                ]);
-            }
-
-            $porDia[$turno['dia_semana']][] = [$inicio, $fin];
-        }
-
-        foreach ($porDia as $franjas) {
-            usort($franjas, fn ($a, $b) => strcmp($a[0], $b[0]));
-
-            for ($i = 1; $i < count($franjas); $i++) {
-                if ($franjas[$i][0] < $franjas[$i - 1][1]) {
-                    throw ValidationException::withMessages([
-                        'turnos' => ["Las franjas {$franjas[$i - 1][0]}–{$franjas[$i - 1][1]} y {$franjas[$i][0]}–{$franjas[$i][1]} del mismo día se superponen."],
-                    ]);
-                }
-            }
-        }
     }
 
     /**

@@ -8,6 +8,7 @@ import PageHeader from '../../Components/PageHeader.vue'
 import Icono from '../../Components/Icono.vue'
 import Campo from '../../Components/Campo.vue'
 import Aviso from '../../Components/Aviso.vue'
+import Interruptor from '../../Components/Interruptor.vue'
 import { api, mensajeError, primerosErrores } from '../../api'
 import { aHora, aISO, aMinutos, duracion, fechaLarga, guaranies, hora } from '../../formato'
 import { claseEntrada, claseEnfoque } from '../../ui'
@@ -16,7 +17,7 @@ import { usePersonal } from '../../personal'
 import { useCatalogo } from '../../catalogo'
 import { crearReserva } from '../../reservas'
 import { usePermisos } from '../../auth'
-import { diaSemanaDe, franjasUnidas, nombreDia, resumenHorario, textoFranjas } from '../../turnos'
+import { diaSemanaDe, franjasUnidas, nombreDia, textoFranjas, useHorarioSalon } from '../../horarios'
 
 const {
     clientes,
@@ -39,6 +40,7 @@ const {
     cargarCatalogo,
 } = useCatalogo()
 const { esProfesional, personalPropio } = usePermisos()
+const { horarioSalon, horarioCargado, cargarHorarioSalon } = useHorarioSalon()
 
 const ahora = ref(new Date())
 let reloj = null
@@ -47,6 +49,7 @@ onMounted(() => {
     cargarClientes({ forzar: true })
     cargarPersonal({ forzar: true })
     cargarCatalogo({ forzar: true })
+    cargarHorarioSalon({ forzar: true })
     reloj = setInterval(() => {
         ahora.value = new Date()
     }, 30000)
@@ -64,7 +67,7 @@ const form = ref({
     servicios: [],
     a_domicilio: false,
     direccion_domicilio: '',
-    minutos_traslado: 0,
+    fuera_de_horario: false,
 })
 
 const formulario = ref(null)
@@ -101,7 +104,6 @@ const opcionesPersonal = computed(() =>
     personalActivo.value.map((p) => ({
         value: p.id,
         label: `${p.nombre} ${p.apellido}`,
-        detalle: p.turnos === undefined || p.turnos.length ? '' : 'Sin horario asignado',
     }))
 )
 
@@ -139,10 +141,6 @@ const profesionalElegido = computed(() =>
     profesionalActual.value ? `${profesionalActual.value.nombre} ${profesionalActual.value.apellido}` : ''
 )
 
-const turnosProfesional = computed(() => profesionalActual.value?.turnos ?? [])
-
-const horarioProfesional = computed(() => (profesionalActual.value ? resumenHorario(turnosProfesional.value) : ''))
-
 const fechaElegida = computed(() => (form.value.fecha ? fechaLarga(form.value.fecha) : ''))
 
 const horaFin = computed(() =>
@@ -152,9 +150,10 @@ const horaFin = computed(() =>
 const inicioBloque = ref(0)
 const diasPorBloque = 14
 
+// Un día se puede elegir si el salón abre; una cita fuera de horario puede ir cualquier día
 function atiende(diaIso) {
-    if (!profesionalActual.value || profesionalActual.value.turnos === undefined) return true
-    return franjasUnidas(turnosProfesional.value, diaIso).length > 0
+    if (form.value.fuera_de_horario || !horarioCargado.value) return true
+    return franjasUnidas(horarioSalon.value, diaIso).length > 0
 }
 
 const diasVisibles = computed(() => {
@@ -195,7 +194,6 @@ let diaConsultado = ''
 const MOTIVOS = {
     ocupado: 'ocupado',
     pasado: 'ya pasó',
-    local_cerrado: 'el local está cerrado',
 }
 
 function claveDia() {
@@ -209,20 +207,17 @@ function urlDisponibilidad() {
     if (f.servicios.length) for (const id of f.servicios) parametros.append('servicios[]', id)
     else parametros.set('duracion_minutos', 30)
 
-    if (f.a_domicilio) {
-        parametros.set('a_domicilio', 1)
-        parametros.set('minutos_traslado', f.minutos_traslado)
-    }
+    if (f.fuera_de_horario) parametros.set('fuera_de_horario', 1)
 
     return `/api/disponibilidad?${parametros}`
 }
 
-// La API es la única fuente de los horarios libres: considera turnos, otras
-// reservas con sus traslados, el horario del local y la tolerancia de 30 minutos.
+// La API es la única fuente de los horarios libres: considera el horario del salón
+// (o la jornada máxima si es fuera de horario), las otras citas y la tolerancia de 30 minutos.
 async function revisarAgenda({ silenciosa = false } = {}) {
     clearTimeout(espera)
     controlador?.abort()
-    const turno = ++consultaAgenda
+    const numeroConsulta = ++consultaAgenda
 
     if (!form.value.personal_id || !form.value.fecha) {
         disponibilidad.value = null
@@ -238,7 +233,7 @@ async function revisarAgenda({ silenciosa = false } = {}) {
     controlador = new AbortController()
 
     const respuesta = await api(urlDisponibilidad(), { senal: controlador.signal })
-    if (turno !== consultaAgenda) return
+    if (numeroConsulta !== consultaAgenda) return
 
     revisando.value = false
     controlador = null
@@ -280,21 +275,22 @@ function programarRevision() {
 const franjasDelDia = computed(() => {
     if (!form.value.fecha || !profesionalActual.value) return []
 
+    // La API devuelve las franjas en que se puede atender ese día: el horario del salón o la jornada máxima
     const delServidor = disponibilidad.value?.franjas
     if (Array.isArray(delServidor) && delServidor.length) {
-        return delServidor
-            .map((franja) => (Array.isArray(franja) ? franja : [franja.inicio ?? franja.hora_inicio, franja.fin ?? franja.hora_fin]))
-            .map(([desde, hasta]) => ({ inicio: aMinutos(desde), fin: aMinutos(hasta) }))
+        return delServidor.map(([desde, hasta]) => ({ inicio: aMinutos(desde), fin: aMinutos(hasta) }))
     }
 
-    return franjasUnidas(turnosProfesional.value, diaSemanaDe(form.value.fecha))
+    // Mientras llega la respuesta se muestra el horario del salón ya conocido
+    if (form.value.fuera_de_horario) return []
+    return franjasUnidas(horarioSalon.value, diaSemanaDe(form.value.fecha))
 })
 
 const textoDia = computed(() => {
     if (!franjasDelDia.value.length) return ''
-    const dia = nombreDia(diaSemanaDe(form.value.fecha))
-    const quien = esProfesional.value ? 'atiendes' : `${profesionalActual.value.nombre} atiende`
-    return `El ${dia} ${quien} ${textoFranjas(franjasDelDia.value)}.`
+    const rango = textoFranjas(franjasDelDia.value)
+    if (form.value.fuera_de_horario) return `Fuera de horario se puede agendar ${rango}.`
+    return `El ${nombreDia(diaSemanaDe(form.value.fecha))} el salón atiende ${rango}.`
 })
 
 const horarios = computed(() => {
@@ -310,7 +306,7 @@ const horarios = computed(() => {
             hora: hora(h.hora),
             disponible,
             motivo: disponible ? '' : MOTIVOS[h.motivo] ?? 'no disponible',
-            // Clientes que llegan sin turno: la API deja reservar hasta 30 minutos después del inicio.
+            // Clientes que llegan sin cita: la API deja reservar hasta 30 minutos después del inicio.
             ahora: disponible && esHoy && minuto <= minutosAhora,
             tarde: minuto >= 13 * 60,
         }
@@ -319,31 +315,14 @@ const horarios = computed(() => {
 
 function etiquetaHorario(horario) {
     if (horario.motivo) return `${horario.hora}, ${horario.motivo}`
-    if (horario.ahora) return `${horario.hora}, ahora: para quien llega sin turno`
+    if (horario.ahora) return `${horario.hora}, ahora: para quien llega sin cita`
     return horario.hora
 }
 
 const horariosManana = computed(() => horarios.value.filter((h) => !h.tarde))
 const horariosTarde = computed(() => horarios.value.filter((h) => h.tarde))
 const sinHorariosLibres = computed(() => horarios.value.length > 0 && !horarios.value.some((h) => h.disponible))
-const sinTurnoEseDia = computed(() => Boolean(disponibilidad.value) && !franjasDelDia.value.length && !horarios.value.length)
-
-const opcionesTraslado = [0, 15, 30, 45, 60].map((minutos) => ({
-    valor: minutos,
-    etiqueta: minutos ? `${minutos} min` : 'Sin traslado',
-}))
-
-const textoTraslado = computed(() =>
-    form.value.minutos_traslado ? `Traslado: ${duracion(form.value.minutos_traslado)} antes y después` : 'Sin tiempo de traslado'
-)
-
-const bloqueAgenda = computed(() => {
-    const traslado = form.value.a_domicilio ? form.value.minutos_traslado : 0
-    if (!traslado || !form.value.hora_inicio || !horaFin.value) return ''
-    const desde = aHora(Math.max(0, aMinutos(form.value.hora_inicio) - traslado))
-    const hasta = aHora(aMinutos(horaFin.value) + traslado)
-    return `Con el traslado, la agenda queda ocupada de ${desde} a ${hasta}.`
-})
+const salonCerradoEseDia = computed(() => Boolean(disponibilidad.value) && !disponibilidad.value.franjas?.length && !horarios.value.length)
 
 const horarioDescartado = ref(false)
 
@@ -399,8 +378,14 @@ watch(serviciosActivos, (lista) => {
 
 watch(
     () => form.value.personal_id,
+    () => limpiarServidor('personal_id', 'horario')
+)
+
+// Al volver al horario del salón, un día en que el salón no abre deja de ser válido
+watch(
+    () => form.value.fuera_de_horario,
     () => {
-        limpiarServidor('personal_id', 'horario')
+        limpiarServidor('horario')
         if (form.value.fecha && !atiende(diaSemanaDe(form.value.fecha))) form.value.fecha = ''
     }
 )
@@ -411,7 +396,7 @@ watch(
             form.value.personal_id,
             form.value.fecha,
             [...form.value.servicios].sort((a, b) => a - b).join(','),
-            form.value.a_domicilio ? `domicilio:${form.value.minutos_traslado}` : 'salon',
+            form.value.fuera_de_horario ? 'fuera' : 'salon',
         ].join('|'),
     programarRevision
 )
@@ -442,11 +427,6 @@ watch(
 watch(
     () => [form.value.a_domicilio, form.value.direccion_domicilio],
     () => limpiarServidor('direccion_domicilio')
-)
-
-watch(
-    () => [form.value.a_domicilio, form.value.minutos_traslado],
-    () => limpiarServidor('minutos_traslado', 'horario')
 )
 
 watch(form, () => {
@@ -492,7 +472,7 @@ const GRUPOS_ERROR = {
     precio: 'servicios',
     a_domicilio: 'direccion_domicilio',
     direccion_domicilio: 'direccion_domicilio',
-    minutos_traslado: 'minutos_traslado',
+    fuera_de_horario: 'horario',
 }
 
 async function mostrarPrimerError() {
@@ -512,7 +492,7 @@ function cargaUtil() {
         servicios: [...f.servicios],
         a_domicilio: f.a_domicilio,
         direccion_domicilio: f.a_domicilio ? f.direccion_domicilio.trim() : null,
-        ...(f.a_domicilio ? { minutos_traslado: f.minutos_traslado } : {}),
+        fuera_de_horario: f.fuera_de_horario,
     }
 }
 
@@ -696,13 +676,9 @@ const lugares = [
                                 <p v-else-if="personalCargado && !personalActivo.length && !esProfesional" class="mt-1.5 text-sm text-niebla">
                                     No hay profesionales activos. Agrega o reactiva a alguien en Equipo.
                                 </p>
-                                <p v-else-if="horarioProfesional" class="mt-1.5 flex items-start gap-1.5 text-sm text-bruma">
+                                <p v-else-if="profesionalActual" class="mt-1.5 flex items-start gap-1.5 text-sm text-bruma">
                                     <Icono name="pendiente" class="mt-0.5 h-4 w-4 shrink-0 text-orquidea" />
-                                    {{ horarioProfesional }}
-                                </p>
-                                <p v-else-if="profesionalActual && profesionalActual.turnos !== undefined" class="mt-1.5 flex items-start gap-1.5 text-sm text-miel">
-                                    <Icono name="alerta" class="mt-0.5 h-4 w-4 shrink-0" />
-                                    {{ profesionalActual.nombre }} todavía no tiene horario asignado. Se lo puedes cargar en Equipo.
+                                    Atiende por cita dentro del horario del salón.
                                 </p>
                             </div>
                         </div>
@@ -830,32 +806,12 @@ const lugares = [
                                 </p>
                             </div>
 
-                            <div v-if="form.a_domicilio" class="mt-4">
-                                <p id="reserva-traslado" class="mb-1.5 text-sm font-medium text-perla">Tiempo de traslado</p>
-                                <div class="flex flex-wrap gap-2" role="group" aria-labelledby="reserva-traslado" aria-describedby="reserva-traslado-ayuda">
-                                    <button
-                                        v-for="opcion in opcionesTraslado"
-                                        :key="opcion.valor"
-                                        type="button"
-                                        class="rounded-full border px-3.5 py-1.5 text-sm tabular-nums transition-colors"
-                                        :class="[
-                                            claseEnfoque,
-                                            form.minutos_traslado === opcion.valor
-                                                ? 'border-orquidea bg-orquidea/12 text-orquidea-claro'
-                                                : 'border-hilo text-bruma hover:border-hilo-fuerte hover:text-perla',
-                                        ]"
-                                        :aria-pressed="form.minutos_traslado === opcion.valor"
-                                        @click="form.minutos_traslado = opcion.valor"
-                                    >
-                                        {{ opcion.etiqueta }}
-                                    </button>
-                                </div>
-                                <p v-if="error('minutos_traslado')" data-error role="alert" class="mt-1.5 text-sm text-borgona">
-                                    {{ error('minutos_traslado') }}
-                                </p>
-                                <p v-else id="reserva-traslado-ayuda" class="mt-1.5 text-sm text-niebla">
-                                    Se reserva antes y después de la cita para ir y volver; en ese tiempo no se agendan otras citas.
-                                </p>
+                            <div class="mt-5">
+                                <Interruptor
+                                    v-model="form.fuera_de_horario"
+                                    etiqueta="Atender fuera del horario del salón"
+                                    descripcion="Permite días en que el salón no abre y horas entre las 06:00 y las 22:00."
+                                />
                             </div>
                         </fieldset>
                     </section>
@@ -983,7 +939,7 @@ const lugares = [
                                     "
                                     :disabled="!dia.disponible"
                                     :aria-pressed="form.fecha === dia.iso"
-                                    :aria-label="`${dia.semana} ${dia.dia} de ${dia.mes}${dia.disponible ? '' : ', no atiende'}`"
+                                    :aria-label="`${dia.semana} ${dia.dia} de ${dia.mes}${dia.disponible ? '' : ', el salón no atiende'}`"
                                     @click="elegirDia(dia)"
                                 >
                                     <span
@@ -1003,8 +959,8 @@ const lugares = [
                             </div>
 
                             <p v-if="error('fecha')" data-error role="alert" class="mt-2 text-sm text-borgona">{{ error('fecha') }}</p>
-                            <p v-else-if="profesionalActual" class="mt-2 text-xs text-niebla">
-                                {{ esProfesional ? 'Los días apagados son los que no atiendes.' : `Los días apagados son los que ${profesionalActual.nombre} no atiende.` }}
+                            <p v-else-if="!form.fuera_de_horario" class="mt-2 text-xs text-niebla">
+                                Los días apagados son los que el salón no atiende. Para agendar igual, marca la cita como fuera de horario.
                             </p>
                         </div>
 
@@ -1055,8 +1011,8 @@ const lugares = [
                                 v-else-if="!horarios.length"
                                 class="mt-2 rounded-lg border border-dashed border-hilo px-4 py-5 text-sm text-niebla"
                             >
-                                <template v-if="sinTurnoEseDia">
-                                    {{ esProfesional ? 'Ese día no tienes turno.' : `Ese día ${profesionalActual.nombre} no tiene turno.` }} Prueba con otro día.
+                                <template v-if="salonCerradoEseDia">
+                                    El salón no atiende ese día. Puedes marcar la cita como fuera de horario.
                                 </template>
                                 <template v-else>No hay horarios en los que entren los servicios elegidos ese día.</template>
                             </div>
@@ -1122,7 +1078,7 @@ const lugares = [
                                     De <strong class="font-semibold text-perla">{{ form.hora_inicio }}</strong>
                                     a <strong class="font-semibold text-perla">{{ horaFin }}</strong>
                                     ({{ duracion(duracionTotal) }} según los servicios)
-                                    <span v-if="bloqueAgenda" class="mt-0.5 block text-bruma">{{ bloqueAgenda }}</span>
+                                    <span v-if="form.fuera_de_horario" class="mt-0.5 block text-bruma">Fuera del horario del salón.</span>
                                 </span>
                             </div>
                             <p v-else-if="form.hora_inicio && !duracionTotal" class="mt-3 text-sm text-niebla">
@@ -1186,6 +1142,7 @@ const lugares = [
                                         <dd class="tabular-nums" :class="form.hora_inicio ? 'text-perla' : 'text-niebla'">
                                             <template v-if="form.hora_inicio">
                                                 {{ form.hora_inicio }}{{ horaFin ? ` – ${horaFin}` : '' }}
+                                                <span v-if="form.fuera_de_horario" class="mt-0.5 block text-miel">Fuera de horario</span>
                                             </template>
                                             <template v-else>Horario sin elegir</template>
                                         </dd>
@@ -1203,9 +1160,7 @@ const lugares = [
                                                 :class="{ 'text-niebla': !form.direccion_domicilio.trim() }"
                                             >
                                                 {{ form.direccion_domicilio.trim() || 'Dirección sin indicar' }}
-                                            </span>
-                                            <span v-if="form.a_domicilio" class="mt-0.5 block text-bruma">{{ textoTraslado }}</span>
-                                        </dd>
+                                            </span>                                        </dd>
                                     </div>
                                 </div>
                             </dl>
