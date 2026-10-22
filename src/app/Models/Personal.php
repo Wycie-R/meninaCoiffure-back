@@ -18,11 +18,6 @@ class Personal extends Model
         ];
     }
 
-    public function turnos(): HasMany
-    {
-        return $this->hasMany(TurnoPersonal::class, 'personal_id');
-    }
-
     public function reservas(): HasMany
     {
         return $this->hasMany(Reserva::class, 'personal_id');

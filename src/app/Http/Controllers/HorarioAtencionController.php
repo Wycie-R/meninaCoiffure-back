@@ -3,7 +3,8 @@
 namespace App\Http\Controllers;
 
 use App\Models\HorarioAtencion;
-use App\Models\TurnoPersonal;
+use App\Models\Reserva;
+use App\Services\ReservaService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Collection;
@@ -11,8 +12,8 @@ use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 /**
- * HU-08: Horario de atención del local. Una cita en el salón debe caber en él (ReservaService);
- * sin filas, el horario del local no restringe las reservas.
+ * HU-08: Horario de atención del salón. Toda cita debe caber en él (Regla 2 en ReservaService),
+ * salvo las marcadas como fuera de horario. El salón siempre tiene al menos una franja.
  */
 class HorarioAtencionController extends Controller
 {
@@ -24,19 +25,20 @@ class HorarioAtencionController extends Controller
     }
 
     /**
-     * Reemplaza todo el horario del local por la lista enviada (vacía = sin restricción).
-     * Informa los turnos del personal activo que quedan fuera, sin bloquear el guardado:
-     * esas horas aún sirven para citas a domicilio.
+     * Reemplaza todo el horario del salón por la lista enviada (al menos una franja).
+     * Informa las reservas por atender que quedan fuera del horario nuevo, sin bloquear
+     * el guardado: la dueña decide si las reprograma o las marca como fuera de horario.
      */
     public function guardar(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'horarios' => ['present', 'array'],
+            'horarios' => ['required', 'array', 'min:1'],
             'horarios.*.dia_semana' => ['required', 'integer', 'between:1,7'],
             'horarios.*.hora_apertura' => ['required', 'date_format:H:i,H:i:s'],
             'horarios.*.hora_cierre' => ['required', 'date_format:H:i,H:i:s'],
         ], [
-            'horarios.present' => 'Debe enviar la lista de horarios (puede estar vacía).',
+            'horarios.required' => 'El salón debe tener al menos un día de atención.',
+            'horarios.min' => 'El salón debe tener al menos un día de atención.',
             'horarios.array' => 'Los horarios deben enviarse como una lista.',
             'horarios.*.dia_semana.required' => 'El día de la semana es obligatorio.',
             'horarios.*.dia_semana.between' => 'El día de la semana debe ser entre 1 (Lunes) y 7 (Domingo).',
@@ -65,7 +67,7 @@ class HorarioAtencionController extends Controller
         return response()->json([
             'message' => 'Horario de atención del local actualizado exitosamente.',
             'data' => $this->horarios(),
-            'turnos_fuera_de_horario' => $this->turnosFueraDeHorario($horarios),
+            'reservas_fuera_de_horario' => $this->reservasFueraDeHorario(),
         ]);
     }
 
@@ -78,8 +80,7 @@ class HorarioAtencionController extends Controller
     }
 
     /**
-     * Igual que los turnos del personal: el cierre va después de la apertura y las franjas
-     * del mismo día no se pisan. Las contiguas (08:00-12:00 y 12:00-17:00) son válidas.
+     * El cierre va después de la apertura y las franjas del mismo día no se pisan. Las contiguas (08:00-12:00 y 12:00-17:00) son válidas.
      */
     protected function validarFranjas(array $horarios): void
     {
@@ -112,57 +113,49 @@ class HorarioAtencionController extends Controller
     }
 
     /**
-     * Turnos del personal activo que no caben enteros en el horario del local de su día
-     * (las franjas contiguas del local se consideran una sola).
+     * Reservas por atender (pendientes o confirmadas, desde hoy) que no caben en el horario
+     * guardado y no están marcadas como fuera de horario.
      */
-    protected function turnosFueraDeHorario(array $horarios): array
+    protected function reservasFueraDeHorario(): array
     {
-        // Sin horario del local no hay restricción
-        if ($horarios === []) {
-            return [];
-        }
+        $reservaService = app(ReservaService::class);
+        $hoy = now()->toDateString();
 
-        $franjasPorDia = [];
-        foreach (collect($horarios)->sortBy('hora_apertura') as $franja) {
-            $dia = $franja['dia_semana'];
-            $ultima = isset($franjasPorDia[$dia]) ? array_key_last($franjasPorDia[$dia]) : null;
+        $reservasPorAtender = Reserva::query()
+            ->with('personal:id,nombre,apellido')
+            ->whereIn('estado', ['pendiente', 'confirmada'])
+            ->where('fuera_de_horario', false)
+            ->where('fecha', '>=', $hoy)
+            ->orderBy('fecha')
+            ->orderBy('hora_inicio')
+            ->get();
 
-            if ($ultima !== null && $franja['hora_apertura'] <= $franjasPorDia[$dia][$ultima][1]) {
-                $franjasPorDia[$dia][$ultima][1] = max($franjasPorDia[$dia][$ultima][1], $franja['hora_cierre']);
-            } else {
-                $franjasPorDia[$dia][] = [$franja['hora_apertura'], $franja['hora_cierre']];
+        $fueraDeHorario = [];
+        foreach ($reservasPorAtender as $reserva) {
+            $fecha = substr((string) $reserva->fecha, 0, 10);
+            $franjasDelSalon = $reservaService->franjasLocal($fecha);
+            $inicio = $this->normalizarHora($reserva->hora_inicio);
+            $fin = $this->normalizarHora($reserva->hora_fin);
+
+            $cabe = false;
+            foreach ($franjasDelSalon as [$apertura, $cierre]) {
+                if ($apertura <= $inicio && $cierre >= $fin) {
+                    $cabe = true;
+                }
+            }
+
+            if (!$cabe) {
+                $fueraDeHorario[] = [
+                    'id' => $reserva->id,
+                    'fecha' => $fecha,
+                    'hora_inicio' => $inicio,
+                    'hora_fin' => $fin,
+                    'personal' => $reserva->personal,
+                ];
             }
         }
 
-        return TurnoPersonal::query()
-            ->with('personal:id,nombre,apellido')
-            ->whereHas('personal', fn ($q) => $q->where('activo', true))
-            ->orderBy('personal_id')
-            ->orderBy('dia_semana')
-            ->orderBy('hora_inicio')
-            ->get()
-            ->filter(function (TurnoPersonal $turno) use ($franjasPorDia) {
-                $inicio = $this->normalizarHora($turno->hora_inicio);
-                $fin = $this->normalizarHora($turno->hora_fin);
-
-                foreach ($franjasPorDia[(int) $turno->dia_semana] ?? [] as [$apertura, $cierre]) {
-                    if ($apertura <= $inicio && $cierre >= $fin) {
-                        return false;
-                    }
-                }
-
-                return true;
-            })
-            ->map(fn (TurnoPersonal $turno) => [
-                'personal_id' => $turno->personal_id,
-                'nombre' => $turno->personal->nombre,
-                'apellido' => $turno->personal->apellido,
-                'dia_semana' => (int) $turno->dia_semana,
-                'hora_inicio' => $this->normalizarHora($turno->hora_inicio),
-                'hora_fin' => $this->normalizarHora($turno->hora_fin),
-            ])
-            ->values()
-            ->all();
+        return $fueraDeHorario;
     }
 
     /**

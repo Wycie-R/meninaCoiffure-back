@@ -10,7 +10,6 @@ use App\Models\Personal;
 use App\Models\PrecioServicio;
 use App\Models\Reserva;
 use App\Models\Servicio;
-use App\Models\TurnoPersonal;
 use Carbon\Carbon;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -22,9 +21,12 @@ class ReservaService
 
     /**
      * Minutos de tolerancia para registrar una cita que ya empezó: clientes que llegan
-     * sin turno y se atienden por orden de llegada.
+     * sin cita y se atienden por orden de llegada.
      */
-    public const TOLERANCIA_SIN_TURNO = 30;
+    public const TOLERANCIA_SIN_CITA = 30;
+
+    /** Límites de una atención fuera del horario del salón (temprano a la mañana o a la noche). */
+    public const JORNADA_MAXIMA = ['06:00:00', '22:00:00'];
 
     /**
      * Transiciones de estado permitidas por PUT. Los estados finales no aparecen como origen.
@@ -53,20 +55,18 @@ class ReservaService
             $horaInicio = $this->normalizarHora($datos['hora_inicio']);
             $horaFin = $this->normalizarHora($datos['hora_fin']);
             $domicilio = $this->datosDomicilio($datos);
+            $fueraDeHorario = (bool) ($datos['fuera_de_horario'] ?? false);
 
             // Bloquea al profesional hasta el fin de la transacción: dos pedidos simultáneos
             // (por ejemplo, en nodos distintos detrás de HAProxy) no pueden pasar ambos la Regla 1
             $this->validarPersonalActivo($personalId, bloquear: true);
             $this->validarHorarioFuturo($fecha, $horaInicio);
 
-            // Regla 1: No solapamiento de horarios para el profesional (con el traslado si es a domicilio)
-            $this->validarSolapamiento($personalId, $fecha, $horaInicio, $horaFin, $domicilio['minutos_traslado']);
+            // Regla 1: la profesional no puede tener dos citas activas a la vez
+            $this->validarSolapamiento($personalId, $fecha, $horaInicio, $horaFin);
 
-            // Regla 2: Dentro del turno laboral del personal y, en el salón, del horario del local
-            $this->validarTurnoPersonal($personalId, $fecha, $horaInicio, $horaFin);
-            if (!$domicilio['a_domicilio']) {
-                $this->validarHorarioLocal($fecha, $horaInicio, $horaFin);
-            }
+            // Regla 2: dentro del horario del salón, salvo atención fuera de horario autorizada
+            $this->validarHorarioSalon($fecha, $horaInicio, $horaFin, $fueraDeHorario);
 
             if (!empty($datos['descuento_id'])) {
                 $this->validarDescuentoVigente((int) $datos['descuento_id'], $fecha);
@@ -111,6 +111,7 @@ class ReservaService
                 'hora_fin' => $horaFin,
                 'estado' => $datos['estado'] ?? 'pendiente',
                 'descuento_id' => $datos['descuento_id'] ?? null,
+                'fuera_de_horario' => $fueraDeHorario,
                 ...$domicilio,
             ]);
 
@@ -173,23 +174,28 @@ class ReservaService
             $horaFin = isset($datos['hora_fin']) ? $this->normalizarHora($datos['hora_fin']) : $reserva->hora_fin;
 
             $cambiaDomicilio = array_key_exists('a_domicilio', $datos)
-                || array_key_exists('direccion_domicilio', $datos)
-                || array_key_exists('minutos_traslado', $datos);
+                || array_key_exists('direccion_domicilio', $datos);
 
             $domicilio = $this->datosDomicilio([
                 'a_domicilio' => $datos['a_domicilio'] ?? $reserva->a_domicilio,
                 'direccion_domicilio' => array_key_exists('direccion_domicilio', $datos)
                     ? $datos['direccion_domicilio']
                     : $reserva->direccion_domicilio,
-                'minutos_traslado' => $datos['minutos_traslado'] ?? $reserva->minutos_traslado,
             ]);
+
+            // Si no se envía, la reserva conserva lo que la dueña autorizó al crearla
+            if (array_key_exists('fuera_de_horario', $datos)) {
+                $fueraDeHorario = (bool) $datos['fuera_de_horario'];
+            } else {
+                $fueraDeHorario = (bool) $reserva->fuera_de_horario;
+            }
 
             $horarioCambiado = (
                 (isset($datos['fecha']) && $datos['fecha'] !== $reserva->fecha) ||
                 (isset($datos['hora_inicio']) && $this->normalizarHora($datos['hora_inicio']) !== $this->normalizarHora($reserva->hora_inicio)) ||
                 (isset($datos['hora_fin']) && $this->normalizarHora($datos['hora_fin']) !== $this->normalizarHora($reserva->hora_fin)) ||
                 (isset($datos['personal_id']) && $datos['personal_id'] !== $reserva->personal_id) ||
-                $domicilio['minutos_traslado'] !== $reserva->minutos_traslado ||
+                $fueraDeHorario !== (bool) $reserva->fuera_de_horario ||
                 $domicilio['a_domicilio'] !== $reserva->a_domicilio
             );
 
@@ -204,13 +210,10 @@ class ReservaService
                 $this->validarHorarioFuturo($fecha, $horaInicio);
 
                 // Revalidar Regla 1 excluyendo la reserva actual
-                $this->validarSolapamiento($personalId, $fecha, $horaInicio, $horaFin, $domicilio['minutos_traslado'], $reserva->id);
+                $this->validarSolapamiento($personalId, $fecha, $horaInicio, $horaFin, $reserva->id);
 
                 // Revalidar Regla 2
-                $this->validarTurnoPersonal($personalId, $fecha, $horaInicio, $horaFin);
-                if (!$domicilio['a_domicilio']) {
-                    $this->validarHorarioLocal($fecha, $horaInicio, $horaFin);
-                }
+                $this->validarHorarioSalon($fecha, $horaInicio, $horaFin, $fueraDeHorario);
             }
 
             $camposActualizables = [
@@ -218,6 +221,9 @@ class ReservaService
             ];
 
             $datosActualizar = array_intersect_key($datos, array_flip($camposActualizables));
+            if (array_key_exists('fuera_de_horario', $datos)) {
+                $datosActualizar['fuera_de_horario'] = $fueraDeHorario;
+            }
             if (isset($datosActualizar['hora_inicio'])) {
                 $datosActualizar['hora_inicio'] = $horaInicio;
             }
@@ -318,22 +324,23 @@ class ReservaService
     }
 
     /**
-     * HU-02: Horarios en los que un profesional puede recibir una cita de cierta duración.
-     * Recorre las franjas del turno (unidas) cada $intervalo minutos y marca cada inicio
-     * como disponible, ocupado (Regla 1, con traslados) o pasado.
+     * HU-02: Horarios en los que una profesional puede recibir una cita de cierta duración.
+     * Recorre el horario del salón (o la jornada máxima, si es fuera de horario) cada $intervalo
+     * minutos y marca cada inicio como disponible, ocupado (Regla 1) o pasado.
+     * Si el salón no abre ese día y no es fuera de horario, no hay franjas ni horarios.
      *
      * @return array{franjas: array<int, array{0: string, 1: string}>, horarios: array<int, array{hora: string, disponible: bool, motivo: ?string}>}
      */
-    public function horariosDisponibles(int $personalId, string $fecha, int $duracion, bool $aDomicilio = false, int $traslado = 0, int $intervalo = 30): array
+    public function horariosDisponibles(int $personalId, string $fecha, int $duracion, bool $fueraDeHorario = false, int $intervalo = 30): array
     {
-        $traslado = $aDomicilio ? $traslado : 0;
-        $franjas = $this->franjasDelDia($personalId, $fecha);
-
-        // En el salón, la cita además debe caber en el horario del local
-        $local = $aDomicilio ? null : $this->franjasLocal($fecha);
+        if ($fueraDeHorario) {
+            $franjas = [self::JORNADA_MAXIMA];
+        } else {
+            $franjas = $this->franjasLocal($fecha);
+        }
 
         $ocupados = $this->bloquesOcupados($personalId, $fecha);
-        $limitePasado = now()->subMinutes(self::TOLERANCIA_SIN_TURNO);
+        $limitePasado = now()->subMinutes(self::TOLERANCIA_SIN_CITA);
         $horarios = [];
 
         foreach ($franjas as [$inicioFranja, $finFranja]) {
@@ -346,10 +353,8 @@ class ReservaService
 
                 if (Carbon::parse($fecha)->startOfDay()->addMinutes($inicio)->lt($limitePasado)) {
                     $motivo = 'pasado';
-                } elseif ($this->chocaConBloques($inicio - $traslado, $fin + $traslado, $ocupados)) {
+                } elseif ($this->chocaConBloques($inicio, $fin, $ocupados)) {
                     $motivo = 'ocupado';
-                } elseif ($local !== null && !$this->cabeEnFranjas($inicio, $fin, $local)) {
-                    $motivo = 'local_cerrado';
                 }
 
                 $horarios[] = ['hora' => $this->aHora($inicio), 'disponible' => $motivo === null, 'motivo' => $motivo];
@@ -403,11 +408,11 @@ class ReservaService
 
     /**
      * No se reservan horarios que ya pasaron. Se toleran unos minutos para registrar
-     * a quien llega sin turno y se atiende por orden de llegada.
+     * a quien llega sin cita y se atiende por orden de llegada.
      */
     protected function validarHorarioFuturo(string $fecha, string $horaInicio): void
     {
-        if (Carbon::parse("{$fecha} {$horaInicio}")->lt(now()->subMinutes(self::TOLERANCIA_SIN_TURNO))) {
+        if (Carbon::parse("{$fecha} {$horaInicio}")->lt(now()->subMinutes(self::TOLERANCIA_SIN_CITA))) {
             throw ValidationException::withMessages([
                 'horario' => ['El horario seleccionado ya pasó. Elige un horario posterior a la hora actual.'],
             ]);
@@ -415,17 +420,16 @@ class ReservaService
     }
 
     /**
-     * Regla 1: Validar que el profesional no tenga reservas activas solapadas.
-     * Una cita a domicilio ocupa también su tiempo de traslado antes y después,
-     * así que se comparan bloques [inicio - traslado, fin + traslado].
+     * Regla 1: la profesional no puede tener dos reservas activas que se superpongan.
+     * Una cita ocupa exactamente su horario (de hora_inicio a hora_fin).
      */
-    protected function validarSolapamiento(int $personalId, string $fecha, string $horaInicio, string $horaFin, int $traslado = 0, ?int $excluirReservaId = null): void
+    protected function validarSolapamiento(int $personalId, string $fecha, string $horaInicio, string $horaFin, ?int $excluirReservaId = null): void
     {
-        $bloques = $this->bloquesOcupados($personalId, $fecha, $excluirReservaId);
-        $inicio = $this->aMinutos($horaInicio) - $traslado;
-        $fin = $this->aMinutos($horaFin) + $traslado;
+        $bloquesOcupados = $this->bloquesOcupados($personalId, $fecha, $excluirReservaId);
+        $inicioEnMinutos = $this->aMinutos($horaInicio);
+        $finEnMinutos = $this->aMinutos($horaFin);
 
-        if ($this->chocaConBloques($inicio, $fin, $bloques)) {
+        if ($this->chocaConBloques($inicioEnMinutos, $finEnMinutos, $bloquesOcupados)) {
             throw ValidationException::withMessages([
                 'horario' => ['El profesional ya cuenta con una reserva activa en el rango horario seleccionado.'],
             ]);
@@ -433,33 +437,36 @@ class ReservaService
     }
 
     /**
-     * Regla 2: Validar que el horario esté dentro del turno laboral del personal.
-     * diaOfWeekIso: 1=Lunes a 7=Domingo
-     * Las franjas contiguas del mismo día se unen (09:00-11:00 + 11:00-13:00 = 09:00-13:00),
-     * y la cita debe quedar completa dentro de una de esas franjas unidas.
+     * Regla 2: la cita debe caber en el horario del salón, sea en el local o a domicilio.
+     * Las franjas contiguas se unen (08:00-13:00 + 13:00-17:00 = 08:00-17:00).
+     * Si la dueña la marcó como fuera de horario, solo se exige la jornada máxima.
      */
-    protected function validarTurnoPersonal(int $personalId, string $fecha, string $horaInicio, string $horaFin): void
+    protected function validarHorarioSalon(string $fecha, string $horaInicio, string $horaFin, bool $fueraDeHorario): void
     {
-        $franjas = $this->franjasDelDia($personalId, $fecha);
+        $inicioEnMinutos = $this->aMinutos($horaInicio);
+        $finEnMinutos = $this->aMinutos($horaFin);
 
-        if (!$this->cabeEnFranjas($this->aMinutos($horaInicio), $this->aMinutos($horaFin), $franjas)) {
+        if ($fueraDeHorario) {
+            if (!$this->cabeEnFranjas($inicioEnMinutos, $finEnMinutos, [self::JORNADA_MAXIMA])) {
+                throw ValidationException::withMessages([
+                    'horario' => ['Una atención fuera de horario debe quedar entre las 06:00 y las 22:00.'],
+                ]);
+            }
+
+            return;
+        }
+
+        $franjasDelSalon = $this->franjasLocal($fecha);
+
+        if (count($franjasDelSalon) === 0) {
             throw ValidationException::withMessages([
-                'horario' => ['El horario seleccionado se encuentra fuera del turno laboral del personal asignado.'],
+                'horario' => ['El salón no atiende ese día. Si la cita se hará igual, márcala como fuera de horario.'],
             ]);
         }
-    }
 
-    /**
-     * Regla 2 (local): una cita en el salón debe caber en el horario de atención del local.
-     * Si el horario del local no está configurado, no se aplica.
-     */
-    protected function validarHorarioLocal(string $fecha, string $horaInicio, string $horaFin): void
-    {
-        $franjas = $this->franjasLocal($fecha);
-
-        if ($franjas !== null && !$this->cabeEnFranjas($this->aMinutos($horaInicio), $this->aMinutos($horaFin), $franjas)) {
+        if (!$this->cabeEnFranjas($inicioEnMinutos, $finEnMinutos, $franjasDelSalon)) {
             throw ValidationException::withMessages([
-                'horario' => ['El salón está cerrado en ese horario. Para atender fuera del horario del local, registra la cita a domicilio.'],
+                'horario' => ['La cita queda fuera del horario del salón. Si se hará igual, márcala como fuera de horario.'],
             ]);
         }
     }
@@ -522,8 +529,7 @@ class ReservaService
     }
 
     /**
-     * HU-14: una cita a domicilio necesita dirección y puede reservar tiempo de traslado;
-     * una cita en el salón no guarda ninguno de los dos.
+     * HU-14: una cita a domicilio necesita dirección; una cita en el salón no la guarda.
      */
     protected function datosDomicilio(array $datos): array
     {
@@ -539,43 +545,27 @@ class ReservaService
         return [
             'a_domicilio' => $aDomicilio,
             'direccion_domicilio' => $aDomicilio ? $direccion : null,
-            'minutos_traslado' => $aDomicilio ? (int) ($datos['minutos_traslado'] ?? 0) : 0,
         ];
     }
 
     /**
-     * Franjas del turno del profesional para el día de la fecha, ordenadas y con las contiguas unidas.
+     * Franjas del horario del salón para la fecha, ordenadas y con las contiguas unidas.
+     * Vacío si el salón no abre ese día.
      *
      * @return array<int, array{0: string, 1: string}>
      */
-    protected function franjasDelDia(int $personalId, string $fecha): array
+    public function franjasLocal(string $fecha): array
     {
-        $franjas = TurnoPersonal::where('personal_id', $personalId)
-            ->where('dia_semana', Carbon::parse($fecha)->dayOfWeekIso)
-            ->orderBy('hora_inicio')
-            ->get(['hora_inicio', 'hora_fin'])
-            ->map(fn ($t) => [$t->hora_inicio, $t->hora_fin])
-            ->all();
+        $diaDeLaSemana = Carbon::parse($fecha)->dayOfWeekIso;
 
-        return $this->unirFranjas($franjas);
-    }
-
-    /**
-     * Franjas del horario del local para la fecha; null si el horario del local no está configurado.
-     *
-     * @return array<int, array{0: string, 1: string}>|null
-     */
-    protected function franjasLocal(string $fecha): ?array
-    {
-        if (!HorarioAtencion::exists()) {
-            return null;
-        }
-
-        $franjas = HorarioAtencion::where('dia_semana', Carbon::parse($fecha)->dayOfWeekIso)
+        $horarios = HorarioAtencion::where('dia_semana', $diaDeLaSemana)
             ->orderBy('hora_apertura')
-            ->get(['hora_apertura', 'hora_cierre'])
-            ->map(fn ($h) => [$h->hora_apertura, $h->hora_cierre])
-            ->all();
+            ->get(['hora_apertura', 'hora_cierre']);
+
+        $franjas = [];
+        foreach ($horarios as $horario) {
+            $franjas[] = [$horario->hora_apertura, $horario->hora_cierre];
+        }
 
         return $this->unirFranjas($franjas);
     }
@@ -610,22 +600,26 @@ class ReservaService
     }
 
     /**
-     * Bloques en minutos que el profesional ya tiene ocupados ese día (con traslados incluidos).
+     * Bloques en minutos que la profesional ya tiene ocupados ese día.
      *
      * @return array<int, array{0: int, 1: int}>
      */
     protected function bloquesOcupados(int $personalId, string $fecha, ?int $excluirReservaId = null): array
     {
-        return Reserva::where('personal_id', $personalId)
+        $consulta = Reserva::where('personal_id', $personalId)
             ->where('fecha', $fecha)
-            ->whereIn('estado', Reserva::ESTADOS_QUE_OCUPAN)
-            ->when($excluirReservaId, fn ($q) => $q->where('id', '!=', $excluirReservaId))
-            ->get(['hora_inicio', 'hora_fin', 'minutos_traslado'])
-            ->map(fn (Reserva $r) => [
-                $this->aMinutos($r->hora_inicio) - (int) $r->minutos_traslado,
-                $this->aMinutos($r->hora_fin) + (int) $r->minutos_traslado,
-            ])
-            ->all();
+            ->whereIn('estado', Reserva::ESTADOS_QUE_OCUPAN);
+
+        if ($excluirReservaId !== null) {
+            $consulta->where('id', '!=', $excluirReservaId);
+        }
+
+        $bloques = [];
+        foreach ($consulta->get(['hora_inicio', 'hora_fin']) as $reserva) {
+            $bloques[] = [$this->aMinutos($reserva->hora_inicio), $this->aMinutos($reserva->hora_fin)];
+        }
+
+        return $bloques;
     }
 
     protected function chocaConBloques(int $inicio, int $fin, array $bloques): bool

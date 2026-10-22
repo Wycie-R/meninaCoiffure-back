@@ -91,7 +91,7 @@ class ReservaController extends Controller
     #[OA\Post(
         path: '/api/reservas',
         summary: 'Crear una nueva reserva',
-        description: 'Registra una reserva con sus detalles de servicios. Aplica validaciones: no solapamiento del personal, horario dentro del turno laboral, servicios activos y congelamiento de precios vigentes.',
+        description: 'Registra una reserva con sus detalles de servicios. Aplica validaciones: no solapamiento del personal, horario dentro del horario del salón (o fuera de horario autorizado), servicios activos y congelamiento de precios vigentes.',
         tags: ['Reservas']
     )]
     #[OA\RequestBody(
@@ -114,7 +114,8 @@ class ReservaController extends Controller
                 new OA\Property(property: 'descuento_id', type: 'integer', nullable: true, example: null, description: 'ID del descuento opcional'),
                 new OA\Property(property: 'estado', type: 'string', enum: ['pendiente', 'confirmada'], example: 'pendiente'),
                 new OA\Property(property: 'a_domicilio', type: 'boolean', example: false, description: 'true si la cita se atiende fuera del salón'),
-                new OA\Property(property: 'direccion_domicilio', type: 'string', nullable: true, example: null, description: 'Obligatoria si a_domicilio es true')
+                new OA\Property(property: 'direccion_domicilio', type: 'string', nullable: true, example: null, description: 'Obligatoria si a_domicilio es true'),
+                new OA\Property(property: 'fuera_de_horario', type: 'boolean', example: false, description: 'true si la dueña autoriza atender fuera del horario del salón (dentro de 06:00–22:00)')
             ]
         )
     )]
@@ -124,7 +125,7 @@ class ReservaController extends Controller
     )]
     #[OA\Response(
         response: 422,
-        description: 'Error de validación (solapamiento horario, fuera de turno o servicio inactivo)'
+        description: 'Error de validación (solapamiento horario, fuera del horario del salón o servicio inactivo)'
     )]
     public function store(StoreReservaRequest $request): JsonResponse
     {
@@ -180,7 +181,7 @@ class ReservaController extends Controller
     #[OA\Put(
         path: '/api/reservas/{reserva}',
         summary: 'Actualizar una reserva existente',
-        description: 'Actualiza campos de la reserva. Si se modifican horarios o profesional, re-valida turnos y solapamientos. Regla 5: Bloquea modificaciones si la reserva ya está completada.',
+        description: 'Actualiza campos de la reserva. Si se modifican horarios o profesional, re-valida el horario del salón y los solapamientos. Regla 5: Bloquea modificaciones si la reserva ya está completada.',
         tags: ['Reservas']
     )]
     #[OA\Parameter(
@@ -203,7 +204,8 @@ class ReservaController extends Controller
                 new OA\Property(property: 'estado', type: 'string', enum: Reserva::ESTADOS, example: 'confirmada'),
                 new OA\Property(property: 'descuento_id', type: 'integer', nullable: true, example: null),
                 new OA\Property(property: 'a_domicilio', type: 'boolean', example: false),
-                new OA\Property(property: 'direccion_domicilio', type: 'string', nullable: true, example: null)
+                new OA\Property(property: 'direccion_domicilio', type: 'string', nullable: true, example: null),
+                new OA\Property(property: 'fuera_de_horario', type: 'boolean', example: false)
             ]
         )
     )]
@@ -348,10 +350,10 @@ class ReservaController extends Controller
     #[OA\Get(
         path: '/api/disponibilidad',
         summary: 'Horarios disponibles de un profesional',
-        description: 'Recorre las franjas del turno del día y marca cada inicio como disponible, ocupado (otra reserva o su traslado), pasado o local_cerrado.',
+        description: 'Recorre el horario del salón ese día (o la jornada 06:00–22:00 si fuera_de_horario es true) y marca cada inicio como disponible, ocupado (otra reserva) o pasado.',
         tags: ['Reservas']
     )]
-    #[OA\Response(response: 200, description: 'Franjas del turno y horarios con su disponibilidad')]
+    #[OA\Response(response: 200, description: 'Franjas del salón y horarios con su disponibilidad')]
     public function disponibilidad(Request $request): JsonResponse
     {
         $datos = $request->validate([
@@ -360,8 +362,7 @@ class ReservaController extends Controller
             'duracion_minutos' => ['required_without:servicios', 'nullable', 'integer', 'min:5', 'max:600'],
             'servicios' => ['required_without:duracion_minutos', 'array'],
             'servicios.*' => ['integer', 'exists:servicios,id'],
-            'a_domicilio' => ['nullable', 'boolean'],
-            'minutos_traslado' => ['nullable', 'integer', 'min:0', 'max:240'],
+            'fuera_de_horario' => ['nullable', 'boolean'],
             'intervalo' => ['nullable', 'integer', Rule::in([15, 30, 60])],
         ], [
             'duracion_minutos.required_without' => 'Indica la duración de la cita o los servicios elegidos.',
@@ -378,8 +379,7 @@ class ReservaController extends Controller
             (int) $datos['personal_id'],
             $fecha,
             max($duracion, 5),
-            (bool) ($datos['a_domicilio'] ?? false),
-            (int) ($datos['minutos_traslado'] ?? 0),
+            (bool) ($datos['fuera_de_horario'] ?? false),
             (int) ($datos['intervalo'] ?? 30),
         );
 

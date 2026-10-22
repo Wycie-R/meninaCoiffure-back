@@ -2,13 +2,14 @@
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import Dropdown from './Dropdown.vue'
 import Icono from './Icono.vue'
+import Interruptor from './Interruptor.vue'
 import { api, mensajeError, primerosErrores } from '../api'
 import { aHora, aISO, aMinutos, capitalizar, duracion, fechaLarga, hora } from '../formato'
 import { claseEnfoque } from '../ui'
 import { usePersonal } from '../personal'
 import { usePermisos } from '../auth'
 import { minutosReserva, nombrePersonal } from '../agenda'
-import { diaSemanaDe, franjasUnidas, nombreDia, textoFranjas } from '../turnos'
+import { diaSemanaDe, franjasUnidas, nombreDia, textoFranjas, useHorarioSalon } from '../horarios'
 
 const props = defineProps({
     reserva: {
@@ -25,8 +26,12 @@ const eleccion = defineModel({ type: Object, required: true })
 
 const { personal, cargarPersonal } = usePersonal()
 const { esAdmin } = usePermisos()
+const { horarioSalon, horarioCargado, cargarHorarioSalon } = useHorarioSalon()
 
-onMounted(() => cargarPersonal())
+onMounted(() => {
+    cargarPersonal()
+    cargarHorarioSalon()
+})
 
 const original = computed(() => ({
     personal_id: props.reserva.personal_id,
@@ -35,7 +40,7 @@ const original = computed(() => ({
 }))
 
 const minutos = computed(() => minutosReserva(props.reserva))
-const traslado = computed(() => (props.reserva.a_domicilio ? Number(props.reserva.minutos_traslado) || 0 : 0))
+const fueraDeHorario = computed(() => Boolean(eleccion.value.fuera_de_horario))
 const hoy = computed(() => aISO(props.ahora))
 
 function porNombre(a, b) {
@@ -52,25 +57,29 @@ const opcionesPersonal = computed(() =>
     equipo.value.map((p) => ({
         value: p.id,
         label: `${p.nombre} ${p.apellido}`,
-        detalle: p.id === original.value.personal_id ? 'Tiene la cita ahora' : p.turnos?.length === 0 ? 'Sin horario asignado' : '',
+        detalle: p.id === original.value.personal_id ? 'Tiene la cita ahora' : '',
     }))
 )
 
 const profesional = computed(() => equipo.value.find((p) => p.id === eleccion.value.personal_id) ?? props.reserva.personal ?? null)
 const nombreProfesional = computed(() => profesional.value?.nombre ?? 'la profesional')
-const turnos = computed(() => profesional.value?.turnos)
 
 function elegirProfesional(id) {
     if (id === eleccion.value.personal_id) return
     eleccion.value = { ...eleccion.value, personal_id: id, hora_inicio: '' }
 }
 
+function cambiarFueraDeHorario(valor) {
+    eleccion.value = { ...eleccion.value, fuera_de_horario: valor, hora_inicio: '' }
+}
+
 const inicioBloque = ref(0)
 const diasPorBloque = 14
 
+// Un día se puede elegir si el salón abre; fuera de horario, cualquier día
 function atiende(dia) {
-    if (turnos.value === undefined) return true
-    return franjasUnidas(turnos.value, dia).length > 0
+    if (fueraDeHorario.value || !horarioCargado.value) return true
+    return franjasUnidas(horarioSalon.value, dia).length > 0
 }
 
 const diasVisibles = computed(() => {
@@ -112,7 +121,8 @@ function centrarEnFecha(iso) {
 centrarEnFecha(eleccion.value.fecha || original.value.fecha)
 
 function elegirDia(dia) {
-    if (!dia.disponible || dia.iso === eleccion.value.fecha) return
+    if (!dia.disponible) return
+    if (dia.iso === eleccion.value.fecha) return
     eleccion.value = { ...eleccion.value, fecha: dia.iso, hora_inicio: '' }
 }
 
@@ -125,12 +135,11 @@ let controlador = null
 const MOTIVOS = {
     ocupado: 'ocupado',
     pasado: 'ya pasó',
-    local_cerrado: 'el local está cerrado',
 }
 
 async function revisarAgenda() {
     controlador?.abort()
-    const turno = ++consulta
+    const numeroConsulta = ++consulta
     const { personal_id, fecha } = eleccion.value
 
     if (!personal_id || !fecha) {
@@ -146,10 +155,7 @@ async function revisarAgenda() {
         excluir_reserva_id: props.reserva.id,
     })
 
-    if (traslado.value) {
-        parametros.set('a_domicilio', 1)
-        parametros.set('minutos_traslado', traslado.value)
-    }
+    if (fueraDeHorario.value) parametros.set('fuera_de_horario', 1)
 
     disponibilidad.value = null
     errorAgenda.value = ''
@@ -157,7 +163,7 @@ async function revisarAgenda() {
     controlador = new AbortController()
 
     const respuesta = await api(`/api/disponibilidad?${parametros}`, { senal: controlador.signal })
-    if (turno !== consulta) return
+    if (numeroConsulta !== consulta) return
 
     revisando.value = false
     controlador = null
@@ -173,7 +179,7 @@ async function revisarAgenda() {
     disponibilidad.value = respuesta.cuerpo?.data ?? null
 }
 
-watch(() => [eleccion.value.personal_id, eleccion.value.fecha], revisarAgenda, { immediate: true })
+watch(() => [eleccion.value.personal_id, eleccion.value.fecha, eleccion.value.fuera_de_horario], revisarAgenda, { immediate: true })
 
 onBeforeUnmount(() => controlador?.abort())
 
@@ -181,11 +187,12 @@ const mismoDiaYProfesional = computed(
     () => eleccion.value.personal_id === original.value.personal_id && eleccion.value.fecha === original.value.fecha
 )
 
+// La API marca como ocupado el horario de la propia cita: al moverla dentro del mismo día se libera
 function chocaConLaPropia(inicio) {
     if (!mismoDiaYProfesional.value) return false
-    const desde = aMinutos(original.value.hora_inicio) - traslado.value
-    const hasta = aMinutos(props.reserva.hora_fin) + traslado.value
-    return inicio - traslado.value < hasta && inicio + minutos.value + traslado.value > desde
+    const desde = aMinutos(original.value.hora_inicio)
+    const hasta = aMinutos(props.reserva.hora_fin)
+    return inicio < hasta && inicio + minutos.value > desde
 }
 
 const horarios = computed(() =>
@@ -205,17 +212,18 @@ const horarios = computed(() =>
     })
 )
 
+// La API devuelve las franjas en las que se puede atender ese día (horario del salón o jornada máxima)
 const franjasDelDia = computed(() => {
     const delServidor = disponibilidad.value?.franjas
-    if (Array.isArray(delServidor) && delServidor.length) {
-        return delServidor.map(([desde, hasta]) => ({ inicio: aMinutos(desde), fin: aMinutos(hasta) }))
-    }
-    return turnos.value ? franjasUnidas(turnos.value, diaSemanaDe(eleccion.value.fecha)) : []
+    if (!Array.isArray(delServidor)) return []
+    return delServidor.map(([desde, hasta]) => ({ inicio: aMinutos(desde), fin: aMinutos(hasta) }))
 })
 
 const textoDia = computed(() => {
     if (!franjasDelDia.value.length || !eleccion.value.fecha) return ''
-    return `El ${nombreDia(diaSemanaDe(eleccion.value.fecha))} ${nombreProfesional.value} atiende ${textoFranjas(franjasDelDia.value)}.`
+    const rango = textoFranjas(franjasDelDia.value)
+    if (fueraDeHorario.value) return `Fuera de horario se puede agendar ${rango}.`
+    return `El ${nombreDia(diaSemanaDe(eleccion.value.fecha))} el salón atiende ${rango}.`
 })
 
 const horariosManana = computed(() => horarios.value.filter((h) => !h.tarde))
@@ -255,9 +263,16 @@ defineExpose({ horaFin })
         <section aria-labelledby="reagendar-titulo">
             <h3 id="reagendar-titulo" class="text-xl">Reagendar la cita</h3>
             <p class="mt-1 text-sm text-bruma">
-                La cita dura {{ duracion(minutos) }}<template v-if="traslado">, más {{ duracion(traslado) }} de traslado antes y después</template>.
-                Los servicios y el precio no cambian.
+                La cita dura {{ duracion(minutos) }}. Los servicios y el precio no cambian.
             </p>
+            <div class="mt-4">
+                <Interruptor
+                    :model-value="eleccion.fuera_de_horario"
+                    etiqueta="Atender fuera del horario del salón"
+                    descripcion="Permite días en que el salón no abre y horas entre las 06:00 y las 22:00."
+                    @update:model-value="cambiarFueraDeHorario"
+                />
+            </div>
         </section>
 
         <section v-if="esAdmin" aria-labelledby="reagendar-profesional">
@@ -312,7 +327,7 @@ defineExpose({ horaFin })
                     "
                     :disabled="!dia.disponible"
                     :aria-pressed="eleccion.fecha === dia.iso"
-                    :aria-label="`${dia.semana} ${dia.dia} de ${dia.mes}${dia.esOriginal ? ', día actual de la cita' : ''}${dia.disponible ? '' : ', no atiende'}`"
+                    :aria-label="`${dia.semana} ${dia.dia} de ${dia.mes}${dia.esOriginal ? ', día actual de la cita' : ''}${dia.disponible ? '' : ', el salón no atiende'}`"
                     @click="elegirDia(dia)"
                 >
                     <span
@@ -368,7 +383,7 @@ defineExpose({ horaFin })
                 {{
                     franjasDelDia.length
                         ? 'Ese día no hay un espacio en el que entre la cita completa. Prueba con otro día.'
-                        : `Ese día ${nombreProfesional} no tiene turno. Prueba con otro día.`
+                        : 'El salón no atiende ese día. Puedes marcar la cita como fuera de horario.'
                 }}
             </div>
 

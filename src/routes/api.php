@@ -69,11 +69,10 @@ Route::middleware(['web', 'auth', 'rol:admin,profesional'])->group(function () {
         Route::post('servicios/{servicio}/cambiar-precio', [ServicioController::class, 'cambiarPrecio']);
         Route::apiResource('servicios', ServicioController::class)->except(['index', 'show']);
 
-        // HU-07 y HU-08: Personal, turnos, especialidades y horario del local
+        // HU-07 y HU-08: Personal, especialidades y horario del salón
         Route::post('personal', [PersonalController::class, 'store']);
         Route::put('personal/{personal}', [PersonalController::class, 'update']);
         Route::delete('personal/{personal}', [PersonalController::class, 'destroy']);
-        Route::post('personal/{personal}/turnos', [PersonalController::class, 'guardarTurnos']);
         Route::put('personal/{personal}/especialidades', [EspecialidadController::class, 'asignar']);
         Route::apiResource('especialidades', EspecialidadController::class)->except(['index'])
             ->parameters(['especialidades' => 'especialidad']);

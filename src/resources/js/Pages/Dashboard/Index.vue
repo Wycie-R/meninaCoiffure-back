@@ -13,9 +13,10 @@ import { buscarReservas, useReservas } from '../../reservas'
 import { usePersonal } from '../../personal'
 import { usePermisos } from '../../auth'
 import { aDomicilio, descartada, dia as diaDe, montosReserva, nombreCliente, nombresServicios, porAtender } from '../../agenda'
-import { franjasUnidas } from '../../turnos'
+import { franjasUnidas, useHorarioSalon } from '../../horarios'
 
 const { personal, cargarPersonal } = usePersonal()
+const { horarioSalon, cargarHorarioSalon } = useHorarioSalon()
 const { reservas: agendaCompleta, cargado: agendaCargada } = useReservas()
 // Un profesional solo ve su propia agenda (el servidor ya filtra sus reservas)
 // y no ve la caja del salón; la caja espera a saber quién es el usuario.
@@ -33,11 +34,11 @@ let reloj = null
 let consulta = 0
 
 async function cargar() {
-    const turno = ++consulta
+    const numeroConsulta = ++consulta
     const fecha = hoy.value
     const { lista, fallo } = await buscarReservas({ fecha_desde: fecha, fecha_hasta: fecha })
 
-    if (turno !== consulta) return
+    if (numeroConsulta !== consulta) return
 
     if (fallo) {
         error.value = mensajeError(fallo, propia.value ? 'cargar tu agenda de hoy' : 'cargar la agenda de hoy')
@@ -52,6 +53,7 @@ async function cargar() {
 onMounted(() => {
     cargar()
     cargarPersonal()
+    cargarHorarioSalon()
     reloj = setInterval(() => {
         ahora.value = new Date()
     }, 30000)
@@ -145,13 +147,17 @@ function porNombre(a, b) {
     return String(a.nombre ?? '').localeCompare(String(b.nombre ?? ''), 'es') || String(a.apellido ?? '').localeCompare(String(b.apellido ?? ''), 'es')
 }
 
+// Todas las profesionales atienden por cita dentro del horario del salón
+const franjasSalonHoy = computed(() => franjasUnidas(horarioSalon.value, diaIso.value))
+
 const personalHoy = computed(() => {
     const conCitas = new Set(reservasVigentes.value.map((reserva) => reserva.personal_id))
     const equipo = new Map(personal.value.map((persona) => [persona.id, persona]))
+    const franjas = franjasSalonHoy.value
 
     for (const reserva of reservasVigentes.value) {
         if (reserva.personal && !equipo.has(reserva.personal_id)) {
-            equipo.set(reserva.personal_id, { ...reserva.personal, id: reserva.personal_id, activo: true, turnos: [] })
+            equipo.set(reserva.personal_id, { ...reserva.personal, id: reserva.personal_id, activo: true })
         }
     }
 
@@ -160,11 +166,11 @@ const personalHoy = computed(() => {
         for (const id of [...equipo.keys()]) if (id !== propioId) equipo.delete(id)
     }
 
+    // Con el salón abierto se muestra al equipo activo; cerrado, solo quien tiene citas fuera de horario
     return [...equipo.values()]
-        .map((persona) => ({ persona, franjas: franjasUnidas(persona.turnos ?? [], diaIso.value) }))
-        .filter(({ persona, franjas }) => (persona.activo && franjas.length) || conCitas.has(persona.id))
-        .sort((a, b) => porNombre(a.persona, b.persona))
-        .map(({ persona, franjas }) => {
+        .filter((persona) => (persona.activo && franjas.length) || conCitas.has(persona.id))
+        .sort(porNombre)
+        .map((persona) => {
             const propias = reservasVigentes.value.filter((reserva) => reserva.personal_id === persona.id)
             const ocupados = propias.reduce(
                 (total, reserva) => total + aMinutos(reserva.hora_fin) - aMinutos(reserva.hora_inicio),
@@ -179,7 +185,7 @@ const personalHoy = computed(() => {
                 iniciales: iniciales(persona.nombre, persona.apellido),
                 horario: franjas.length
                     ? franjas.map((franja) => `${aHora(franja.inicio)} – ${aHora(franja.fin)}`).join(', ')
-                    : 'Sin turno hoy',
+                    : 'El salón no atiende hoy',
                 franjas,
                 reservas: propias.length,
                 ocupacion: disponibles ? Math.min(100, Math.round((ocupados / disponibles) * 100)) : 0,
@@ -229,7 +235,8 @@ function posicion(inicio, fin) {
     }
 }
 
-function zonasFueraDeTurno(franjas) {
+// Zonas sombreadas de la línea de tiempo en las que el salón está cerrado
+function zonasFueraDeHorario(franjas) {
     const { inicio, fin } = rangoAgenda.value
     const zonas = []
     let cursor = inicio
@@ -250,7 +257,7 @@ function zonasFueraDeTurno(franjas) {
 const filasAgenda = computed(() =>
     personalHoy.value.map((persona, indice) => ({
         ...persona,
-        fueraDeTurno: zonasFueraDeTurno(persona.franjas),
+        fueraDeHorario: zonasFueraDeHorario(persona.franjas),
         bloques: reservasHoy.value
             .filter((reserva) => reserva.personal_id === persona.id)
             .sort((a, b) => Number(!descartada(a)) - Number(!descartada(b)))
@@ -272,7 +279,8 @@ function etiquetaHora(minuto) {
 
 function tituloBloque(reserva) {
     const lugar = aDomicilio(reserva) ? ' (a domicilio)' : ''
-    return `${hora(reserva.hora_inicio)} a ${hora(reserva.hora_fin)}: ${nombreCliente(reserva)}, ${serviciosTexto(reserva)}${lugar}`
+    const horario = reserva.fuera_de_horario ? ' (fuera de horario)' : ''
+    return `${hora(reserva.hora_inicio)} a ${hora(reserva.hora_fin)}: ${nombreCliente(reserva)}, ${serviciosTexto(reserva)}${lugar}${horario}`
 }
 </script>
 
@@ -362,7 +370,7 @@ function tituloBloque(reserva) {
                                     ></span>
 
                                     <span
-                                        v-for="(zona, i) in fila.fueraDeTurno"
+                                        v-for="(zona, i) in fila.fueraDeHorario"
                                         :key="i"
                                         class="absolute inset-y-0 bg-[repeating-linear-gradient(135deg,var(--color-velo)_0_4px,transparent_4px_9px)]"
                                         :class="zona.clase"
@@ -394,12 +402,8 @@ function tituloBloque(reserva) {
                     <EstadoVacio
                         v-else
                         class="mt-6"
-                        :titulo="propia ? 'Hoy no tienes turno' : 'Nadie tiene turno hoy'"
-                        :descripcion="
-                            propia
-                                ? 'Los días que tengas turno, tus citas aparecen aquí en una línea de tiempo.'
-                                : 'Cuando haya profesionales con turno, sus citas aparecen aquí en una línea de tiempo.'
-                        "
+                        titulo="El salón no atiende hoy"
+                        descripcion="Las citas del día aparecen aquí en una línea de tiempo."
                     />
                 </section>
 

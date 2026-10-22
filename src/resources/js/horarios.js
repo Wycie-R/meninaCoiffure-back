@@ -1,4 +1,55 @@
+import { ref, readonly } from 'vue'
+import { api, mensajeError } from './api'
 import { hora, aMinutos, aHora } from './formato'
+
+// Horario de atención del salón, compartido por las pantallas (se pide una sola vez)
+const horarioSalon = ref([])
+const cargandoHorario = ref(false)
+const errorHorario = ref('')
+const horarioCargado = ref(false)
+
+let consultaHorario = null
+
+export async function cargarHorarioSalon({ forzar = false } = {}) {
+    if (consultaHorario) return consultaHorario
+    if (horarioCargado.value && !forzar) return
+
+    cargandoHorario.value = true
+    errorHorario.value = ''
+
+    consultaHorario = api('/api/horarios-atencion')
+        .then((respuesta) => {
+            if (!respuesta.ok) {
+                errorHorario.value = mensajeError(respuesta, 'cargar el horario del salón')
+                return
+            }
+
+            horarioSalon.value = comoFranjas(respuesta.cuerpo?.data ?? [])
+            horarioCargado.value = true
+        })
+        .finally(() => {
+            cargandoHorario.value = false
+            consultaHorario = null
+        })
+
+    return consultaHorario
+}
+
+// Después de guardar el horario en Configuración, las demás pantallas ven el nuevo sin recargar
+export function actualizarHorarioSalon(horarios) {
+    horarioSalon.value = comoFranjas(horarios)
+    horarioCargado.value = true
+}
+
+export function useHorarioSalon() {
+    return {
+        horarioSalon: readonly(horarioSalon),
+        cargandoHorario: readonly(cargandoHorario),
+        errorHorario: readonly(errorHorario),
+        horarioCargado: readonly(horarioCargado),
+        cargarHorarioSalon,
+    }
+}
 
 export const DIAS = [
     { dia: 1, nombre: 'Lunes', corto: 'Lu' },
@@ -28,10 +79,20 @@ function ordenadas(franjas) {
     return [...franjas].sort((a, b) => aMinutos(a.inicio) - aMinutos(b.inicio))
 }
 
-export function semanaDesdeTurnos(turnos = []) {
+// El horario del salón llega de la API como { dia_semana, hora_apertura, hora_cierre };
+// el editor y los cálculos trabajan con franjas { dia_semana, hora_inicio, hora_fin }
+export function comoFranjas(horarios = []) {
+    return horarios.map((h) => ({
+        dia_semana: Number(h.dia_semana),
+        hora_inicio: hora(h.hora_apertura),
+        hora_fin: hora(h.hora_cierre),
+    }))
+}
+
+export function semanaDesdeFranjas(franjasDeLaSemana = []) {
     return DIAS.map(({ dia }) => {
         const franjas = ordenadas(
-            turnos
+            franjasDeLaSemana
                 .filter((t) => t.dia_semana === dia)
                 .map((t) => ({ inicio: hora(t.hora_inicio), fin: hora(t.hora_fin) }))
         ).map((f) => nuevaFranja(f.inicio, f.fin))
@@ -48,7 +109,7 @@ export function semanaPorDefecto() {
     }))
 }
 
-export function turnosDesdeSemana(semana) {
+export function franjasDesdeSemana(semana) {
     return semana
         .filter((d) => d.activo)
         .flatMap((d) =>
@@ -61,7 +122,7 @@ export function turnosDesdeSemana(semana) {
 }
 
 export function firmaSemana(semana) {
-    return JSON.stringify(turnosDesdeSemana(semana))
+    return JSON.stringify(franjasDesdeSemana(semana))
 }
 
 export function minutosDia(dia) {
@@ -146,11 +207,11 @@ export function erroresVacios() {
     return { general: '', dias: {} }
 }
 
-export function erroresTurnosDesdeServidor(errores, enviados) {
+export function erroresSemanaDesdeServidor(errores, enviados) {
     const resultado = erroresVacios()
 
     for (const [clave, mensaje] of Object.entries(errores)) {
-        const indice = clave.match(/^turnos\.(\d+)/)?.[1]
+        const indice = clave.match(/^horarios\.(\d+)/)?.[1]
         const dia = indice === undefined ? null : enviados[Number(indice)]?.dia_semana
 
         if (dia && !resultado.dias[dia]) resultado.dias[dia] = mensaje
@@ -165,8 +226,8 @@ export function diaSemanaDe(iso) {
     return new Date(anio, mes - 1, dia).getDay() || 7
 }
 
-export function franjasUnidas(turnos = [], dia) {
-    const lista = turnos
+export function franjasUnidas(franjas = [], dia) {
+    const lista = franjas
         .filter((t) => Number(t.dia_semana) === dia)
         .map((t) => ({ inicio: aMinutos(t.hora_inicio), fin: aMinutos(t.hora_fin) }))
         .filter((f) => f.fin > f.inicio)
@@ -205,11 +266,11 @@ function textoDias(dias) {
     return `los ${enumerar(dias.map((d) => NOMBRE_DIAS[d]))}`
 }
 
-export function resumenHorario(turnos = []) {
+export function resumenHorario(franjasDeLaSemana = []) {
     const grupos = []
 
     for (const { dia } of DIAS) {
-        const franjas = franjasUnidas(turnos, dia)
+        const franjas = franjasUnidas(franjasDeLaSemana, dia)
         if (!franjas.length) continue
 
         const texto = textoFranjas(franjas)

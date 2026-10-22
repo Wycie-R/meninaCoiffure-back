@@ -12,7 +12,7 @@ import {
     opcionesInicio,
     puedeAgregarFranja,
     siguienteFranja,
-} from '../turnos'
+} from '../horarios'
 import { claseEnfoque } from '../ui'
 
 const semana = defineModel({ type: Array, required: true })
@@ -24,11 +24,11 @@ const props = defineProps({
     },
     textoVacio: {
         type: String,
-        default: 'Sin horario: se puede guardar así, pero no se le podrán agendar reservas hasta que actives algún día.',
+        default: 'Sin días activos: activa al menos uno.',
     },
     textoDescanso: {
         type: String,
-        default: 'Descansa',
+        default: 'Cerrado',
     },
 })
 

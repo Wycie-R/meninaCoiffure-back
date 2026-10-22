@@ -34,7 +34,8 @@ class StoreReservaRequest extends FormRequest
             'estado' => ['nullable', 'string', 'in:pendiente,confirmada'],
             'a_domicilio' => ['nullable', 'boolean'],
             'direccion_domicilio' => ['nullable', 'required_if_accepted:a_domicilio', 'string', 'max:255'],
-            'minutos_traslado' => ['nullable', 'integer', 'min:0', 'max:240'],
+            // Regla 2: true si la dueña autoriza atender fuera del horario del salón
+            'fuera_de_horario' => ['nullable', 'boolean'],
         ];
     }
 
@@ -63,8 +64,7 @@ class StoreReservaRequest extends FormRequest
             'a_domicilio.boolean' => 'Indica si la reserva es a domicilio con verdadero o falso.',
             'direccion_domicilio.required_if_accepted' => 'La dirección es obligatoria para una reserva a domicilio.',
             'direccion_domicilio.max' => 'La dirección no puede superar los 255 caracteres.',
-            'minutos_traslado.max' => 'El traslado no puede superar las 4 horas (240 minutos).',
-            'minutos_traslado.min' => 'El traslado no puede ser negativo.',
+            'fuera_de_horario.boolean' => 'Indica con verdadero o falso si la cita es fuera de horario.',
         ];
     }
 }

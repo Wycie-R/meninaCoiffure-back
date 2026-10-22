@@ -107,7 +107,7 @@ class EspecialidadHorarioTest extends TestCase
             ->assertStatus(200)
             ->assertJsonPath('data.id', 2)
             ->assertJsonCount(2, 'data.especialidades')
-            ->assertJsonCount(5, 'data.turnos');
+            ->assertJsonMissingPath('data.turnos');
 
         $this->assertEqualsCanonicalizing(
             [$colorimetria, $estetica],
@@ -171,13 +171,37 @@ class EspecialidadHorarioTest extends TestCase
         $this->assertSame(3, HorarioAtencion::count());
         $this->assertDatabaseMissing('horarios_atencion', ['dia_semana' => 2]);
 
-        // Informativo: los turnos de martes a viernes (08–17) quedan fuera; el lunes 08–17 cabe en 08–13 + 13–18
-        $fuera = collect($respuesta->json('turnos_fuera_de_horario'));
-        $this->assertCount(8, $fuera);
-        $this->assertFalse($fuera->contains('dia_semana', 1));
-        $this->assertEqualsCanonicalizing([1, 2], $fuera->pluck('personal_id')->unique()->values()->all());
-        $this->assertSame('08:00:00', $fuera->first()['hora_inicio']);
-        $this->assertArrayHasKey('nombre', $fuera->first());
+        // Sin reservas por atender, nada queda fuera del horario nuevo
+        $respuesta->assertJsonPath('reservas_fuera_de_horario', []);
+    }
+
+    public function test_achicar_el_horario_avisa_las_reservas_que_quedan_fuera(): void
+    {
+        $martes = Carbon::parse('next tuesday')->toDateString();
+        $miercoles = Carbon::parse('next wednesday')->toDateString();
+        $reserva = ['cliente_id' => 1, 'personal_id' => 1, 'servicios' => [1]];
+
+        $tarde = $this->postJson('/api/reservas', [...$reserva, 'fecha' => $martes, 'hora_inicio' => '15:00', 'hora_fin' => '16:00'])
+            ->assertStatus(201)->json('data.id');
+        $this->postJson('/api/reservas', [...$reserva, 'fecha' => $martes, 'hora_inicio' => '09:00', 'hora_fin' => '10:00'])
+            ->assertStatus(201);
+        // Las marcadas como fuera de horario no se avisan: la dueña ya lo autorizó
+        $this->postJson('/api/reservas', [...$reserva, 'fecha' => $miercoles, 'hora_inicio' => '19:00', 'hora_fin' => '20:00', 'fuera_de_horario' => true])
+            ->assertStatus(201);
+
+        $horarioDeMañana = [];
+        foreach ([1, 2, 3, 4, 5] as $dia) {
+            $horarioDeMañana[] = ['dia_semana' => $dia, 'hora_apertura' => '08:00', 'hora_cierre' => '13:00'];
+        }
+
+        $fuera = $this->putJson('/api/horarios-atencion', ['horarios' => $horarioDeMañana])
+            ->assertStatus(200)
+            ->json('reservas_fuera_de_horario');
+
+        $this->assertCount(1, $fuera);
+        $this->assertSame($tarde, $fuera[0]['id']);
+        $this->assertSame('15:00:00', $fuera[0]['hora_inicio']);
+        $this->assertSame(1, $fuera[0]['personal']['id']);
     }
 
     public function test_horario_con_horas_invertidas_o_solapadas_se_rechaza(): void
@@ -206,14 +230,13 @@ class EspecialidadHorarioTest extends TestCase
         $this->assertSame(5, HorarioAtencion::count());
     }
 
-    public function test_horario_vacio_quita_la_restriccion_del_local(): void
+    public function test_el_salon_no_puede_quedar_sin_horario(): void
     {
         $this->putJson('/api/horarios-atencion', ['horarios' => []])
-            ->assertStatus(200)
-            ->assertJsonCount(0, 'data')
-            ->assertJsonPath('turnos_fuera_de_horario', []);
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['horarios']);
 
-        $this->assertSame(0, HorarioAtencion::count());
+        $this->assertSame(5, HorarioAtencion::count());
     }
 
     public function test_reserva_en_el_salon_debe_caber_en_el_horario_del_local(): void
@@ -235,12 +258,19 @@ class EspecialidadHorarioTest extends TestCase
         // En el salón, fuera del horario del local: rechazada
         $this->postJson('/api/reservas', $reserva)->assertStatus(422)->assertJsonValidationErrors(['horario']);
 
-        // A domicilio no depende del horario del local (sí del turno del profesional)
-        $this->postJson('/api/reservas', [
+        // A domicilio también se respeta el horario del salón
+        $aDomicilio = [
             ...$reserva,
             'a_domicilio' => true,
             'direccion_domicilio' => 'Calle Mcal. López 123, Villa Elisa',
-        ])->assertStatus(201)->assertJsonPath('data.a_domicilio', true);
+        ];
+        $this->postJson('/api/reservas', $aDomicilio)->assertStatus(422)->assertJsonValidationErrors(['horario']);
+
+        // Salvo que la dueña la marque como fuera de horario
+        $this->postJson('/api/reservas', [...$aDomicilio, 'fuera_de_horario' => true])
+            ->assertStatus(201)
+            ->assertJsonPath('data.a_domicilio', true)
+            ->assertJsonPath('data.fuera_de_horario', true);
 
         // Dentro del horario del local, en el salón: aceptada
         $this->postJson('/api/reservas', [...$reserva, 'hora_inicio' => '10:00', 'hora_fin' => '11:00'])
@@ -251,7 +281,9 @@ class EspecialidadHorarioTest extends TestCase
     {
         $this->comoProfesional();
 
-        $this->putJson('/api/horarios-atencion', ['horarios' => []])->assertStatus(403);
+        $this->putJson('/api/horarios-atencion', ['horarios' => [
+            ['dia_semana' => 1, 'hora_apertura' => '08:00', 'hora_cierre' => '12:00'],
+        ]])->assertStatus(403);
         $this->assertSame(5, HorarioAtencion::count());
     }
 }

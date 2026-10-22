@@ -23,7 +23,7 @@ import {
     nombrePersonal,
     notaAcciones,
     sinCerrar,
-    textoTraslado,
+    fueraDeHorario,
 } from '../agenda'
 import { capitalizar, duracion, fechaLarga, guaranies, hora } from '../formato'
 
@@ -65,7 +65,6 @@ const abandonada = computed(() => (mostrada.value ? sinCerrar(mostrada.value, pr
 const montos = computed(() => (mostrada.value ? montosReserva(mostrada.value) : { subtotal: 0, descuento: 0, total: 0 }))
 const tieneDescuento = computed(() => Boolean(mostrada.value && (mostrada.value.descuento || mostrada.value.descuento_id || montos.value.descuento)))
 const detalles = computed(() => mostrada.value?.detalles ?? [])
-const traslado = computed(() => (mostrada.value ? textoTraslado(mostrada.value) : ''))
 const puedeReagendar = computed(() => acciones.value.includes('cancelar'))
 
 const opcionesServicio = computed(() =>
@@ -157,7 +156,7 @@ async function ejecutar(accion) {
 }
 
 const reagendando = ref(false)
-const eleccion = ref({ personal_id: null, fecha: '', hora_inicio: '' })
+const eleccion = ref({ personal_id: null, fecha: '', hora_inicio: '', fuera_de_horario: false })
 const selectorHorario = ref(null)
 const guardandoCambio = ref(false)
 const errorReagenda = ref('')
@@ -169,13 +168,19 @@ const cambioListo = computed(() => {
     return (
         elegido.personal_id !== actual.personal_id ||
         elegido.fecha !== String(actual.fecha).slice(0, 10) ||
-        elegido.hora_inicio !== hora(actual.hora_inicio)
+        elegido.hora_inicio !== hora(actual.hora_inicio) ||
+        elegido.fuera_de_horario !== Boolean(actual.fuera_de_horario)
     )
 })
 
 function abrirReagenda() {
     const actual = mostrada.value
-    eleccion.value = { personal_id: actual.personal_id, fecha: String(actual.fecha).slice(0, 10), hora_inicio: '' }
+    eleccion.value = {
+        personal_id: actual.personal_id,
+        fecha: String(actual.fecha).slice(0, 10),
+        hora_inicio: '',
+        fuera_de_horario: Boolean(actual.fuera_de_horario),
+    }
     errorReagenda.value = ''
     reagendando.value = true
 }
@@ -199,6 +204,7 @@ async function guardarCambio() {
         fecha: elegido.fecha,
         hora_inicio: elegido.hora_inicio,
         hora_fin: selectorHorario.value.horaFin,
+        fuera_de_horario: elegido.fuera_de_horario,
     }
     if (elegido.personal_id !== actual.personal_id) datos.personal_id = elegido.personal_id
 
@@ -267,6 +273,10 @@ async function agregarServicio() {
                     <dt class="text-niebla">Horario</dt>
                     <dd class="tabular-nums text-perla">
                         {{ hora(mostrada.hora_inicio) }} a {{ hora(mostrada.hora_fin) }}, {{ duracion(minutosReserva(mostrada)) }}
+                        <span v-if="fueraDeHorario(mostrada)" class="mt-1 flex items-center gap-1.5 text-miel">
+                            <Icono name="pendiente" class="h-4 w-4 shrink-0" />
+                            Fuera del horario del salón
+                        </span>
                     </dd>
 
                     <dt class="text-niebla">Profesional</dt>
@@ -285,10 +295,6 @@ async function agregarServicio() {
                             :class="mostrada.direccion_domicilio ? 'text-bruma' : 'text-niebla'"
                         >
                             {{ mostrada.direccion_domicilio || 'Sin dirección registrada' }}
-                        </span>
-                        <span v-if="traslado" class="mt-1 flex items-center gap-1.5 text-bruma">
-                            <Icono name="pendiente" class="h-4 w-4 shrink-0 text-niebla" />
-                            {{ traslado }}
                         </span>
                     </dd>
                 </dl>
