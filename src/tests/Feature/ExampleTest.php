@@ -12,8 +12,8 @@ class ExampleTest extends TestCase
      */
     public function test_the_application_returns_a_successful_response(): void
     {
-        // La raíz lleva al dashboard, que sin sesión redirige al login
-        $this->get('/')->assertRedirect('/dashboard');
+        // Sin sesión, la raíz lleva a la página pública del salón
+        $this->get('/')->assertRedirect('/salon');
         $this->get('/login')->assertStatus(200);
     }
 }

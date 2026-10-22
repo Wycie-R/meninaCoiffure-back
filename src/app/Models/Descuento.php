@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
@@ -16,6 +17,19 @@ class Descuento extends Model
             'valor' => 'decimal:2',
             'activo' => 'boolean',
         ];
+    }
+
+    /** Promociones aplicables en una fecha: activas y con la fecha dentro de su vigencia. */
+    public function scopeVigentes(Builder $query, string $fecha): Builder
+    {
+        return $query
+            ->where('activo', true)
+            ->where(function (Builder $q) use ($fecha) {
+                $q->whereNull('fecha_inicio')->orWhere('fecha_inicio', '<=', $fecha);
+            })
+            ->where(function (Builder $q) use ($fecha) {
+                $q->whereNull('fecha_fin')->orWhere('fecha_fin', '>=', $fecha);
+            });
     }
 
     public function reservas(): HasMany

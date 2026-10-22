@@ -15,6 +15,10 @@ return [
 
     'name' => env('APP_NAME', 'Laravel'),
 
+    // Número de WhatsApp del salón para la página pública (solo dígitos, con código de país).
+    // Vacío: la página no muestra el botón de contacto.
+    'salon_whatsapp' => env('SALON_WHATSAPP', ''),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment

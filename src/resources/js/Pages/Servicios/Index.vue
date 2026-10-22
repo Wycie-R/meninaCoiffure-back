@@ -4,7 +4,6 @@ import { usePage } from '@inertiajs/vue3'
 import AppLayout from '../../Layouts/AppLayout.vue'
 import Button from '../../Components/Button.vue'
 import SearchInput from '../../Components/SearchInput.vue'
-import StatusBadge from '../../Components/StatusBadge.vue'
 import PageHeader from '../../Components/PageHeader.vue'
 import EstadoVacio from '../../Components/EstadoVacio.vue'
 import Ilustracion from '../../Components/Ilustracion.vue'
@@ -19,7 +18,8 @@ import { api, primerosErrores, mensajeError } from '../../api'
 import { guaranies, duracion, normalizar, fechaCorta, aISO, hoyISO, plural } from '../../formato'
 import { useCatalogo } from '../../catalogo'
 import { usePermisos } from '../../auth'
-import { claseEntrada, claseEnfoque, ilustracionDe } from '../../ui'
+import TarjetaServicio from '../../Components/TarjetaServicio.vue'
+import { claseEntrada, claseEnfoque, ilustracionDe, tonoDe } from '../../ui'
 
 const { servicios, categorias, cargando, error, cargarCatalogo } = useCatalogo()
 const { esAdmin } = usePermisos()
@@ -63,7 +63,9 @@ const grupos = computed(() => {
         .sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
         .map((grupo) => ({
             ...grupo,
+            descripcion: categorias.value.find((c) => c.id === grupo.id)?.descripcion ?? '',
             ilustracion: ilustracionDe(grupo.nombre),
+            tono: tonoDe(ilustracionDe(grupo.nombre)),
             servicios: [...grupo.servicios].sort(
                 (a, b) => Number(b.activo) - Number(a.activo) || a.nombre.localeCompare(b.nombre, 'es')
             ),
@@ -394,42 +396,32 @@ watch(aviso, (valor) => {
 
                 <div v-else class="space-y-12">
                     <section v-for="grupo in grupos" :key="grupo.id" :aria-labelledby="`categoria-${grupo.id}`">
-                        <div class="flex items-center gap-4">
-                            <Ilustracion :nombre="grupo.ilustracion" class="h-14 w-14 shrink-0" />
-                            <div>
+                        <!-- Encabezado de la categoría con su ilustración y tono -->
+                        <div
+                            class="relative flex items-center gap-5 overflow-hidden rounded-[26px] border border-hilo bg-linear-to-br to-transparent p-5"
+                            :class="grupo.tono.fondo"
+                        >
+                            <Ilustracion :nombre="grupo.ilustracion" class="h-20 w-20 shrink-0 drop-shadow-[0_12px_24px_rgba(0,0,0,0.45)]" />
+                            <div class="min-w-0">
                                 <h2 :id="`categoria-${grupo.id}`" class="text-3xl">{{ grupo.nombre }}</h2>
-                                <p class="text-sm text-niebla">{{ plural(grupo.servicios.length, 'servicio', 'servicios') }}</p>
+                                <p v-if="grupo.descripcion" class="mt-1 text-sm text-bruma">{{ grupo.descripcion }}</p>
+                                <p class="mt-1 text-xs uppercase tracking-[0.16em]" :class="grupo.tono.texto">
+                                    {{ plural(grupo.servicios.length, 'servicio', 'servicios') }}
+                                </p>
                             </div>
                         </div>
 
-                        <ul class="mt-5">
+                        <ul class="mt-4 grid gap-4 md:grid-cols-2">
                             <li v-for="servicio in grupo.servicios" :key="servicio.id">
-                                <button
-                                    type="button"
-                                    class="-mx-4 block w-[calc(100%+2rem)] rounded-2xl px-4 py-4 text-left transition-colors hover:bg-velo"
-                                    :class="[
-                                        claseEnfoque,
-                                        servicio.id === servicioNuevo ? 'bg-menta/8 ring-1 ring-inset ring-menta/30' : '',
-                                        servicio.id === seleccionado ? 'bg-velo ring-1 ring-inset ring-orquidea/40' : '',
-                                    ]"
-                                    :aria-label="`${esAdmin ? 'Ver y editar' : 'Ver'} ${servicio.nombre}`"
-                                    @click="abrirServicio(servicio)"
-                                >
-                                    <span class="flex items-baseline gap-3">
-                                        <span class="min-w-0 text-base font-medium" :class="servicio.activo ? 'text-perla' : 'text-niebla line-through decoration-niebla/60'">
-                                            {{ servicio.nombre }}
-                                        </span>
-                                        <StatusBadge v-if="!servicio.activo" status="inactivo" class="shrink-0 self-center" />
-                                        <span class="hidden min-w-8 flex-1 -translate-y-1 border-b border-dotted border-hilo-fuerte sm:block" aria-hidden="true"></span>
-                                        <span class="ml-auto shrink-0 text-sm tabular-nums text-niebla sm:ml-0">{{ duracion(servicio.duracion_minutos) }}</span>
-                                        <span class="w-32 shrink-0 text-right font-display text-xl tabular-nums" :class="servicio.activo ? 'text-perla' : 'text-niebla'">
-                                            {{ guaranies(servicio.precio_vigente) }}
-                                        </span>
-                                    </span>
-                                    <span v-if="servicio.descripcion" class="mt-1 block max-w-xl text-sm text-bruma">
-                                        {{ servicio.descripcion }}
-                                    </span>
-                                </button>
+                                <TarjetaServicio
+                                    :servicio="servicio"
+                                    :ilustracion="grupo.ilustracion"
+                                    clicable
+                                    :seleccionado="servicio.id === seleccionado"
+                                    :nuevo="servicio.id === servicioNuevo"
+                                    :etiqueta="`${esAdmin ? 'Ver y editar' : 'Ver'} ${servicio.nombre}`"
+                                    @elegir="abrirServicio(servicio)"
+                                />
                             </li>
                         </ul>
                     </section>
