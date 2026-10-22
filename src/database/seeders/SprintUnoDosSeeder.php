@@ -22,7 +22,7 @@ class SprintUnoDosSeeder extends Seeder
         User::whereIn('email', ['recepcion@meninacoiffure.com', 'diana@meninacoiffure.com'])->delete();
         Role::where('nombre', 'recepcionista')->delete();
 
-        // 2. Datos base del salón (personal, catálogo, insumos); el seeder es idempotente
+        // 2. Datos base del salón (personal, horario y catálogo); el seeder es idempotente
         $this->call(AvanceDosSeeder::class);
 
         // 3. Usuarios de prueba para HU-25. La propietaria administra y además atiende,

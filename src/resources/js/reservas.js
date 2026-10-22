@@ -112,7 +112,7 @@ export async function cambiarEstadoReserva(id, estado, extra = {}) {
     return respuesta
 }
 
-export async function reagendarReserva(id, datos) {
+export async function modificarReserva(id, datos) {
     const respuesta = await api(`/api/reservas/${id}`, { metodo: 'PUT', datos })
     if (respuesta.ok) fusionar(id, respuesta.cuerpo.data)
     return respuesta

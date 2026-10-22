@@ -1,4 +1,4 @@
-import { aFecha, aMinutos, hoyISO, normalizar } from './formato'
+import { aFecha, aMinutos, duracion, hoyISO, normalizar } from './formato'
 
 export const ESTADOS_ACTIVOS = ['pendiente', 'confirmada']
 export const ESTADOS_DESCARTADOS = ['cancelada', 'no_asistio']
@@ -70,6 +70,17 @@ export function pagosReserva(reserva) {
 // La administración autorizó atenderla fuera del horario del salón
 export function fueraDeHorario(reserva) {
     return Boolean(reserva.fuera_de_horario)
+}
+
+// Solo las citas a domicilio ocupan tiempo de traslado antes y después
+export function minutosTraslado(reserva) {
+    if (!aDomicilio(reserva)) return 0
+    return Math.max(0, Number(reserva.minutos_traslado) || 0)
+}
+
+export function textoTraslado(reserva) {
+    const minutos = minutosTraslado(reserva)
+    return minutos ? `Traslado: ${duracion(minutos)} antes y después` : ''
 }
 
 export function etiquetaDescuento(reserva) {

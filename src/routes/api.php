@@ -3,21 +3,18 @@
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CategoriaServicioController;
 use App\Http\Controllers\ClienteController;
-use App\Http\Controllers\ConsumoRecursoController;
+use App\Http\Controllers\ConfiguracionController;
 use App\Http\Controllers\DescuentoController;
 use App\Http\Controllers\EspecialidadController;
 use App\Http\Controllers\HistorialVisitaController;
 use App\Http\Controllers\HorarioAtencionController;
 use App\Http\Controllers\MetodoPagoController;
-use App\Http\Controllers\MovimientoStockController;
 use App\Http\Controllers\PagoController;
 use App\Http\Controllers\PersonalController;
 use App\Http\Controllers\PreferenciaClienteController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\ReservaController;
 use App\Http\Controllers\ServicioController;
-use App\Http\Controllers\ServicioRecursoController;
-use App\Http\Controllers\StockRecursoController;
 use Illuminate\Support\Facades\Route;
 
 // HU-25 y T-02: Autenticación por rol y sesiones centralizadas
@@ -34,33 +31,47 @@ Route::apiResource('servicios', ServicioController::class)->only(['index', 'show
 // El resto exige sesión iniciada (la sesión vive en PostgreSQL, compartida entre nodos)
 // y un rol del salón: admin (la dueña) o profesional (solo opera sobre su propia agenda)
 Route::middleware(['web', 'auth', 'rol:admin,profesional'])->group(function () {
-    // Consulta del equipo, especialidades, horario del local e insumos
+    // Consulta del equipo, especialidades, horario del salón, métodos de pago y promociones
     Route::get('personal', [PersonalController::class, 'index']);
     Route::get('personal/{personal}', [PersonalController::class, 'show']);
     Route::get('especialidades', [EspecialidadController::class, 'index']);
     Route::get('horarios-atencion', [HorarioAtencionController::class, 'index']);
-    Route::get('recursos', [StockRecursoController::class, 'index']);
-    Route::get('servicios/{servicio}/recursos', [ServicioRecursoController::class, 'index']);
     Route::get('metodos-pago', [MetodoPagoController::class, 'index']);
     Route::get('descuentos', [DescuentoController::class, 'index']);
 
-    // Clientes y expediente (HU-05 y HU-13)
-    Route::apiResource('clientes', ClienteController::class)->except(['destroy']);
-    Route::get('clientes/{cliente}/preferencias', [PreferenciaClienteController::class, 'index']);
-    Route::post('clientes/{cliente}/preferencias', [PreferenciaClienteController::class, 'store']);
-    Route::put('preferencias/{preferencia}', [PreferenciaClienteController::class, 'update']);
-    Route::delete('preferencias/{preferencia}', [PreferenciaClienteController::class, 'destroy']);
-    Route::get('clientes/{cliente}/historial', [HistorialVisitaController::class, 'index']);
-    Route::put('historial-visitas/{historial}', [HistorialVisitaController::class, 'update']);
+    // Cada profesional ve siempre su agenda. Lo demás depende de los permisos que la dueña
+    // le habilita en Configuración (middleware permiso; la administración siempre pasa)
+    Route::get('reservas', [ReservaController::class, 'index']);
+    Route::get('reservas/{reserva}', [ReservaController::class, 'show']);
+    // PUT revisa el permiso según lo que cambia (reprogramar o cambiar el estado) en el controlador
+    Route::match(['put', 'patch'], 'reservas/{reserva}', [ReservaController::class, 'update']);
 
     // Reservas y disponibilidad (HU-02, HU-03, HU-04, HU-06, HU-12 y HU-14)
-    Route::get('disponibilidad', [ReservaController::class, 'disponibilidad']);
-    Route::post('reservas/{reserva}/servicios', [ReservaController::class, 'agregarServicio']);
-    Route::apiResource('reservas', ReservaController::class);
+    Route::middleware('permiso:puede_crear_reservas')->group(function () {
+        Route::get('disponibilidad', [ReservaController::class, 'disponibilidad']);
+        Route::post('reservas', [ReservaController::class, 'store']);
+        Route::post('reservas/{reserva}/servicios', [ReservaController::class, 'agregarServicio']);
+    });
+    Route::delete('reservas/{reserva}', [ReservaController::class, 'destroy'])
+        ->middleware('permiso:puede_cambiar_estado');
 
-    // Consumo real de insumos por atención (HU-18)
-    Route::get('reservas/{reserva}/consumos', [ConsumoRecursoController::class, 'index']);
-    Route::put('detalles-reserva/{detalle}/consumos', [ConsumoRecursoController::class, 'update']);
+    // Clientes: buscar o dar de alta a una clienta sirve para agendar; el expediente es aparte
+    Route::middleware('permiso:puede_ver_clientes,puede_crear_reservas')->group(function () {
+        Route::get('clientes', [ClienteController::class, 'index']);
+        Route::post('clientes', [ClienteController::class, 'store']);
+    });
+
+    // Expediente de la clienta (HU-05 y HU-13)
+    Route::middleware('permiso:puede_ver_clientes')->group(function () {
+        Route::get('clientes/{cliente}', [ClienteController::class, 'show']);
+        Route::match(['put', 'patch'], 'clientes/{cliente}', [ClienteController::class, 'update']);
+        Route::get('clientes/{cliente}/preferencias', [PreferenciaClienteController::class, 'index']);
+        Route::post('clientes/{cliente}/preferencias', [PreferenciaClienteController::class, 'store']);
+        Route::put('preferencias/{preferencia}', [PreferenciaClienteController::class, 'update']);
+        Route::delete('preferencias/{preferencia}', [PreferenciaClienteController::class, 'destroy']);
+        Route::get('clientes/{cliente}/historial', [HistorialVisitaController::class, 'index']);
+        Route::put('historial-visitas/{historial}', [HistorialVisitaController::class, 'update']);
+    });
 
     // Solo administración
     Route::middleware('rol:admin')->group(function () {
@@ -85,11 +96,9 @@ Route::middleware(['web', 'auth', 'rol:admin,profesional'])->group(function () {
         Route::apiResource('metodos-pago', MetodoPagoController::class)->except(['index']);
         Route::apiResource('descuentos', DescuentoController::class)->except(['index']);
 
-        // HU-15 a HU-17: Inventario de insumos
-        Route::apiResource('recursos', StockRecursoController::class)->except(['index']);
-        Route::get('movimientos-stock', [MovimientoStockController::class, 'index']);
-        Route::post('movimientos-stock', [MovimientoStockController::class, 'store']);
-        Route::put('servicios/{servicio}/recursos', [ServicioRecursoController::class, 'update']);
+        // Configuración: la dueña habilita o quita permisos a cada empleada
+        Route::get('configuracion/permisos', [ConfiguracionController::class, 'permisos']);
+        Route::put('configuracion/permisos/{user}', [ConfiguracionController::class, 'actualizarPermisos']);
 
         // HU-23 y HU-24: Reportes
         Route::prefix('reportes')->group(function () {
@@ -97,7 +106,6 @@ Route::middleware(['web', 'auth', 'rol:admin,profesional'])->group(function () {
             Route::get('servicios', [ReporteController::class, 'servicios']);
             Route::get('personal', [ReporteController::class, 'personal']);
             Route::get('ingresos-diarios', [ReporteController::class, 'ingresosDiarios']);
-            Route::get('stock', [ReporteController::class, 'stock']);
         });
     });
 });

@@ -9,6 +9,7 @@ import Icono from '../../Components/Icono.vue'
 import Campo from '../../Components/Campo.vue'
 import Aviso from '../../Components/Aviso.vue'
 import Interruptor from '../../Components/Interruptor.vue'
+import EstadoVacio from '../../Components/EstadoVacio.vue'
 import { api, mensajeError, primerosErrores } from '../../api'
 import { aHora, aISO, aMinutos, duracion, fechaLarga, guaranies, hora } from '../../formato'
 import { claseEntrada, claseEnfoque } from '../../ui'
@@ -39,7 +40,9 @@ const {
     error: errorCatalogo,
     cargarCatalogo,
 } = useCatalogo()
-const { esProfesional, personalPropio } = usePermisos()
+const { cargado: usuarioCargado, esProfesional, personalPropio, puedeCrearReservas, puedeFueraDeHorario } = usePermisos()
+// Solo se muestra el aviso cuando ya se sabe quién es: así no parpadea al cargar
+const sinPermisoParaCrear = computed(() => usuarioCargado.value && !puedeCrearReservas.value)
 const { horarioSalon, horarioCargado, cargarHorarioSalon } = useHorarioSalon()
 
 const ahora = ref(new Date())
@@ -67,6 +70,7 @@ const form = ref({
     servicios: [],
     a_domicilio: false,
     direccion_domicilio: '',
+    minutos_traslado: 0,
     fuera_de_horario: false,
 })
 
@@ -209,6 +213,12 @@ function urlDisponibilidad() {
 
     if (f.fuera_de_horario) parametros.set('fuera_de_horario', 1)
 
+    // El traslado de una cita a domicilio también ocupa la agenda de la profesional
+    if (f.a_domicilio) {
+        parametros.set('a_domicilio', 1)
+        parametros.set('minutos_traslado', f.minutos_traslado)
+    }
+
     return `/api/disponibilidad?${parametros}`
 }
 
@@ -324,6 +334,24 @@ const horariosTarde = computed(() => horarios.value.filter((h) => h.tarde))
 const sinHorariosLibres = computed(() => horarios.value.length > 0 && !horarios.value.some((h) => h.disponible))
 const salonCerradoEseDia = computed(() => Boolean(disponibilidad.value) && !disponibilidad.value.franjas?.length && !horarios.value.length)
 
+const opcionesTraslado = [0, 15, 30, 45, 60].map((minutos) => ({
+    valor: minutos,
+    etiqueta: minutos ? `${minutos} min` : 'Sin traslado',
+}))
+
+const textoTraslado = computed(() =>
+    form.value.minutos_traslado ? `Traslado: ${duracion(form.value.minutos_traslado)} antes y después` : 'Sin tiempo de traslado'
+)
+
+// La cita debe caber en el horario; el traslado solo ocupa la agenda y puede quedar fuera
+const bloqueAgenda = computed(() => {
+    const traslado = form.value.a_domicilio ? form.value.minutos_traslado : 0
+    if (!traslado || !form.value.hora_inicio || !horaFin.value) return ''
+    const desde = aHora(Math.max(0, aMinutos(form.value.hora_inicio) - traslado))
+    const hasta = aHora(aMinutos(horaFin.value) + traslado)
+    return `Con el traslado, la agenda queda ocupada de ${desde} a ${hasta}.`
+})
+
 const horarioDescartado = ref(false)
 
 function limpiarServidor(...campos) {
@@ -397,6 +425,7 @@ watch(
             form.value.fecha,
             [...form.value.servicios].sort((a, b) => a - b).join(','),
             form.value.fuera_de_horario ? 'fuera' : 'salon',
+            form.value.a_domicilio ? `domicilio:${form.value.minutos_traslado}` : 'local',
         ].join('|'),
     programarRevision
 )
@@ -427,6 +456,11 @@ watch(
 watch(
     () => [form.value.a_domicilio, form.value.direccion_domicilio],
     () => limpiarServidor('direccion_domicilio')
+)
+
+watch(
+    () => [form.value.a_domicilio, form.value.minutos_traslado],
+    () => limpiarServidor('minutos_traslado', 'horario')
 )
 
 watch(form, () => {
@@ -472,6 +506,7 @@ const GRUPOS_ERROR = {
     precio: 'servicios',
     a_domicilio: 'direccion_domicilio',
     direccion_domicilio: 'direccion_domicilio',
+    minutos_traslado: 'minutos_traslado',
     fuera_de_horario: 'horario',
 }
 
@@ -492,6 +527,7 @@ function cargaUtil() {
         servicios: [...f.servicios],
         a_domicilio: f.a_domicilio,
         direccion_domicilio: f.a_domicilio ? f.direccion_domicilio.trim() : null,
+        ...(f.a_domicilio ? { minutos_traslado: f.minutos_traslado } : {}),
         fuera_de_horario: f.fuera_de_horario,
     }
 }
@@ -609,7 +645,16 @@ const lugares = [
                 descripcion="Agenda una cita eligiendo cliente, profesional, horario y servicios."
             />
 
-            <div class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+            <EstadoVacio
+                v-if="sinPermisoParaCrear"
+                class="mt-6"
+                titulo="No puedes agendar citas"
+                descripcion="La administración no te habilitó para crear ni reprogramar reservas. Si lo necesitas, pídele que lo active en Configuración."
+            >
+                <Button href="/reservas" label="Ver tu agenda" variant="secondary" />
+            </EstadoVacio>
+
+            <div v-else class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
                 <form
                     ref="formulario"
                     class="min-w-0 rounded-[28px] border border-hilo bg-velo"
@@ -806,7 +851,35 @@ const lugares = [
                                 </p>
                             </div>
 
-                            <div class="mt-5">
+                            <div v-if="form.a_domicilio" class="mt-4">
+                                <p id="reserva-traslado" class="mb-1.5 text-sm font-medium text-perla">Tiempo de traslado</p>
+                                <div class="flex flex-wrap gap-2" role="group" aria-labelledby="reserva-traslado" aria-describedby="reserva-traslado-ayuda">
+                                    <button
+                                        v-for="opcion in opcionesTraslado"
+                                        :key="opcion.valor"
+                                        type="button"
+                                        class="rounded-full border px-3.5 py-1.5 text-sm tabular-nums transition-colors"
+                                        :class="[
+                                            claseEnfoque,
+                                            form.minutos_traslado === opcion.valor
+                                                ? 'border-orquidea bg-orquidea/12 text-orquidea-claro'
+                                                : 'border-hilo text-bruma hover:border-hilo-fuerte hover:text-perla',
+                                        ]"
+                                        :aria-pressed="form.minutos_traslado === opcion.valor"
+                                        @click="form.minutos_traslado = opcion.valor"
+                                    >
+                                        {{ opcion.etiqueta }}
+                                    </button>
+                                </div>
+                                <p v-if="error('minutos_traslado')" data-error role="alert" class="mt-1.5 text-sm text-borgona">
+                                    {{ error('minutos_traslado') }}
+                                </p>
+                                <p v-else id="reserva-traslado-ayuda" class="mt-1.5 text-sm text-niebla">
+                                    Se reserva antes y después de la cita para ir y volver; en ese tiempo no se agendan otras citas.
+                                </p>
+                            </div>
+
+                            <div v-if="puedeFueraDeHorario" class="mt-5">
                                 <Interruptor
                                     v-model="form.fuera_de_horario"
                                     etiqueta="Atender fuera del horario del salón"
@@ -1078,6 +1151,7 @@ const lugares = [
                                     De <strong class="font-semibold text-perla">{{ form.hora_inicio }}</strong>
                                     a <strong class="font-semibold text-perla">{{ horaFin }}</strong>
                                     ({{ duracion(duracionTotal) }} según los servicios)
+                                    <span v-if="bloqueAgenda" class="mt-0.5 block text-bruma">{{ bloqueAgenda }}</span>
                                     <span v-if="form.fuera_de_horario" class="mt-0.5 block text-bruma">Fuera del horario del salón.</span>
                                 </span>
                             </div>
@@ -1160,7 +1234,8 @@ const lugares = [
                                                 :class="{ 'text-niebla': !form.direccion_domicilio.trim() }"
                                             >
                                                 {{ form.direccion_domicilio.trim() || 'Dirección sin indicar' }}
-                                            </span>                                        </dd>
+                                            </span>
+                                            <span v-if="form.a_domicilio" class="mt-0.5 block text-bruma">{{ textoTraslado }}</span>                                        </dd>
                                     </div>
                                 </div>
                             </dl>

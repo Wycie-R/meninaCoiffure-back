@@ -8,7 +8,7 @@ import Icono from '../Components/Icono.vue'
 const page = usePage()
 const rutaActual = computed(() => page.url.split('?')[0])
 
-const { usuario, esAdmin } = usePermisos()
+const { usuario, esAdmin, puede } = usePermisos()
 
 const abierto = ref(false)
 const escritorio = ref(true)
@@ -25,8 +25,8 @@ const grupos = [
         items: [
             { label: 'Dashboard', icono: 'dashboard', href: '/dashboard' },
             { label: 'Reservas', icono: 'reservas', href: '/reservas' },
-            { label: 'Nueva reserva', icono: 'agregar', href: '/reservas/crear' },
-            { label: 'Clientes', icono: 'clientes', href: '/clientes' },
+            { label: 'Nueva reserva', icono: 'agregar', href: '/reservas/crear', permiso: 'puede_crear_reservas' },
+            { label: 'Clientes', icono: 'clientes', href: '/clientes', permiso: 'puede_ver_clientes' },
         ],
     },
     {
@@ -52,10 +52,17 @@ const grupos = [
     },
 ]
 
-// Lo que es solo de administración no se muestra hasta saber que el usuario es admin.
+// Lo que es solo de administración no se muestra hasta saber que el usuario es admin,
+// y lo que depende de un permiso, hasta saber que la dueña lo habilitó.
+function itemVisible(item) {
+    if (item.soloAdmin && !esAdmin.value) return false
+    if (item.permiso && !puede(item.permiso)) return false
+    return true
+}
+
 const gruposVisibles = computed(() =>
     grupos
-        .map((grupo) => ({ ...grupo, items: grupo.items.filter((item) => !item.soloAdmin || esAdmin.value) }))
+        .map((grupo) => ({ ...grupo, items: grupo.items.filter(itemVisible) }))
         .filter((grupo) => grupo.items.length)
 )
 

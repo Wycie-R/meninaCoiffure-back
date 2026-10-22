@@ -15,13 +15,6 @@ class Servicio extends Model
         return $this->belongsTo(CategoriaServicio::class, 'categoria_id');
     }
 
-    /** HU-17: consumo estándar de insumos por servicio (plantilla editable). */
-    public function recursos(): \Illuminate\Database\Eloquent\Relations\BelongsToMany
-    {
-        return $this->belongsToMany(StockRecurso::class, 'servicio_recurso', 'servicio_id', 'recurso_id')
-            ->withPivot('cantidad_utilizada');
-    }
-
     public function detalles(): HasMany
     {
         return $this->hasMany(DetalleReserva::class, 'servicio_id');

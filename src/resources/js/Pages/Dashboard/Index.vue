@@ -20,7 +20,7 @@ const { horarioSalon, cargarHorarioSalon } = useHorarioSalon()
 const { reservas: agendaCompleta, cargado: agendaCargada } = useReservas()
 // Un profesional solo ve su propia agenda (el servidor ya filtra sus reservas)
 // y no ve la caja del salón; la caja espera a saber quién es el usuario.
-const { cargado: usuarioCargado, esProfesional: propia, personalPropio } = usePermisos()
+const { cargado: usuarioCargado, esProfesional: propia, personalPropio, puedeCrearReservas } = usePermisos()
 
 const ahora = ref(new Date())
 const hoy = computed(() => aISO(ahora.value))
@@ -289,7 +289,7 @@ function tituloBloque(reserva) {
         <div class="mx-auto max-w-7xl px-6 py-10">
             <PageHeader :titulo="fechaLarga" :descripcion="resumen" class="[&_h1]:first-letter:uppercase">
                 <Button href="/reservas" variant="secondary">{{ propia ? 'Ver tu agenda' : 'Ver todas las reservas' }}</Button>
-                <Button href="/reservas/crear" variant="primary">
+                <Button v-if="puedeCrearReservas" href="/reservas/crear" variant="primary">
                     <Icono name="agregar" class="h-4 w-4" />
                     Nueva reserva
                 </Button>
