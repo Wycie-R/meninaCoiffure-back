@@ -1,5 +1,6 @@
 <script setup>
 import { ref, computed, watch, onMounted } from 'vue'
+import { Link } from '@inertiajs/vue3'
 import AppLayout from '../../Layouts/AppLayout.vue'
 import Button from '../../Components/Button.vue'
 import SearchInput from '../../Components/SearchInput.vue'
@@ -33,7 +34,36 @@ import {
 const { personal, cargando, error, cargarPersonal } = usePersonal()
 const { esAdmin } = usePermisos()
 
-onMounted(() => cargarPersonal())
+onMounted(() => {
+    cargarPersonal()
+    cargarCatalogo()
+})
+
+const catalogo = ref([])
+const cargandoCatalogo = ref(false)
+const errorCatalogo = ref('')
+
+async function cargarCatalogo() {
+    cargandoCatalogo.value = true
+    errorCatalogo.value = ''
+    const respuesta = await api('/api/especialidades')
+    cargandoCatalogo.value = false
+
+    if (!respuesta.ok) {
+        errorCatalogo.value = mensajeError(respuesta, 'cargar las especialidades')
+        return
+    }
+
+    catalogo.value = [...(respuesta.cuerpo?.data ?? [])].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+}
+
+function especialidadesDe(p) {
+    return [...(p.especialidades ?? [])].sort((a, b) => a.nombre.localeCompare(b.nombre, 'es'))
+}
+
+function idsDe(p) {
+    return (p.especialidades ?? []).map((e) => e.id).sort((a, b) => a - b)
+}
 
 const aviso = ref('')
 const destacado = ref(null)
@@ -44,7 +74,7 @@ const lista = computed(() => {
     const texto = normalizar(busqueda.value)
 
     return personal.value
-        .filter((p) => (verInactivos.value || p.activo) && normalizar(`${p.nombre} ${p.apellido} ${p.email ?? ''}`).includes(texto))
+        .filter((p) => (verInactivos.value || p.activo) && normalizar(`${p.nombre} ${p.apellido} ${p.email ?? ''} ${(p.especialidades ?? []).map((e) => e.nombre).join(' ')}`).includes(texto))
         .map((p) => {
             const turnos = p.turnos ?? []
 
@@ -53,6 +83,7 @@ const lista = computed(() => {
                 nombreCompleto: `${p.nombre} ${p.apellido}`,
                 dias: new Set(turnos.map((t) => t.dia_semana)),
                 minutos: turnos.reduce((total, t) => total + aMinutos(t.hora_fin) - aMinutos(t.hora_inicio), 0),
+                especialidadesOrdenadas: especialidadesDe(p),
             }
         })
         .sort(
@@ -67,7 +98,7 @@ const resumen = computed(() => {
     const total = personal.value.length
     if (!total) return 'Todavía no hay profesionales en el equipo.'
     const activos = personal.value.filter((p) => p.activo).length
-    const accion = esAdmin.value ? 'ver o cambiar sus datos y su horario' : 'ver sus datos y su horario'
+    const accion = esAdmin.value ? 'ver o cambiar sus datos, su horario y sus especialidades' : 'ver sus datos, su horario y sus especialidades'
     return `${plural(activos, 'profesional activo', 'profesionales activos')} de ${total}. Toca a cada persona para ${accion}.`
 })
 
@@ -95,6 +126,10 @@ const guardandoDatos = ref(false)
 const guardandoHorario = ref(false)
 const guardandoNuevo = ref(false)
 
+const seleccion = ref([])
+const errorEspecialidades = ref('')
+const guardandoEspecialidades = ref(false)
+
 const confirmarDesactivar = ref(false)
 const cambiandoEstado = ref(false)
 const errorEstado = ref('')
@@ -119,6 +154,17 @@ function sincronizarHorario(p) {
     erroresSemana.value = erroresVacios()
 }
 
+function sincronizarEspecialidades(p) {
+    seleccion.value = idsDe(p)
+    errorEspecialidades.value = ''
+}
+
+function alternarEspecialidad(id) {
+    if (!esAdmin.value) return
+    seleccion.value = seleccion.value.includes(id) ? seleccion.value.filter((x) => x !== id) : [...seleccion.value, id]
+    errorEspecialidades.value = ''
+}
+
 function limpiarError(campo) {
     if (!erroresDatos.value[campo]) return
     erroresDatos.value = Object.fromEntries(Object.entries(erroresDatos.value).filter(([clave]) => clave !== campo))
@@ -134,6 +180,8 @@ function abrirNuevo() {
     erroresDatos.value = {}
     semana.value = semanaPorDefecto()
     erroresSemana.value = erroresVacios()
+    seleccion.value = []
+    errorEspecialidades.value = ''
     errorEstado.value = ''
     modo.value = 'nuevo'
 }
@@ -141,6 +189,7 @@ function abrirNuevo() {
 function abrirPersona(p) {
     sincronizarDatos(p)
     sincronizarHorario(p)
+    sincronizarEspecialidades(p)
     errorEstado.value = ''
     modo.value = p.id
 }
@@ -159,6 +208,48 @@ const cambiosHorario = computed(() => {
     if (!persona.value) return false
     return firmaSemana(semana.value) !== firmaSemana(semanaDesdeTurnos(persona.value.turnos ?? []))
 })
+
+const cambiosEspecialidades = computed(() => {
+    if (!persona.value) return false
+    return idsDe(persona.value).join() !== [...seleccion.value].sort((a, b) => a - b).join()
+})
+
+const especialidadesPersona = computed(() => {
+    if (!persona.value || esAdmin.value) return []
+    return especialidadesDe(persona.value)
+})
+
+function errorDeAsignacion(respuesta) {
+    if (respuesta.status === 422) {
+        const errores = Object.values(primerosErrores(respuesta.cuerpo))
+        if (errores.length) return errores[0]
+    }
+    return mensajeError(respuesta, 'guardar las especialidades')
+}
+
+async function enviarEspecialidades(id) {
+    return api(`/api/personal/${id}/especialidades`, {
+        metodo: 'PUT',
+        datos: { especialidades: [...seleccion.value].sort((a, b) => a - b) },
+    })
+}
+
+async function guardarEspecialidades() {
+    guardandoEspecialidades.value = true
+    errorEspecialidades.value = ''
+    const respuesta = await enviarEspecialidades(persona.value.id)
+    guardandoEspecialidades.value = false
+
+    if (!respuesta.ok) {
+        errorEspecialidades.value = errorDeAsignacion(respuesta)
+        if (respuesta.status === 422) cargarCatalogo()
+        return
+    }
+
+    await cargarPersonal({ forzar: true })
+    if (persona.value) sincronizarEspecialidades(persona.value)
+    aviso.value = 'Especialidades actualizadas.'
+}
 
 function validarDatos() {
     const e = {}
@@ -253,9 +344,9 @@ async function registrar() {
         metodo: 'POST',
         datos: { ...cargaUtilDatos(), activo: true, turnos },
     })
-    guardandoNuevo.value = false
 
     if (!respuesta.ok) {
+        guardandoNuevo.value = false
         if (respuesta.status === 422) {
             const errores = primerosErrores(respuesta.cuerpo)
             const deTurnos = Object.fromEntries(Object.entries(errores).filter(([clave]) => clave.startsWith('turnos')))
@@ -269,10 +360,18 @@ async function registrar() {
     }
 
     const nuevo = respuesta.cuerpo.data
+    let mensaje = `${nuevo.nombre} ${nuevo.apellido} se sumó al equipo.`
+
+    if (seleccion.value.length) {
+        const asignacion = await enviarEspecialidades(nuevo.id)
+        if (!asignacion.ok) mensaje += ' No se pudieron guardar sus especialidades; asígnalas desde su ficha.'
+    }
+
+    guardandoNuevo.value = false
     await cargarPersonal({ forzar: true })
     cerrarPanel()
     destacado.value = nuevo.id
-    aviso.value = `${nuevo.nombre} ${nuevo.apellido} se sumó al equipo.`
+    aviso.value = mensaje
 }
 
 async function cambiarEstado(activo) {
@@ -318,7 +417,7 @@ watch(aviso, (valor) => {
 
             <div class="mt-8 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <div class="sm:w-72">
-                    <SearchInput v-model="busqueda" placeholder="Buscar profesional..." />
+                    <SearchInput v-model="busqueda" placeholder="Buscar por nombre o especialidad..." />
                 </div>
                 <Interruptor v-model="verInactivos" etiqueta="Mostrar inactivos" />
             </div>
@@ -407,6 +506,26 @@ watch(aviso, (valor) => {
                             <span class="mt-3 block text-sm text-bruma">
                                 {{ p.minutos ? `${duracion(p.minutos)} por semana` : 'Sin horario asignado' }}
                             </span>
+
+                            <span v-if="p.especialidadesOrdenadas.length" class="mt-4 flex flex-wrap gap-1.5">
+                                <span class="sr-only">Especialidades: {{ p.especialidadesOrdenadas.map((e) => e.nombre).join(', ') }}</span>
+                                <span
+                                    v-for="e in p.especialidadesOrdenadas.slice(0, 3)"
+                                    :key="e.id"
+                                    class="max-w-full truncate rounded-full border border-hilo-fuerte bg-raso px-3 py-1 text-xs font-medium text-perla"
+                                    aria-hidden="true"
+                                >
+                                    {{ e.nombre }}
+                                </span>
+                                <span
+                                    v-if="p.especialidadesOrdenadas.length > 3"
+                                    class="rounded-full border border-hilo px-3 py-1 text-xs font-medium text-bruma"
+                                    aria-hidden="true"
+                                >
+                                    +{{ p.especialidadesOrdenadas.length - 3 }}
+                                </span>
+                            </span>
+                            <span v-else class="mt-4 block text-sm text-bruma">Sin especialidades asignadas</span>
                         </button>
                     </li>
                 </ul>
@@ -416,12 +535,12 @@ watch(aviso, (valor) => {
         <PanelLateral
             :abierto="panelAbierto"
             :titulo="esNuevo ? 'Nuevo profesional' : persona ? `${persona.nombre} ${persona.apellido}` : 'Profesional'"
-            :subtitulo="esNuevo ? 'Datos y horario semanal' : persona?.fecha_ingreso ? `Ingresó el ${fechaCorta(persona.fecha_ingreso)}` : ''"
+            :subtitulo="esNuevo ? 'Datos, horario semanal y especialidades' : persona?.fecha_ingreso ? `Ingresó el ${fechaCorta(persona.fecha_ingreso)}` : ''"
             @cerrar="cerrarPanel"
         >
             <div v-if="esNuevo || persona" class="space-y-10">
                 <p v-if="!esAdmin" class="rounded-xl bg-terciopelo px-4 py-3 text-sm text-bruma">
-                    Solo la administración del salón puede cambiar los datos y los horarios del equipo.
+                    Solo la administración del salón puede cambiar los datos, los horarios y las especialidades del equipo.
                 </p>
 
                 <section aria-labelledby="titulo-datos">
@@ -479,6 +598,86 @@ watch(aviso, (valor) => {
                     <Button v-if="!esNuevo && esAdmin" class="mt-5" :disabled="guardandoHorario || !cambiosHorario" @click="guardarHorario">
                         {{ guardandoHorario ? 'Guardando…' : 'Guardar horario' }}
                     </Button>
+                </section>
+
+                <section aria-labelledby="titulo-especialidades">
+                    <h3 id="titulo-especialidades" class="text-xl">Especialidades</h3>
+                    <p class="mt-1 text-sm text-bruma">
+                        {{ esAdmin ? 'Marca lo que sabe hacer esta persona dentro del salón.' : 'Lo que sabe hacer esta persona dentro del salón.' }}
+                    </p>
+
+                    <template v-if="esAdmin">
+                        <div v-if="cargandoCatalogo && !catalogo.length" class="mt-4 flex flex-wrap gap-2" aria-busy="true" aria-label="Cargando las especialidades">
+                            <span v-for="n in 4" :key="n" class="h-9 w-28 animate-pulse rounded-full bg-terciopelo"></span>
+                        </div>
+
+                        <div v-else-if="errorCatalogo" class="mt-4 flex flex-wrap items-center gap-3 rounded-xl border border-borgona/40 bg-borgona-hondo px-4 py-3" role="alert">
+                            <p class="flex-1 text-sm text-borgona">{{ errorCatalogo }}</p>
+                            <Button label="Reintentar" variant="secondary" @click="cargarCatalogo" />
+                        </div>
+
+                        <div v-else-if="!catalogo.length" class="mt-4 rounded-xl bg-terciopelo px-4 py-3 text-sm text-bruma">
+                            Todavía no hay especialidades creadas.
+                            <Link href="/configuracion?seccion=especialidades" class="rounded font-medium text-orquidea underline underline-offset-4 hover:text-orquidea-claro" :class="claseEnfoque">
+                                Crearlas en Configuración
+                            </Link>
+                        </div>
+
+                        <template v-else>
+                            <div class="mt-4 flex flex-wrap gap-2" role="group" aria-labelledby="titulo-especialidades">
+                                <button
+                                    v-for="e in catalogo"
+                                    :key="e.id"
+                                    type="button"
+                                    class="inline-flex items-center gap-1.5 rounded-full border px-4 py-2 text-sm font-medium transition-colors"
+                                    :class="[
+                                        claseEnfoque,
+                                        seleccion.includes(e.id)
+                                            ? 'border-orquidea/50 bg-orquidea/12 text-orquidea-claro'
+                                            : 'border-hilo text-bruma hover:border-hilo-fuerte hover:text-perla',
+                                    ]"
+                                    :aria-pressed="seleccion.includes(e.id)"
+                                    :title="e.descripcion || undefined"
+                                    @click="alternarEspecialidad(e.id)"
+                                >
+                                    <svg v-if="seleccion.includes(e.id)" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                                        <path d="M5 12.5l4.5 4.5L19 7.5" />
+                                    </svg>
+                                    {{ e.nombre }}
+                                </button>
+                            </div>
+
+                            <p class="mt-3 text-sm text-bruma" aria-live="polite">
+                                {{ seleccion.length ? plural(seleccion.length, 'especialidad marcada', 'especialidades marcadas') : 'Ninguna especialidad marcada' }}
+                            </p>
+                            <p v-if="esNuevo" class="mt-1 text-sm text-bruma">Se guardan junto con el registro.</p>
+                        </template>
+
+                        <p v-if="errorEspecialidades" role="alert" class="mt-3 text-sm text-borgona">{{ errorEspecialidades }}</p>
+
+                        <Button
+                            v-if="!esNuevo && catalogo.length"
+                            class="mt-5"
+                            :disabled="guardandoEspecialidades || !cambiosEspecialidades"
+                            @click="guardarEspecialidades"
+                        >
+                            {{ guardandoEspecialidades ? 'Guardando…' : 'Guardar especialidades' }}
+                        </Button>
+                    </template>
+
+                    <template v-else>
+                        <ul v-if="especialidadesPersona.length" class="mt-4 flex flex-wrap gap-2">
+                            <li
+                                v-for="e in especialidadesPersona"
+                                :key="e.id"
+                                class="rounded-full border border-hilo-fuerte bg-raso px-4 py-2 text-sm font-medium text-perla"
+                                :title="e.descripcion || undefined"
+                            >
+                                {{ e.nombre }}
+                            </li>
+                        </ul>
+                        <p v-else class="mt-4 rounded-xl bg-terciopelo px-4 py-3 text-sm text-bruma">Sin especialidades asignadas.</p>
+                    </template>
                 </section>
 
                 <section v-if="!esNuevo && esAdmin" aria-labelledby="titulo-disponibilidad" class="rounded-[24px] border border-hilo p-5">

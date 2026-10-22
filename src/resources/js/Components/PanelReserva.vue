@@ -6,10 +6,12 @@ import Modal from './Modal.vue'
 import StatusBadge from './StatusBadge.vue'
 import Dropdown from './Dropdown.vue'
 import Icono from './Icono.vue'
-import { mensajeError } from '../api'
+import ReagendarReserva from './ReagendarReserva.vue'
+import PagosReserva from './PagosReserva.vue'
+import { mensajeError, primerosErrores } from '../api'
 import { claseEntrada } from '../ui'
 import { useCatalogo } from '../catalogo'
-import { cambiarEstadoReserva, cancelarReserva, agregarServicioReserva, useReservas } from '../reservas'
+import { cambiarEstadoReserva, cancelarReserva, agregarServicioReserva, reagendarReserva, useReservas } from '../reservas'
 import {
     aDomicilio,
     accionesDe,
@@ -20,7 +22,6 @@ import {
     nombreCliente,
     nombrePersonal,
     notaAcciones,
-    pagosReserva,
     sinCerrar,
     textoTraslado,
 } from '../agenda'
@@ -64,8 +65,8 @@ const abandonada = computed(() => (mostrada.value ? sinCerrar(mostrada.value, pr
 const montos = computed(() => (mostrada.value ? montosReserva(mostrada.value) : { subtotal: 0, descuento: 0, total: 0 }))
 const tieneDescuento = computed(() => Boolean(mostrada.value && (mostrada.value.descuento || mostrada.value.descuento_id || montos.value.descuento)))
 const detalles = computed(() => mostrada.value?.detalles ?? [])
-const pagos = computed(() => (mostrada.value ? pagosReserva(mostrada.value) : null))
 const traslado = computed(() => (mostrada.value ? textoTraslado(mostrada.value) : ''))
+const puedeReagendar = computed(() => acciones.value.includes('cancelar'))
 
 const opcionesServicio = computed(() =>
     servicios.value
@@ -100,6 +101,7 @@ watch(
         servicioElegido.value = null
         confirmacion.value = null
         notasAtencion.value = ''
+        cerrarReagenda()
         if (id !== null) cargarCatalogo()
     }
 )
@@ -154,6 +156,71 @@ async function ejecutar(accion) {
     emit('aviso', `La reserva de ${nombreCliente(actual)} ${accionAviso[accion]}`)
 }
 
+const reagendando = ref(false)
+const eleccion = ref({ personal_id: null, fecha: '', hora_inicio: '' })
+const selectorHorario = ref(null)
+const guardandoCambio = ref(false)
+const errorReagenda = ref('')
+
+const cambioListo = computed(() => {
+    const actual = mostrada.value
+    const elegido = eleccion.value
+    if (!actual || !elegido.hora_inicio) return false
+    return (
+        elegido.personal_id !== actual.personal_id ||
+        elegido.fecha !== String(actual.fecha).slice(0, 10) ||
+        elegido.hora_inicio !== hora(actual.hora_inicio)
+    )
+})
+
+function abrirReagenda() {
+    const actual = mostrada.value
+    eleccion.value = { personal_id: actual.personal_id, fecha: String(actual.fecha).slice(0, 10), hora_inicio: '' }
+    errorReagenda.value = ''
+    reagendando.value = true
+}
+
+function cerrarReagenda() {
+    reagendando.value = false
+    errorReagenda.value = ''
+    guardandoCambio.value = false
+}
+
+watch(acciones, (lista) => {
+    if (reagendando.value && !lista.includes('cancelar')) cerrarReagenda()
+})
+
+async function guardarCambio() {
+    if (!cambioListo.value) return
+
+    const actual = mostrada.value
+    const elegido = eleccion.value
+    const datos = {
+        fecha: elegido.fecha,
+        hora_inicio: elegido.hora_inicio,
+        hora_fin: selectorHorario.value.horaFin,
+    }
+    if (elegido.personal_id !== actual.personal_id) datos.personal_id = elegido.personal_id
+
+    guardandoCambio.value = true
+    errorReagenda.value = ''
+
+    const respuesta = await reagendarReserva(actual.id, datos)
+
+    guardandoCambio.value = false
+
+    if (!respuesta.ok) {
+        errorReagenda.value =
+            respuesta.status === 422
+                ? Object.values(primerosErrores(respuesta.cuerpo))[0] ?? mensajeError(respuesta, 'reagendar la reserva')
+                : mensajeError(respuesta, 'reagendar la reserva')
+        return
+    }
+
+    cerrarReagenda()
+    emit('aviso', `La reserva de ${nombreCliente(actual)} se reagendó para el ${fechaLarga(elegido.fecha)} a las ${elegido.hora_inicio}.`)
+}
+
 async function agregarServicio() {
     if (servicioElegido.value === null) return
 
@@ -181,7 +248,15 @@ async function agregarServicio() {
         :subtitulo="mostrada ? capitalizar(fechaLarga(mostrada.fecha, true)) : ''"
         @cerrar="emit('cerrar')"
     >
-        <div v-if="mostrada" class="space-y-10">
+        <ReagendarReserva
+            v-if="mostrada && reagendando"
+            ref="selectorHorario"
+            v-model="eleccion"
+            :reserva="mostrada"
+            :ahora="ahora"
+        />
+
+        <div v-else-if="mostrada" class="space-y-10">
             <section aria-labelledby="reserva-cita">
                 <div class="flex flex-wrap items-center justify-between gap-3">
                     <h3 id="reserva-cita" class="text-xl">La cita</h3>
@@ -302,18 +377,6 @@ async function agregarServicio() {
                         <dt class="text-sm text-bruma">Total</dt>
                         <dd class="font-display text-2xl tabular-nums">{{ guaranies(montos.total) }}</dd>
                     </div>
-                    <template v-if="pagos">
-                        <div class="flex items-baseline justify-between gap-4 text-sm">
-                            <dt class="text-bruma">Pagado</dt>
-                            <dd class="tabular-nums text-perla">{{ guaranies(pagos.pagado) }}</dd>
-                        </div>
-                        <div class="flex items-baseline justify-between gap-4 text-sm">
-                            <dt class="text-bruma">Saldo</dt>
-                            <dd class="tabular-nums" :class="pagos.saldo > 0 ? 'text-perla' : 'text-niebla'">
-                                {{ pagos.saldo > 0 ? guaranies(pagos.saldo) : 'Sin saldo pendiente' }}
-                            </dd>
-                        </div>
-                    </template>
                 </dl>
 
                 <div v-if="puedeAgregar" class="mt-6 rounded-[24px] border border-hilo p-5">
@@ -339,10 +402,21 @@ async function agregarServicio() {
                     <p v-if="errorServicio" role="alert" class="mt-3 text-sm text-borgona">{{ errorServicio }}</p>
                 </div>
             </section>
+
+            <PagosReserva :reserva="mostrada" @aviso="emit('aviso', $event)" />
         </div>
 
         <template #pie>
-            <div v-if="mostrada">
+            <div v-if="mostrada && reagendando">
+                <p v-if="errorReagenda" role="alert" class="mb-3 text-sm text-borgona">{{ errorReagenda }}</p>
+                <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <Button label="Volver" variant="secondary" :disabled="guardandoCambio" @click="cerrarReagenda" />
+                    <Button :disabled="guardandoCambio || !cambioListo" @click="guardarCambio">
+                        {{ guardandoCambio ? 'Guardando…' : 'Guardar cambio' }}
+                    </Button>
+                </div>
+            </div>
+            <div v-else-if="mostrada">
                 <p v-if="errorAccion" role="alert" class="mb-3 text-sm text-borgona">{{ errorAccion }}</p>
                 <p v-if="nota" class="mb-3 text-sm text-bruma">{{ nota }}</p>
 
@@ -354,6 +428,9 @@ async function agregarServicio() {
                         @click="confirmacion = 'cancelar'"
                     >
                         Cancelar reserva
+                    </Button>
+                    <Button v-if="puedeReagendar" variant="secondary" :disabled="procesando" @click="abrirReagenda">
+                        Reagendar
                     </Button>
                     <Button v-if="acciones.includes('confirmar')" :disabled="procesando" @click="ejecutar('confirmar')">
                         {{ procesando ? 'Confirmando…' : 'Confirmar reserva' }}

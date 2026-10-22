@@ -32,6 +32,10 @@ Route::middleware('auth')->group(function () {
         return Inertia::render('Servicios/Create');
     })->middleware('rol:admin');
 
+    Route::get('/clientes', function () {
+        return Inertia::render('Clientes/Index');
+    });
+
     Route::get('/categorias', function () {
         return Inertia::render('Categorias/Index');
     });
@@ -42,6 +46,10 @@ Route::middleware('auth')->group(function () {
 
     Route::get('/reportes', function () {
         return Inertia::render('Reportes/Index');
+    })->middleware('rol:admin');
+
+    Route::get('/configuracion', function () {
+        return Inertia::render('Configuracion/Index');
     })->middleware('rol:admin');
 });
 

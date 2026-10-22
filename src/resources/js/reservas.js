@@ -112,6 +112,12 @@ export async function cambiarEstadoReserva(id, estado, extra = {}) {
     return respuesta
 }
 
+export async function reagendarReserva(id, datos) {
+    const respuesta = await api(`/api/reservas/${id}`, { metodo: 'PUT', datos })
+    if (respuesta.ok) fusionar(id, respuesta.cuerpo.data)
+    return respuesta
+}
+
 export async function cancelarReserva(id) {
     const respuesta = await api(`/api/reservas/${id}`, { metodo: 'DELETE' })
     if (respuesta.ok) fusionar(id, respuesta.cuerpo.data)
@@ -139,6 +145,39 @@ export async function agregarServicioReserva(id, servicioId) {
 
         const actualizada = await api(`/api/reservas/${id}`)
         if (actualizada.ok && actualizada.cuerpo?.data) fusionar(id, actualizada.cuerpo.data)
+    }
+
+    return respuesta
+}
+
+export async function registrarPagoReserva(id, datos) {
+    const respuesta = await api('/api/pagos', { metodo: 'POST', datos: { ...datos, reserva_id: id } })
+
+    if (respuesta.ok && respuesta.cuerpo?.data) {
+        const actual = reservas.value.find((r) => r.id === id)
+        const { reserva, ...pago } = respuesta.cuerpo.data
+        const cambios = { pagos: [...(actual?.pagos ?? []), pago] }
+
+        if (reserva) {
+            cambios.pagado = reserva.pagado
+            cambios.saldo = reserva.saldo
+        }
+
+        fusionar(id, cambios)
+    }
+
+    return respuesta
+}
+
+export async function anularPagoReserva(id, pagoId) {
+    const respuesta = await api(`/api/pagos/${pagoId}`, { metodo: 'DELETE' })
+
+    if (respuesta.ok || respuesta.status === 404) {
+        const actual = reservas.value.find((r) => r.id === id)
+        const pagos = (actual?.pagos ?? []).filter((pago) => pago.id !== pagoId)
+        const pagado = pagos.reduce((suma, pago) => suma + Number(pago.monto), 0)
+
+        fusionar(id, { pagos, pagado, saldo: undefined })
     }
 
     return respuesta

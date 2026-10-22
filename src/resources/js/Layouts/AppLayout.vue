@@ -26,6 +26,7 @@ const grupos = [
             { label: 'Dashboard', icono: 'dashboard', href: '/dashboard' },
             { label: 'Reservas', icono: 'reservas', href: '/reservas' },
             { label: 'Nueva reserva', icono: 'agregar', href: '/reservas/crear' },
+            { label: 'Clientes', icono: 'clientes', href: '/clientes' },
         ],
     },
     {
@@ -46,7 +47,7 @@ const grupos = [
         titulo: 'Administración',
         items: [
             { label: 'Reportes', icono: 'reportes', href: '/reportes', soloAdmin: true },
-            { label: 'Configuración', icono: 'configuracion', href: null, soloAdmin: true },
+            { label: 'Configuración', icono: 'configuracion', href: '/configuracion', soloAdmin: true },
         ],
     },
 ]

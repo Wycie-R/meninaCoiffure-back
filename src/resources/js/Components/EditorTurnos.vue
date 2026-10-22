@@ -17,10 +17,18 @@ import { claseEnfoque } from '../ui'
 
 const semana = defineModel({ type: Array, required: true })
 
-defineProps({
+const props = defineProps({
     errores: {
         type: Object,
         default: () => ({ general: '', dias: {} }),
+    },
+    textoVacio: {
+        type: String,
+        default: 'Sin horario: se puede guardar así, pero no se le podrán agendar reservas hasta que actives algún día.',
+    },
+    textoDescanso: {
+        type: String,
+        default: 'Descansa',
     },
 })
 
@@ -28,14 +36,14 @@ const resumen = computed(() => {
     const minutos = minutosSemana(semana.value)
     return minutos
         ? `${duracion(minutos)} por semana`
-        : 'Sin horario: se puede guardar así, pero no se le podrán agendar reservas hasta que actives algún día.'
+        : props.textoVacio
 })
 
 const filas = computed(() =>
     semana.value.map((dia) => ({
         ...dia,
         nombre: DIAS.find((d) => d.dia === dia.dia).nombre,
-        horas: dia.activo ? duracion(minutosDia(dia)) : 'Descansa',
+        horas: dia.activo ? duracion(minutosDia(dia)) : props.textoDescanso,
         puedeAgregar: puedeAgregarFranja(dia.franjas),
     }))
 )
