@@ -17,6 +17,11 @@ return Application::configure(basePath: dirname(__DIR__))
             'api/*',
         ]);
 
+        // Quien ya tiene sesión y abre /login va a su página: el equipo al panel, una clienta al salón
+        $middleware->redirectUsersTo(function (Request $request) {
+            return $request->user()->paginaInicial();
+        });
+
         $middleware->alias([
             'rol' => \App\Http\Middleware\VerificarRol::class,
             'permiso' => \App\Http\Middleware\VerificarPermiso::class,

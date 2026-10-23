@@ -16,6 +16,11 @@ class AuthController extends Controller
      */
     public function login(Request $request): JsonResponse
     {
+        // Con Keycloak como proveedor no se deja abierta una segunda puerta con contraseña local
+        if (config('services.keycloak.proveedor') === 'keycloak') {
+            abort(404);
+        }
+
         $credentials = $request->validate([
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
@@ -62,6 +67,12 @@ class AuthController extends Controller
      */
     public function logout(Request $request): JsonResponse
     {
+        // Se lee antes de invalidar la sesión: sirve para cerrar también la sesión de Keycloak
+        $idToken = null;
+        if ($request->hasSession()) {
+            $idToken = $request->session()->get('keycloak_id_token');
+        }
+
         Auth::guard('web')->logout();
 
         if ($request->hasSession()) {
@@ -71,6 +82,8 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Sesión cerrada correctamente.',
+            // Con login local queda en null y el frontend vuelve a /login como siempre
+            'url_cierre' => KeycloakController::urlCierreDeSesion($idToken),
         ]);
     }
 

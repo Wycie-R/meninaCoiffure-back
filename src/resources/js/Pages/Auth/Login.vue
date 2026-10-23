@@ -5,6 +5,21 @@ import Button from '../../Components/Button.vue'
 import Monograma from '../../Components/Monograma.vue'
 import { establecerUsuario } from '../../auth'
 
+const props = defineProps({
+    // 'local': formulario con contraseña; 'keycloak': botón que lleva a la pantalla de Keycloak
+    proveedor: {
+        type: String,
+        default: 'local',
+    },
+    // Aviso que deja el callback de Keycloak cuando el login no se pudo completar
+    error: {
+        type: String,
+        default: null,
+    },
+})
+
+const conKeycloak = props.proveedor === 'keycloak'
+
 const form = ref({
     email: '',
     password: '',
@@ -93,9 +108,33 @@ async function ingresar() {
                 </div>
 
                 <h1 class="mt-10 text-4xl lg:mt-0">Iniciar sesión</h1>
-                <p class="mt-2 text-sm text-bruma">Usa el correo y la contraseña de tu cuenta del salón.</p>
 
-                <form class="mt-8" novalidate @submit.prevent="ingresar">
+                <!-- Login con Keycloak: la contraseña se escribe en la pantalla de Keycloak, no acá -->
+                <div v-if="conKeycloak">
+                    <p class="mt-2 text-sm text-bruma">
+                        Ingresa con tu cuenta de Menina Coiffure. Si todavía no tienes una, puedes crearla en el siguiente paso.
+                    </p>
+
+                    <div
+                        v-if="error"
+                        role="alert"
+                        class="mt-8 rounded-xl border border-borgona/40 bg-borgona-hondo px-4 py-3 text-sm text-borgona"
+                    >
+                        {{ error }}
+                    </div>
+
+                    <!-- Enlace normal (no de Inertia): el navegador tiene que salir hacia Keycloak -->
+                    <a
+                        href="/auth/keycloak/redirigir"
+                        class="mt-8 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-orquidea px-5 text-sm font-medium text-noche transition duration-150 hover:bg-orquidea-claro active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orquidea"
+                    >
+                        Ingresar con mi cuenta
+                    </a>
+                </div>
+
+                <p v-else class="mt-2 text-sm text-bruma">Usa el correo y la contraseña de tu cuenta del salón.</p>
+
+                <form v-if="!conKeycloak" class="mt-8" novalidate @submit.prevent="ingresar">
                     <div
                         v-if="errorGeneral"
                         role="alert"

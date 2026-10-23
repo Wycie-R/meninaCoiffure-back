@@ -1,12 +1,13 @@
 <?php
 
+use App\Http\Controllers\KeycloakController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
 // Quien entra sin sesión ve la página pública del salón; el equipo va directo a su panel
 Route::get('/', function () {
     if (auth()->check()) {
-        return redirect('/dashboard');
+        return redirect(auth()->user()->paginaInicial());
     }
 
     return redirect('/salon');
@@ -14,18 +15,34 @@ Route::get('/', function () {
 
 // Página pública: catálogo, horario, promociones vigentes y contacto por WhatsApp
 Route::get('/salon', function () {
+    // Si una clienta entró con su cuenta, el encabezado la saluda y le ofrece salir
+    $cuenta = null;
+    if (auth()->check() && auth()->user()->hasRole('cliente')) {
+        $cuenta = ['nombre' => auth()->user()->name];
+    }
+
     return Inertia::render('Salon/Index', [
         'whatsapp' => config('app.salon_whatsapp'),
+        'cuenta' => $cuenta,
     ]);
 });
 
 Route::middleware('guest')->group(function () {
+    // Con AUTH_PROVEEDOR=keycloak la página muestra solo el botón que lleva a Keycloak
     Route::get('/login', function () {
-        return Inertia::render('Auth/Login');
+        return Inertia::render('Auth/Login', [
+            'proveedor' => config('services.keycloak.proveedor'),
+            'error' => session('error_login'),
+        ]);
     })->name('login');
+
+    // Login con Keycloak (Authorization Code + PKCE); responden 404 si el proveedor es local
+    Route::get('/auth/keycloak/redirigir', [KeycloakController::class, 'redirigir']);
+    Route::get('/auth/keycloak/callback', [KeycloakController::class, 'callback']);
 });
 
-Route::middleware('auth')->group(function () {
+// Pantallas del equipo: una clienta con sesión no entra al panel
+Route::middleware(['auth', 'rol:admin,profesional'])->group(function () {
     Route::get('/dashboard', function () {
         return Inertia::render('Dashboard/Index');
     })->name('dashboard');

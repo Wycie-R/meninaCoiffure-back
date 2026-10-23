@@ -8,11 +8,17 @@ import Monograma from '../../Components/Monograma.vue'
 import Ilustracion from '../../Components/Ilustracion.vue'
 import Icono from '../../Components/Icono.vue'
 import TarjetaServicio from '../../Components/TarjetaServicio.vue'
+import { cerrarSesion } from '../../auth'
 
 const props = defineProps({
     whatsapp: {
         type: String,
         default: '',
+    },
+    // Clienta con sesión iniciada ({ nombre }); null para quien solo visita
+    cuenta: {
+        type: Object,
+        default: null,
     },
 })
 
@@ -249,15 +255,27 @@ const estadoHoy = computed(() => {
                     <Monograma :size="32" />
                     <span class="font-display text-lg">Menina Coiffure</span>
                 </div>
-                <a
-                    v-if="hayWhatsapp"
-                    :href="enlaceReservar"
-                    target="_blank"
-                    rel="noopener"
-                    class="rounded-full border border-hilo-fuerte px-4 py-1.5 text-sm text-perla transition-colors hover:bg-raso focus-visible:outline-2 focus-visible:outline-orquidea"
-                >
-                    Reservar
-                </a>
+                <div class="flex items-center gap-3">
+                    <template v-if="cuenta">
+                        <span class="hidden text-sm text-bruma sm:inline">Hola, {{ cuenta.nombre }}</span>
+                        <button
+                            type="button"
+                            class="text-sm text-bruma underline-offset-4 transition-colors hover:text-perla hover:underline focus-visible:outline-2 focus-visible:outline-orquidea"
+                            @click="cerrarSesion"
+                        >
+                            Salir
+                        </button>
+                    </template>
+                    <a
+                        v-if="hayWhatsapp"
+                        :href="enlaceReservar"
+                        target="_blank"
+                        rel="noopener"
+                        class="rounded-full border border-hilo-fuerte px-4 py-1.5 text-sm text-perla transition-colors hover:bg-raso focus-visible:outline-2 focus-visible:outline-orquidea"
+                    >
+                        Reservar
+                    </a>
+                </div>
             </div>
         </header>
 

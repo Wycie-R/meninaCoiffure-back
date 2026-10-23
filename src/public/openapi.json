@@ -3,7 +3,7 @@
   "info": {
     "title": "Menina Coiffure — API REST",
     "version": "2.0.0",
-    "description": "API REST de **Menina Coiffure**, centro familiar de **peluquería y estética** de Villa Elisa (Paraguay): peluquería\n(cortes, brushing, peinados), colorimetría (tintes, mechas, balayage), tratamientos capilares y estética (depilación,\nlimpieza facial, maquillaje social), en el salón y a domicilio. Laravel 13 + PostgreSQL 18 + Vue/Inertia.\n\nMontos en **guaraníes (PYG)**, sin decimales en la práctica (los campos decimales de la base se serializan como\ntexto, por ejemplo `\"70000.00\"`; los montos calculados, como número). Fechas `YYYY-MM-DD`, horas `HH:MM[:SS]`,\nzona horaria America/Asuncion.\n\n### Roles\n- **`admin`**: la propietaria, Sra. Mónica. Su usuario `admin@meninacoiffure.com` está vinculado a su ficha de\n  personal porque también atiende clientes. Acceso total.\n- **`profesional`**: por ejemplo Carla (`carla@meninacoiffure.com`). Solo ve y opera **su propia agenda**: el listado\n  de reservas le devuelve solo las suyas y sobre reservas ajenas recibe 403. No accede a rutas de administración.\n  Además, la dueña le habilita o quita **permisos** desde Configuración (`/api/configuracion/permisos`); por defecto\n  están todos habilitados. Sin el permiso necesario la API responde **403** \"La administración no te habilitó para\n  esta acción.\":\n  - `puede_crear_reservas`: `POST /api/reservas`, `POST /api/reservas/{id}/servicios`, `GET /api/disponibilidad` y\n    reprogramar en `PUT /api/reservas/{id}` (fecha, horas, cliente, domicilio, descuento o `fuera_de_horario`).\n  - `puede_cambiar_estado`: `PUT /api/reservas/{id}` con un `estado` distinto y `DELETE /api/reservas/{id}`.\n  - `puede_reservar_fuera_de_horario`: crear o marcar una reserva con `fuera_de_horario = true`.\n  - `puede_ver_clientes`: ficha, edición, preferencias e historial de clientes. El listado (`GET /api/clientes`) y el\n    alta (`POST /api/clientes`) se permiten con este permiso **o** con `puede_crear_reservas`.\n- **`cliente`**: reservado para el futuro (la clientela todavía no usa el sistema); hoy recibe 403 en toda ruta\n  protegida.\n\nUsuarios de prueba (contraseña `password123`): `admin@meninacoiffure.com` y `carla@meninacoiffure.com`.\n\n### Autenticación y \"Try it out\"\nLa API usa la **sesión de Laravel** (cookie `laravel_session`, sesión guardada en PostgreSQL), no tokens.\nPúblicas: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, la consulta del catálogo\n(`GET /api/servicios`, `GET /api/servicios/{servicio}`, `GET /api/categorias-servicio`,\n`GET /api/categorias-servicio/{categorias_servicio}`) y lo que usa la página pública del salón (`/salon`):\n`GET /api/horarios-atencion` y `GET /api/promociones`. Todo lo demás exige sesión (**401** sin ella) y un rol del\nsalón (**403** si el rol no corresponde; varias rutas son solo `admin`).\n\n> Antes de usar **\"Try it out\"** en rutas protegidas, inicia sesión en [/login](/login) **en el mismo navegador**\n> (o ejecuta aquí `POST /api/auth/login`, que está en el mismo origen) y vuelve a esta página: el navegador envía la\n> cookie `laravel_session` solo. El esquema `cookieAuth` de \"Authorize\" es informativo; Swagger UI no puede fijar\n> cookies por sí mismo.\n\n**CSRF:** las rutas `api/*` están excluidas de la verificación CSRF (`bootstrap/app.php`), así que los métodos de\nescritura (POST/PUT/DELETE) **no** necesitan la cabecera `X-XSRF-TOKEN`; basta la cookie de sesión.\n\nErrores con formato JSON estándar de Laravel: `{\"message\": \"...\"}` (401/403/404) y\n`{\"message\": \"...\", \"errors\": {\"campo\": [\"...\"]}}` (422)."
+    "description": "API REST de **Menina Coiffure**, centro familiar de **peluquería y estética** de Villa Elisa (Paraguay): peluquería\n(cortes, brushing, peinados), colorimetría (tintes, mechas, balayage), tratamientos capilares y estética (depilación,\nlimpieza facial, maquillaje social), en el salón y a domicilio. Laravel 13 + PostgreSQL 18 + Vue/Inertia.\n\nMontos en **guaraníes (PYG)**, sin decimales en la práctica (los campos decimales de la base se serializan como\ntexto, por ejemplo `\"70000.00\"`; los montos calculados, como número). Fechas `YYYY-MM-DD`, horas `HH:MM[:SS]`,\nzona horaria America/Asuncion.\n\n### Roles\n- **`admin`**: la propietaria, Sra. Mónica. Su usuario `admin@meninacoiffure.com` está vinculado a su ficha de\n  personal porque también atiende clientes. Acceso total.\n- **`profesional`**: por ejemplo Carla (`carla@meninacoiffure.com`). Solo ve y opera **su propia agenda**: el listado\n  de reservas le devuelve solo las suyas y sobre reservas ajenas recibe 403. No accede a rutas de administración.\n  Además, la dueña le habilita o quita **permisos** desde Configuración (`/api/configuracion/permisos`); por defecto\n  están todos habilitados. Sin el permiso necesario la API responde **403** \"La administración no te habilitó para\n  esta acción.\":\n  - `puede_crear_reservas`: `POST /api/reservas`, `POST /api/reservas/{id}/servicios`, `GET /api/disponibilidad` y\n    reprogramar en `PUT /api/reservas/{id}` (fecha, horas, cliente, domicilio, descuento o `fuera_de_horario`).\n  - `puede_cambiar_estado`: `PUT /api/reservas/{id}` con un `estado` distinto y `DELETE /api/reservas/{id}`.\n  - `puede_reservar_fuera_de_horario`: crear o marcar una reserva con `fuera_de_horario = true`.\n  - `puede_ver_clientes`: ficha, edición, preferencias e historial de clientes. El listado (`GET /api/clientes`) y el\n    alta (`POST /api/clientes`) se permiten con este permiso **o** con `puede_crear_reservas`.\n- **`cliente`**: reservado para el futuro (la clientela todavía no usa el sistema); hoy recibe 403 en toda ruta\n  protegida.\n\nUsuarios de prueba (contraseña `password123`): `admin@meninacoiffure.com` y `carla@meninacoiffure.com`.\n\n### Proveedor de login (`AUTH_PROVEEDOR`)\n- **`local`** (por defecto): `POST /api/auth/login` con correo y contraseña.\n- **`keycloak`**: el login se delega en Keycloak (OpenID Connect, Authorization Code + PKCE S256) por\n  `GET /auth/keycloak/redirigir` y `GET /auth/keycloak/callback`; `POST /api/auth/login` responde **404**.\n  La dueña y el equipo se vinculan por correo verificado y conservan rol y permisos; una persona nueva\n  entra con rol `cliente`. `POST /api/auth/logout` devuelve `url_cierre` para cerrar también la sesión de Keycloak.\n\n### Autenticación y \"Try it out\"\nLa API usa la **sesión de Laravel** (cookie `laravel_session`, sesión guardada en PostgreSQL), no tokens.\nPúblicas: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, la consulta del catálogo\n(`GET /api/servicios`, `GET /api/servicios/{servicio}`, `GET /api/categorias-servicio`,\n`GET /api/categorias-servicio/{categorias_servicio}`) y lo que usa la página pública del salón (`/salon`):\n`GET /api/horarios-atencion` y `GET /api/promociones`. Todo lo demás exige sesión (**401** sin ella) y un rol del\nsalón (**403** si el rol no corresponde; varias rutas son solo `admin`).\n\n> Antes de usar **\"Try it out\"** en rutas protegidas, inicia sesión en [/login](/login) **en el mismo navegador**\n> (o ejecuta aquí `POST /api/auth/login`, que está en el mismo origen) y vuelve a esta página: el navegador envía la\n> cookie `laravel_session` solo. El esquema `cookieAuth` de \"Authorize\" es informativo; Swagger UI no puede fijar\n> cookies por sí mismo.\n\n**CSRF:** las rutas `api/*` están excluidas de la verificación CSRF (`bootstrap/app.php`), así que los métodos de\nescritura (POST/PUT/DELETE) **no** necesitan la cabecera `X-XSRF-TOKEN`; basta la cookie de sesión.\n\nErrores con formato JSON estándar de Laravel: `{\"message\": \"...\"}` (401/403/404) y\n`{\"message\": \"...\", \"errors\": {\"campo\": [\"...\"]}}` (422)."
   },
   "servers": [
     {
@@ -77,7 +77,7 @@
           "Autenticación"
         ],
         "summary": "Iniciar sesión",
-        "description": "HU-25. Valida las credenciales, inicia la sesión y regenera el identificador de sesión. La respuesta incluye\nla cookie `laravel_session` (y `XSRF-TOKEN`). Si se invoca desde esta misma página (mismo origen) el navegador\nguarda la cookie y las siguientes llamadas de \"Try it out\" quedan autenticadas.\n\nCredenciales incorrectas responden **422** en `email` (no 401).\n\n**Acceso:** público (no requiere sesión).",
+        "description": "HU-25. Valida las credenciales, inicia la sesión y regenera el identificador de sesión. La respuesta incluye\nla cookie `laravel_session` (y `XSRF-TOKEN`). Si se invoca desde esta misma página (mismo origen) el navegador\nguarda la cookie y las siguientes llamadas de \"Try it out\" quedan autenticadas.\n\nCredenciales incorrectas responden **422** en `email` (no 401).\n\n**Acceso:** público (no requiere sesión).\n\nCon `AUTH_PROVEEDOR=keycloak` responde **404**: el login se hace por `GET /auth/keycloak/redirigir`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -220,6 +220,9 @@
                 }
               }
             }
+          },
+          "404": {
+            "description": "El proveedor de login es Keycloak (no hay login con contraseña local)"
           }
         }
       }
@@ -230,7 +233,7 @@
           "Autenticación"
         ],
         "summary": "Cerrar sesión",
-        "description": "HU-25. Cierra la sesión activa, invalida la sesión y regenera el token CSRF. Responde 200 aunque no haya sesión.\n\n**Acceso:** público (no requiere sesión).",
+        "description": "HU-25. Cierra la sesión activa, invalida la sesión y regenera el token CSRF. Responde 200 aunque no haya sesión.\n\nSi la sesión se inició con Keycloak, `url_cierre` trae la dirección del `end_session_endpoint` (con\n`id_token_hint` y `post_logout_redirect_uri=/salon`) a la que el frontend redirige para cerrar también la sesión\nde Keycloak. Con login local es `null`.\n\n**Acceso:** público (no requiere sesión).",
         "security": [],
         "responses": {
           "200": {
@@ -243,6 +246,12 @@
                     "message": {
                       "type": "string",
                       "example": "Sesión cerrada correctamente."
+                    },
+                    "url_cierre": {
+                      "type": "string",
+                      "format": "uri",
+                      "nullable": true,
+                      "example": "http://localhost:8080/realms/menina/protocol/openid-connect/logout?id_token_hint=eyJ...&post_logout_redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Fsalon"
                     }
                   },
                   "required": [
@@ -351,6 +360,62 @@
                 }
               }
             }
+          }
+        }
+      }
+    },
+    "/auth/keycloak/redirigir": {
+      "get": {
+        "tags": [
+          "Autenticación"
+        ],
+        "summary": "Ir al login de Keycloak",
+        "description": "Genera `state` y `code_verifier`, los guarda en la sesión y redirige a la pantalla de login de Keycloak\ncon `code_challenge = BASE64URL(SHA256(code_verifier))` y `code_challenge_method=S256`.\n\nEs una ruta del navegador (redirección), no un endpoint JSON: ábrela en otra pestaña en lugar de\nusar \"Try it out\".\n\n**Acceso:** sin sesión. Solo existe con `AUTH_PROVEEDOR=keycloak` (si no, 404).",
+        "security": [],
+        "responses": {
+          "302": {
+            "description": "Redirección a `http://localhost:8080/realms/menina/protocol/openid-connect/auth?...`"
+          },
+          "404": {
+            "description": "El proveedor de login es local"
+          }
+        }
+      }
+    },
+    "/auth/keycloak/callback": {
+      "get": {
+        "tags": [
+          "Autenticación"
+        ],
+        "summary": "Vuelta desde Keycloak",
+        "description": "Keycloak redirige acá con `code` y `state`. Laravel compara el `state` con el de la sesión (protección\nCSRF), canjea el código servidor a servidor (`code_verifier` + `client_secret`), pide `userinfo` y busca\no crea la cuenta:\n\n| Situación | Resultado |\n|---|---|\n| Cuenta ya vinculada (`keycloak_id = sub`) | Inicia sesión con esa cuenta |\n| Mismo correo, verificado en Keycloak | Guarda el `sub` y conserva rol y permisos |\n| Mismo correo **sin verificar** | Rechaza (evita apropiarse de una cuenta del equipo) |\n| Persona nueva | Crea la cuenta con rol `cliente`, sin contraseña local |\n\nRedirige a `/dashboard` (equipo) o `/salon` (clienta). Ante cualquier error vuelve a `/login` con un aviso.\n\n**Acceso:** sin sesión. Solo existe con `AUTH_PROVEEDOR=keycloak` (si no, 404).",
+        "security": [],
+        "parameters": [
+          {
+            "name": "code",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Código de autorización de un solo uso"
+          },
+          {
+            "name": "state",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "Debe coincidir con el guardado en la sesión"
+          }
+        ],
+        "responses": {
+          "302": {
+            "description": "Sesión iniciada (`/dashboard` o `/salon`) o error (`/login`)"
+          },
+          "404": {
+            "description": "El proveedor de login es local"
           }
         }
       }
