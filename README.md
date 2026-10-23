@@ -46,6 +46,7 @@ Usuarios de prueba (contraseña `password123`): `admin@meninacoiffure.com` (admi
 Después de traer cambios del repositorio:
 
 ```bash
+git fetch
 git pull
 docker compose up -d --build
 docker compose exec app composer install
@@ -53,6 +54,22 @@ docker compose exec app php artisan migrate
 docker compose exec app npm install
 docker compose exec app npm run build
 ```
+
+
+
+## 🔐 Keycloak (login con proveedor de identidad)
+
+Keycloak corre en su propio contenedor y ya viene configurado desde `keycloak/realm-menina.json` (realm `menina`, cliente `menina-web` con PKCE y usuarios de prueba). No usa la base del salón.
+
+```bash
+docker compose up -d keycloak
+```
+
+- **Consola de administración:** [http://localhost:8080/admin](http://localhost:8080/admin) (usuario `admin`, contraseña `admin`).
+- **Cuenta de una usuaria del realm:** [http://localhost:8080/realms/menina/account](http://localhost:8080/realms/menina/account).
+- **Usuarios del realm** (contraseña `password123`): `admin@meninacoiffure.com`, `carla@meninacoiffure.com` y `clienta@meninacoiffure.com`.
+- **Elegir el login** en `src/.env`: `AUTH_PROVEEDOR=local` (formulario propio) o `AUTH_PROVEEDOR=keycloak`. Después de cambiarlo: `docker compose exec app php artisan config:clear`.
+- **Reimportar el realm** tras editar el JSON (borra los usuarios creados a mano): `docker compose rm -sf keycloak`, `docker volume rm menina_coiffure_keycloak_data` y `docker compose up -d keycloak`.
 
 
 
