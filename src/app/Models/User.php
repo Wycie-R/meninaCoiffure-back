@@ -71,6 +71,12 @@ class User extends Authenticatable
         return $this->belongsTo(Personal::class, 'personal_id');
     }
 
+    /** Ficha de clienta vinculada a la cuenta (solo para el rol cliente). */
+    public function cliente(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Cliente::class, 'user_id');
+    }
+
     public function hasRole(string $rolNombre): bool
     {
         return $this->role && strtolower($this->role->nombre) === strtolower($rolNombre);
@@ -82,12 +88,12 @@ class User extends Authenticatable
     }
 
     /**
-     * Adónde va la cuenta al iniciar sesión: el equipo a su panel, una clienta a la página del salón.
+     * Adónde va la cuenta al iniciar sesión: el equipo a su panel, una clienta a sus citas.
      */
     public function paginaInicial(): string
     {
         if ($this->hasRole('cliente')) {
-            return '/salon';
+            return '/mi-cuenta';
         }
 
         return '/dashboard';

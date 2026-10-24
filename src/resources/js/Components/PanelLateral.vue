@@ -78,9 +78,10 @@ onBeforeUnmount(() => {
                 tabindex="-1"
                 class="fixed inset-y-0 right-0 z-50 flex w-full max-w-lg flex-col border-l border-hilo bg-velo text-perla shadow-2xl shadow-black/60 focus:outline-none"
             >
-                <header class="flex items-start justify-between gap-4 border-b border-hilo px-6 py-5">
+                <!-- En celular 16 px a los lados: el contenido del panel (montos, horarios) necesita ese ancho -->
+                <header class="flex items-start justify-between gap-4 border-b border-hilo px-4 py-4 sm:px-6 sm:py-5">
                     <div class="min-w-0">
-                        <h2 class="text-3xl leading-tight">{{ titulo }}</h2>
+                        <h2 class="text-2xl leading-tight sm:text-3xl">{{ titulo }}</h2>
                         <p v-if="subtitulo" class="mt-1 text-sm text-bruma">{{ subtitulo }}</p>
                     </div>
                     <button
@@ -95,11 +96,11 @@ onBeforeUnmount(() => {
                     </button>
                 </header>
 
-                <div class="scroll-fino flex-1 overflow-y-auto px-6 py-6">
+                <div class="scroll-fino flex-1 overflow-y-auto px-4 py-5 sm:px-6 sm:py-6">
                     <slot />
                 </div>
 
-                <footer v-if="$slots.pie" class="border-t border-hilo bg-noche/40 px-6 py-4">
+                <footer v-if="$slots.pie" class="border-t border-hilo bg-noche/40 px-4 py-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] sm:px-6 sm:py-4">
                     <slot name="pie" />
                 </footer>
             </section>

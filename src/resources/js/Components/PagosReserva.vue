@@ -214,7 +214,7 @@ function fechaPago(valor) {
                     <button
                         v-if="esAdmin"
                         type="button"
-                        :class="[claseEnfoque, 'rounded text-sm text-bruma underline-offset-4 hover:text-borgona hover:underline']"
+                        :class="[claseEnfoque, '-my-1 inline-flex min-h-10 items-center rounded px-1 text-sm text-bruma underline-offset-4 hover:text-borgona hover:underline']"
                         :aria-label="`Anular el pago de ${guaranies(pago.monto)}`"
                         @click="porAnular = pago"
                     >
@@ -227,7 +227,7 @@ function fechaPago(valor) {
 
         <p v-if="errorAnulacion" role="alert" class="mt-3 text-sm text-borgona">{{ errorAnulacion }}</p>
 
-        <div v-if="admiteCobro && abierto" class="mt-6 rounded-[24px] border border-hilo p-5">
+        <div v-if="admiteCobro && abierto" class="mt-6 rounded-[24px] border border-hilo p-4 sm:p-5">
             <h4 class="text-lg">Registrar un pago</h4>
 
             <div class="mt-4 space-y-4">
@@ -253,7 +253,7 @@ function fechaPago(valor) {
                         :aria-pressed="atajo === 'saldo'"
                         :class="[
                             claseEnfoque,
-                            'rounded-full border px-3.5 py-1.5 text-sm transition-colors',
+                            'min-h-10 rounded-full border px-3.5 py-1.5 text-sm transition-colors',
                             atajo === 'saldo'
                                 ? 'border-orquidea bg-orquidea/15 text-orquidea-claro'
                                 : 'border-hilo text-bruma hover:border-hilo-fuerte hover:text-perla',
@@ -268,7 +268,7 @@ function fechaPago(valor) {
                         :aria-pressed="atajo === 'sena'"
                         :class="[
                             claseEnfoque,
-                            'rounded-full border px-3.5 py-1.5 text-sm transition-colors',
+                            'min-h-10 rounded-full border px-3.5 py-1.5 text-sm transition-colors',
                             atajo === 'sena'
                                 ? 'border-orquidea bg-orquidea/15 text-orquidea-claro'
                                 : 'border-hilo text-bruma hover:border-hilo-fuerte hover:text-perla',
@@ -297,7 +297,8 @@ function fechaPago(valor) {
 
             <p v-if="errorGeneral" role="alert" class="mt-4 text-sm text-borgona">{{ errorGeneral }}</p>
 
-            <div class="mt-5 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <!-- En celular, Volver y Registrar lado a lado -->
+            <div class="mt-5 grid grid-cols-[auto_minmax(0,1fr)] gap-2 sm:flex sm:justify-end sm:gap-3">
                 <Button label="Volver" variant="secondary" :disabled="guardando" @click="cerrar" />
                 <Button :disabled="!listo" @click="registrar">
                     {{ guardando ? 'Registrando…' : `Registrar ${monto > 0 ? guaranies(monto) : 'pago'}` }}
@@ -306,7 +307,7 @@ function fechaPago(valor) {
         </div>
 
         <div v-else-if="admiteCobro" class="mt-4">
-            <Button variant="secondary" @click="abrir">
+            <Button variant="secondary" class="w-full sm:w-auto" @click="abrir">
                 <Icono name="billete" class="h-4 w-4" />
                 Registrar pago
             </Button>

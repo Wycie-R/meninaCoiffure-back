@@ -9,6 +9,11 @@ import { claseEnfoque, tonoDe } from '../ui'
 // Tarjeta de un servicio de la carta. La usan el módulo Servicios (botón que abre el panel)
 // y la página pública del salón (tarjeta con un enlace de consulta en el slot).
 const props = defineProps({
+    // En el módulo Servicios se muestra qué especialidad pide; en la página pública no hace falta
+    mostrarEspecialidad: {
+        type: Boolean,
+        default: false,
+    },
     servicio: {
         type: Object,
         required: true,
@@ -106,9 +111,18 @@ function elegir() {
         </span>
 
         <span class="relative mt-auto flex flex-wrap items-end justify-between gap-3 pt-5">
-            <span class="inline-flex items-center gap-1.5 rounded-full bg-raso px-3 py-1 text-xs text-bruma">
-                <Icono name="reloj" class="h-3.5 w-3.5" :class="tono.texto" />
-                {{ duracion(servicio.duracion_minutos) }}
+            <span class="flex flex-wrap items-center gap-2">
+                <span class="inline-flex items-center gap-1.5 rounded-full bg-raso px-3 py-1 text-xs text-bruma">
+                    <Icono name="reloj" class="h-3.5 w-3.5" :class="tono.texto" />
+                    {{ duracion(servicio.duracion_minutos) }}
+                </span>
+                <span
+                    v-if="mostrarEspecialidad && servicio.especialidad"
+                    class="inline-flex items-center gap-1.5 rounded-full bg-raso px-3 py-1 text-xs text-bruma"
+                >
+                    <Icono name="personal" class="h-3.5 w-3.5" :class="tono.texto" />
+                    {{ servicio.especialidad.nombre }}
+                </span>
             </span>
             <span
                 class="font-display text-2xl tabular-nums"

@@ -13,7 +13,6 @@ import BarraProporcion from '../../Components/BarraProporcion.vue'
 import { api, mensajeError, primerosErrores } from '../../api'
 import {
     aFecha,
-    aISO,
     capitalizar,
     duracion,
     fechaBreve,
@@ -25,25 +24,17 @@ import {
     porcentaje,
 } from '../../formato'
 import { claseEntrada, claseEnfoque } from '../../ui'
+import { ATAJOS_PERIODO, rangoDe } from '../../rangos'
 
+// El backend acepta períodos de hasta 366 días (ReporteController::DIAS_MAXIMOS): tres meses entran
 const MAXIMO_DIAS = 366
 
+// Los atajos comunes (Hoy, Este mes, Últimos 3 meses) más los propios de Reportes
 const PERIODOS = [
-    { clave: 'mes', etiqueta: 'Este mes' },
+    ...ATAJOS_PERIODO,
     { clave: 'anterior', etiqueta: 'Mes anterior' },
-    { clave: 'ultimos30', etiqueta: 'Últimos 30 días' },
     { clave: 'personalizado', etiqueta: 'Personalizado' },
 ]
-
-function rangoDe(clave) {
-    const hoy = new Date()
-    const anio = hoy.getFullYear()
-    const mes = hoy.getMonth()
-
-    if (clave === 'anterior') return { desde: aISO(new Date(anio, mes - 1, 1)), hasta: aISO(new Date(anio, mes, 0)) }
-    if (clave === 'ultimos30') return { desde: aISO(new Date(anio, mes, hoy.getDate() - 29)), hasta: aISO(hoy) }
-    return { desde: aISO(new Date(anio, mes, 1)), hasta: aISO(hoy) }
-}
 
 const periodo = ref('mes')
 const rango = ref(rangoDe('mes'))
@@ -311,24 +302,42 @@ const filasPersonal = computed(() => {
 })
 
 const claseTarjeta = 'rounded-[28px] border border-hilo bg-velo p-5 sm:p-6'
+
+// En la grilla de dos columnas del celular, un último elemento suelto ocupa la fila entera
+function claseUltimaCelda(indice, total, claseDesde) {
+    const esUltimo = indice === total - 1
+    const quedaSolo = total % 2 === 1
+    if (esUltimo && quedaSolo) return `col-span-2 ${claseDesde}`
+    return ''
+}
+
+function textoTiempoAtendido(persona) {
+    const minutos = Number(persona.minutos_atendidos)
+    if (!minutos) return '—'
+    return duracion(minutos)
+}
 </script>
 
 <template>
     <AppLayout>
-        <div class="mx-auto max-w-7xl px-6 py-10">
+        <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10">
             <PageHeader titulo="Reportes" :descripcion="`Cómo le fue al salón. ${textoPeriodo}`">
                 <Button variant="secondary" :disabled="cargando" @click="cargar">
                     {{ cargando ? 'Actualizando…' : 'Actualizar' }}
                 </Button>
             </PageHeader>
 
-            <section class="mt-8" aria-label="Período del reporte">
-                <div class="flex flex-wrap items-center gap-2" role="group" aria-label="Elegir período">
+            <section class="mt-6 sm:mt-8" aria-label="Período del reporte">
+                <div
+                    class="scroll-fino -mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1 [mask-image:linear-gradient(to_right,black_85%,transparent)] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 sm:[mask-image:none]"
+                    role="group"
+                    aria-label="Elegir período"
+                >
                     <button
                         v-for="opcion in PERIODOS"
                         :key="opcion.clave"
                         type="button"
-                        class="rounded-full border px-4 py-2 text-sm transition-colors"
+                        class="min-h-10 shrink-0 whitespace-nowrap rounded-full border px-4 py-2 text-sm transition-colors"
                         :class="[
                             claseEnfoque,
                             periodo === opcion.clave
@@ -404,29 +413,36 @@ const claseTarjeta = 'rounded-[28px] border border-hilo bg-velo p-5 sm:p-6'
 
                     <div v-else class="space-y-4 transition-opacity" :class="{ 'opacity-60': cargando && resumen }" :aria-busy="cargando">
                         <div class="grid overflow-hidden rounded-[28px] border border-orquidea/25 bg-orquidea-hondo/35 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">
-                            <div class="p-6">
+                            <div class="p-5 sm:p-6">
                                 <p class="text-sm text-orquidea-claro">Facturado</p>
                                 <span v-if="primeraCarga('resumen')" class="mt-3 block h-12 w-60 max-w-full animate-pulse rounded-full bg-orquidea-hondo/60"></span>
-                                <p v-else class="mt-2 break-words text-5xl font-semibold leading-none text-perla">{{ facturado.valor }}</p>
+                                <p v-else class="mt-2 break-words text-4xl font-semibold leading-none text-perla sm:text-5xl">{{ facturado.valor }}</p>
                                 <p class="mt-3 text-sm text-bruma">{{ facturado.detalle }}</p>
                             </div>
 
-                            <dl class="grid gap-px bg-orquidea/15 sm:grid-cols-3">
-                                <div v-for="indicador in indicadoresDinero" :key="indicador.clave" class="bg-velo/85 p-5 sm:p-6">
-                                    <dt class="text-sm text-bruma">{{ indicador.etiqueta }}</dt>
+                            <!-- Celular: dos columnas; el último ocupa la fila entera para no dejar un hueco -->
+                            <dl class="grid grid-cols-2 gap-px bg-orquidea/15 sm:grid-cols-3">
+                                <div
+                                    v-for="(indicador, indice) in indicadoresDinero"
+                                    :key="indicador.clave"
+                                    class="bg-velo/85 p-4 sm:p-6"
+                                    :class="claseUltimaCelda(indice, indicadoresDinero.length, 'sm:col-span-1')"
+                                >
+                                    <dt class="text-xs text-bruma sm:text-sm">{{ indicador.etiqueta }}</dt>
                                     <dd>
                                         <span v-if="primeraCarga('resumen')" class="mt-3 block h-7 w-32 max-w-full animate-pulse rounded-full bg-terciopelo"></span>
-                                        <span v-else class="mt-2 block break-words text-2xl font-semibold leading-tight text-perla">{{ indicador.valor }}</span>
-                                        <span class="mt-2 block text-sm text-niebla">{{ indicador.detalle }}</span>
+                                        <span v-else class="mt-2 block break-words text-xl font-semibold leading-tight text-perla sm:text-2xl">{{ indicador.valor }}</span>
+                                        <span class="mt-1.5 block text-xs text-niebla sm:mt-2 sm:text-sm">{{ indicador.detalle }}</span>
                                     </dd>
                                 </div>
                             </dl>
                         </div>
 
-                        <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-5">
+                        <div class="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-5">
                             <TarjetaIndicador
-                                v-for="indicador in indicadoresAgenda"
+                                v-for="(indicador, indice) in indicadoresAgenda"
                                 :key="indicador.clave"
+                                :class="claseUltimaCelda(indice, indicadoresAgenda.length, 'lg:col-span-1')"
                                 :etiqueta="indicador.etiqueta"
                                 :valor="indicador.valor"
                                 :detalle="indicador.detalle"
@@ -612,7 +628,42 @@ const claseTarjeta = 'rounded-[28px] border border-hilo bg-velo p-5 sm:p-6'
                         Nadie del equipo tuvo citas en este período.
                     </p>
 
-                    <div v-else class="scroll-fino -mx-5 mt-5 overflow-x-auto px-5 transition-opacity sm:-mx-6 sm:px-6" :class="{ 'opacity-60': cargando }">
+                    <!-- Celular: una tarjeta por profesional (la tabla de seis columnas no entra) -->
+                    <ul v-else class="mt-5 space-y-3 transition-opacity sm:hidden" :class="{ 'opacity-60': cargando }">
+                        <li v-for="persona in filasPersonal" :key="persona.personal_id" class="rounded-2xl bg-terciopelo p-4">
+                            <div class="flex items-baseline justify-between gap-3">
+                                <p class="min-w-0 truncate font-medium text-perla">{{ persona.nombreCompleto }}</p>
+                                <p class="shrink-0 tabular-nums text-perla">{{ guaranies(persona.facturado) }}</p>
+                            </div>
+                            <div class="mt-2 h-2 rounded-full bg-velo">
+                                <div
+                                    class="h-full rounded-full bg-serie-a"
+                                    :style="{ width: `${Math.round(persona.fraccion * 100)}%`, minWidth: persona.fraccion ? '2px' : '0' }"
+                                    aria-hidden="true"
+                                ></div>
+                            </div>
+                            <dl class="mt-3 grid grid-cols-4 gap-2 text-center">
+                                <div>
+                                    <dt class="text-[0.6875rem] leading-tight text-niebla">Completadas</dt>
+                                    <dd class="mt-0.5 tabular-nums text-perla">{{ persona.completadas ?? 0 }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[0.6875rem] leading-tight text-niebla">No vino</dt>
+                                    <dd class="mt-0.5 tabular-nums text-bruma">{{ persona.no_asistio ?? 0 }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[0.6875rem] leading-tight text-niebla">Canceladas</dt>
+                                    <dd class="mt-0.5 tabular-nums text-bruma">{{ persona.canceladas ?? 0 }}</dd>
+                                </div>
+                                <div>
+                                    <dt class="text-[0.6875rem] leading-tight text-niebla">Tiempo</dt>
+                                    <dd class="mt-0.5 text-sm leading-tight tabular-nums text-bruma">{{ textoTiempoAtendido(persona) }}</dd>
+                                </div>
+                            </dl>
+                        </li>
+                    </ul>
+
+                    <div v-if="!primeraCarga('personal') && !errores.personal && filasPersonal.length" class="scroll-fino -mx-5 mt-5 hidden overflow-x-auto px-5 transition-opacity sm:-mx-6 sm:block sm:px-6" :class="{ 'opacity-60': cargando }">
                         <table class="w-full min-w-[44rem] text-sm">
                             <caption class="sr-only">Desempeño por profesional</caption>
                             <thead class="text-left text-xs text-bruma">
@@ -632,7 +683,7 @@ const claseTarjeta = 'rounded-[28px] border border-hilo bg-velo p-5 sm:p-6'
                                     <td class="px-3 py-3 text-right tabular-nums text-bruma">{{ persona.no_asistio ?? 0 }}</td>
                                     <td class="px-3 py-3 text-right tabular-nums text-bruma">{{ persona.canceladas ?? 0 }}</td>
                                     <td class="px-3 py-3 text-right tabular-nums text-bruma">
-                                        {{ Number(persona.minutos_atendidos) ? duracion(Number(persona.minutos_atendidos)) : '—' }}
+                                        {{ textoTiempoAtendido(persona) }}
                                     </td>
                                     <td class="py-3 pl-3">
                                         <span class="flex items-center gap-2.5">

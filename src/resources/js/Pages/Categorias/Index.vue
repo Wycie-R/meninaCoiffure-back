@@ -141,7 +141,7 @@ async function eliminar() {
 
 <template>
     <AppLayout>
-        <div class="mx-auto max-w-5xl px-6 py-10">
+        <div class="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-10">
             <PageHeader titulo="Categorías" :descripcion="cargando && !categorias.length ? 'Cargando categorías…' : resumen">
                 <Button href="/servicios" variant="secondary">Ver la carta</Button>
                 <Button v-if="esAdmin" @click="abrirNueva">

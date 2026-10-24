@@ -2,6 +2,7 @@
 import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { Link, usePage } from '@inertiajs/vue3'
 import { usePermisos, cerrarSesion } from '../auth'
+import { usePendientes, cargarPendientes } from '../solicitudes'
 import Monograma from '../Components/Monograma.vue'
 import Icono from '../Components/Icono.vue'
 
@@ -69,6 +70,26 @@ const gruposVisibles = computed(() =>
 const enlaces = grupos.flatMap((grupo) => grupo.items.filter((item) => item.href))
 
 const nombresRol = { admin: 'Administración', profesional: 'Profesional' }
+
+// Pedidos de clientas sin responder: se avisan junto a Dashboard, donde está la bandeja.
+// El número es compartido: baja al instante cuando la dueña agenda o rechaza un pedido
+const solicitudesPendientes = usePendientes()
+
+// El usuario se carga aparte: se cuenta cuando se sabe que es la administración
+watch(
+    esAdmin,
+    (esLaDuena) => {
+        if (esLaDuena) cargarPendientes()
+    },
+    { immediate: true }
+)
+
+function contadorDe(item) {
+    if (item.href === '/dashboard' && esAdmin.value) {
+        return solicitudesPendientes.value
+    }
+    return 0
+}
 
 const hrefActivo = computed(() => {
     const coincidencias = enlaces
@@ -170,21 +191,22 @@ onBeforeUnmount(() => {
 
         <aside
             id="menu-lateral"
-            class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col border-r border-hilo bg-velo transition-transform duration-300 ease-out xl:translate-x-0"
+            class="fixed inset-y-0 left-0 z-40 flex w-64 flex-col overflow-x-hidden border-r border-hilo bg-velo transition-transform duration-300 ease-out xl:translate-x-0"
             :class="abierto ? 'translate-x-0' : '-translate-x-full'"
             aria-label="Navegación principal"
             :inert="!escritorio && !abierto"
         >
-            <div class="flex shrink-0 items-center justify-between gap-2 px-5 pb-6 pt-6 bajo:pb-3 bajo:pt-4">
+            <!-- El encabezado entra en los 256 px del menú: si no, la X asoma por el borde con el menú cerrado -->
+            <div class="flex shrink-0 items-center justify-between gap-2 px-4 pb-6 pt-6 bajo:pb-3 bajo:pt-4">
                 <Link
                     href="/dashboard"
                     prefetch
-                    class="flex items-center gap-3 rounded-xl"
+                    class="flex min-w-0 items-center gap-2.5 rounded-xl"
                     :class="focusClass"
                 >
-                    <Monograma :size="40" class="shrink-0" />
-                    <span class="flex flex-col">
-                        <span class="whitespace-nowrap font-display text-[1.25rem] leading-none text-perla">Menina Coiffure</span>
+                    <Monograma :size="36" class="shrink-0" />
+                    <span class="flex min-w-0 flex-col">
+                        <span class="truncate font-display text-[1.2rem] leading-none text-perla">Menina Coiffure</span>
                         <span class="mt-1 text-xs text-niebla">Salón de Villa Elisa</span>
                     </span>
                 </Link>
@@ -192,7 +214,7 @@ onBeforeUnmount(() => {
                 <button
                     ref="botonCerrar"
                     type="button"
-                    class="rounded-full p-2 text-bruma transition-colors hover:bg-raso hover:text-perla xl:hidden"
+                    class="shrink-0 rounded-full p-2 text-bruma transition-colors hover:bg-raso hover:text-perla xl:hidden"
                     :class="focusClass"
                     aria-label="Cerrar menú de navegación"
                     @click="cerrar"
@@ -229,6 +251,13 @@ onBeforeUnmount(() => {
                                 :class="{ 'text-orquidea': esActivo(item.href) }"
                             />
                             {{ item.label }}
+                            <span
+                                v-if="contadorDe(item) > 0"
+                                class="ml-auto rounded-full bg-orquidea px-2 py-0.5 text-[0.6875rem] font-semibold tabular-nums text-noche"
+                                :title="`${contadorDe(item)} solicitudes de cita sin responder`"
+                            >
+                                {{ contadorDe(item) }}
+                            </span>
                         </Link>
 
                         <span

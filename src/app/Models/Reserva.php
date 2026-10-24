@@ -15,8 +15,11 @@ class Reserva extends Model
     /** Estados que ocupan el horario del profesional (Regla 1). */
     public const ESTADOS_QUE_OCUPAN = ['pendiente', 'confirmada', 'completada'];
 
-    /** Estados finales: la reserva ya no admite cambios (Regla 5). */
-    public const ESTADOS_FINALES = ['cancelada', 'completada', 'no_asistio'];
+    /**
+     * Estados finales: la reserva ya no admite cambios (Regla 5). "No asistió" no está: la dueña
+     * puede corregirla o reprogramarla (la clienta llegó tarde o la cita se mueve a otro día).
+     */
+    public const ESTADOS_FINALES = ['cancelada', 'completada'];
 
     protected $table = 'reservas';
     protected $fillable = [

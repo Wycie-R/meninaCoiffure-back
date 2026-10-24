@@ -20,11 +20,29 @@ import { claseEntrada, ilustracionDe } from '../../ui'
 const { categorias, cargando: cargandoCategorias, error: errorCatalogo, cargarCatalogo } = useCatalogo()
 const { esProfesional } = usePermisos()
 
-onMounted(() => cargarCatalogo())
+// Especialidades del equipo: el servicio puede pedir una (opcional)
+const especialidades = ref([])
+
+async function cargarEspecialidades() {
+    const respuesta = await api('/api/especialidades')
+    if (respuesta.ok) especialidades.value = respuesta.cuerpo?.data ?? []
+}
+
+onMounted(() => {
+    cargarCatalogo()
+    cargarEspecialidades()
+})
+
+// La primera opción deja el servicio sin especialidad: cualquiera lo hace sin aviso
+const opcionesEspecialidad = computed(() => [
+    { label: 'Ninguna (cualquiera lo hace)', value: null },
+    ...especialidades.value.map((e) => ({ label: e.nombre, value: e.id })),
+])
 
 const form = ref({
     nombre: '',
     categoria_id: null,
+    especialidad_id: null,
     duracion_minutos: '',
     precio: '',
     descripcion: '',
@@ -99,6 +117,7 @@ async function guardar() {
         datos: {
             nombre: form.value.nombre.trim(),
             categoria_id: form.value.categoria_id,
+            especialidad_id: form.value.especialidad_id,
             duracion_minutos: Number(form.value.duracion_minutos),
             precio: form.value.precio,
             descripcion: form.value.descripcion.trim() || null,
@@ -119,7 +138,7 @@ async function guardar() {
 
 <template>
     <AppLayout>
-        <div class="mx-auto max-w-6xl px-6 py-10">
+        <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
             <PageHeader titulo="Nuevo servicio" descripcion="Agrega un servicio a la carta con su duración y su precio inicial." />
 
             <EstadoVacio
@@ -169,6 +188,18 @@ async function guardar() {
                                     :placeholder="cargandoCategorias ? 'Cargando…' : 'Seleccionar categoría'"
                                     :disabled="cargandoCategorias"
                                     @update:model-value="limpiarServidor('categoria_id')"
+                                />
+                            </Campo>
+
+                            <Campo
+                                etiqueta="Especialidad que requiere"
+                                :error="error('especialidad_id')"
+                                ayuda="Si se agenda con una profesional que no la tiene, el sistema avisa antes de guardar."
+                            >
+                                <Dropdown
+                                    v-model="form.especialidad_id"
+                                    :options="opcionesEspecialidad"
+                                    placeholder="Ninguna (cualquiera lo hace)"
                                 />
                             </Campo>
                         </div>
@@ -239,7 +270,24 @@ async function guardar() {
                         </div>
                     </section>
 
-                    <div class="flex flex-col-reverse gap-3 rounded-b-[28px] border-t border-hilo bg-noche/30 p-5 sm:flex-row sm:justify-end sm:px-6">
+                    <!-- En celular la vista previa va antes de guardar (en escritorio es la columna de la derecha) -->
+                    <div class="border-t border-hilo px-5 pt-5 lg:hidden">
+                        <p class="mb-2 text-sm font-medium text-bruma">Así se verá en la carta</p>
+                        <div class="flex items-center gap-3 rounded-2xl bg-orquidea-hondo/35 p-3 ring-1 ring-inset ring-orquidea/25">
+                            <Ilustracion :nombre="ilustracionDe(categoriaElegida)" class="h-11 w-11 shrink-0" />
+                            <div class="min-w-0 flex-1">
+                                <p class="truncate font-display text-lg leading-tight">{{ form.nombre.trim() || 'Nombre del servicio' }}</p>
+                                <p class="truncate text-xs" :class="categoriaElegida ? 'text-orquidea-claro' : 'text-niebla'">
+                                    {{ categoriaElegida || 'Sin categoría' }} · {{ duracionVista || '— min' }}
+                                </p>
+                            </div>
+                            <span class="shrink-0 font-display text-lg tabular-nums">
+                                {{ form.precio === '' ? 'Gs. —' : guaranies(form.precio) }}
+                            </span>
+                        </div>
+                    </div>
+
+                    <div class="flex flex-col-reverse gap-3 rounded-b-[28px] border-t border-hilo bg-noche/30 p-5 max-lg:mt-5 sm:flex-row sm:justify-end sm:px-6">
                         <Button label="Cancelar" href="/servicios" variant="secondary" class="w-full sm:w-auto" />
                         <Button type="submit" :disabled="enviando" class="w-full sm:w-auto">
                             <Icono name="completada" class="h-4 w-4" />
@@ -248,7 +296,7 @@ async function guardar() {
                     </div>
                 </form>
 
-                <aside class="lg:sticky lg:top-24 lg:self-start">
+                <aside class="hidden lg:sticky lg:top-24 lg:block lg:self-start">
                     <p class="mb-3 text-sm font-medium text-bruma">Así se verá en la carta</p>
 
                     <div class="rounded-[28px] bg-orquidea-hondo/35 p-5 ring-1 ring-inset ring-orquidea/25">

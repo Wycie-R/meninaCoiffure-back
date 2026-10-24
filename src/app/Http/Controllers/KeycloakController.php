@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Cliente;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\Client\ConnectionException;
@@ -22,7 +23,8 @@ class KeycloakController extends Controller
     private const ERROR_PROVEEDOR = 'No se pudo completar el inicio de sesión con tu cuenta. Inténtalo de nuevo en unos minutos.';
 
     /**
-     * Paso 1: manda el navegador a la pantalla de login de Keycloak.
+     * Paso 1: manda el navegador a la pantalla de login de Keycloak
+     * (con ?registro=1, directo al formulario para crear la cuenta).
      */
     public function redirigir(Request $request): RedirectResponse
     {
@@ -49,7 +51,13 @@ class KeycloakController extends Controller
             'code_challenge_method' => 'S256',
         ]);
 
-        return redirect()->away(self::urlPublica('/protocol/openid-connect/auth') . '?' . $parametros);
+        // El endpoint de registro recibe los mismos parámetros que el de login
+        $endpoint = '/protocol/openid-connect/auth';
+        if ($request->boolean('registro')) {
+            $endpoint = '/protocol/openid-connect/registrations';
+        }
+
+        return redirect()->away(self::urlPublica($endpoint) . '?' . $parametros);
     }
 
     /**
@@ -123,6 +131,10 @@ class KeycloakController extends Controller
             return $this->volverAlLogin('Ya existe una cuenta del salón con ese correo. Pide a la administración que lo verifique.');
         }
 
+        if ($usuario->hasRole('cliente')) {
+            $this->vincularFichaDeClienta($usuario, $persona, $email);
+        }
+
         Auth::login($usuario);
         $request->session()->regenerate();
         // Se guarda para cerrar también la sesión de Keycloak al salir
@@ -174,6 +186,44 @@ class KeycloakController extends Controller
     }
 
     /**
+     * Toda clienta con cuenta necesita su ficha en clientes para pedir citas. Si la dueña ya la
+     * había cargado con ese correo se reutiliza (y conserva su historial); si no, se crea.
+     */
+    private function vincularFichaDeClienta(User $usuario, array $persona, string $email): void
+    {
+        if ($usuario->cliente()->exists()) {
+            return;
+        }
+
+        // Solo con correo verificado: si no, alguien podría ver las citas de otra clienta
+        // registrándose con su correo
+        $correoVerificado = ($persona['email_verified'] ?? false) === true;
+        if ($correoVerificado) {
+            $fichaExistente = Cliente::whereNull('user_id')->whereRaw('LOWER(email) = ?', [$email])->first();
+            if ($fichaExistente !== null) {
+                $fichaExistente->user_id = $usuario->id;
+                $fichaExistente->save();
+                return;
+            }
+        }
+
+        $nombre = trim((string) ($persona['given_name'] ?? ''));
+        $apellido = trim((string) ($persona['family_name'] ?? ''));
+        if ($nombre === '') {
+            $nombre = $usuario->name;
+        }
+
+        $ficha = new Cliente([
+            'nombre' => $nombre,
+            'apellido' => $apellido,
+            'email' => $email,
+            'fecha_registro' => now()->toDateString(),
+        ]);
+        $ficha->user_id = $usuario->id;
+        $ficha->save();
+    }
+
+    /**
      * URL de cierre de sesión en Keycloak, o null si el login es local o no hay token guardado.
      */
     public static function urlCierreDeSesion(?string $idToken): ?string
@@ -184,7 +234,8 @@ class KeycloakController extends Controller
 
         $parametros = http_build_query([
             'id_token_hint' => $idToken,
-            'post_logout_redirect_uri' => url('/salon'),
+            // Al salir se vuelve a la pantalla de inicio de sesión
+            'post_logout_redirect_uri' => url('/login'),
         ]);
 
         return self::urlPublica('/protocol/openid-connect/logout') . '?' . $parametros;

@@ -1,4 +1,5 @@
-import { aFecha, aMinutos, duracion, hoyISO, normalizar } from './formato'
+import { aFecha, aMinutos, duracion, guaranies, hoyISO, normalizar } from './formato'
+import { diaSemanaDe, textoDiasPromocion } from './horarios'
 
 export const ESTADOS_ACTIVOS = ['pendiente', 'confirmada']
 export const ESTADOS_DESCARTADOS = ['cancelada', 'no_asistio']
@@ -90,6 +91,53 @@ export function etiquetaDescuento(reserva) {
     return `${descuento.nombre ?? 'Descuento'}${detalle}`
 }
 
+// Misma regla que ReservaService::validarDescuentoVigente: activa y vigente en la fecha de la cita
+export function promocionRige(descuento, fecha) {
+    if (!descuento || !descuento.activo || !fecha) return false
+
+    const inicio = descuento.fecha_inicio ? String(descuento.fecha_inicio).slice(0, 10) : ''
+    const fin = descuento.fecha_fin ? String(descuento.fecha_fin).slice(0, 10) : ''
+
+    if (inicio && inicio > fecha) return false
+    if (fin && fin < fecha) return false
+
+    // Igual que Descuento::rigeElDia: sin días cargados rige todos los días
+    const dias = descuento.dias_semana ?? []
+    if (!dias.length) return true
+    return dias.map(Number).includes(diaSemanaDe(fecha))
+}
+
+// Igual que Descuento::montoSobre: el porcentaje se redondea a 2 decimales y nunca supera el subtotal
+export function montoPromocion(descuento, subtotal) {
+    if (!descuento) return 0
+
+    const valor = Number(descuento.valor) || 0
+    let monto = valor
+    if (descuento.tipo === 'porcentaje') {
+        monto = Math.round(subtotal * valor) / 100
+    }
+
+    return Math.min(monto, subtotal)
+}
+
+// "Promo Primavera · 10 %" o "Promo Socia · Gs. 20.000 menos"
+export function textoPromocion(descuento) {
+    if (!descuento) return ''
+
+    const nombre = descuento.nombre ?? 'Promoción'
+    let texto = `${nombre} · ${guaranies(Number(descuento.valor) || 0)} menos`
+    if (descuento.tipo === 'porcentaje') {
+        texto = `${nombre} · ${Number(descuento.valor)} %`
+    }
+
+    // Una promoción de ciertos días lo dice: "Miércoles de color · 15 % · Los miércoles"
+    const dias = descuento.dias_semana ?? []
+    if (dias.length && dias.length < 7) {
+        texto = `${texto} · ${textoDiasPromocion(dias)}`
+    }
+    return texto
+}
+
 export function minutosReserva(reserva) {
     return aMinutos(reserva.hora_fin) - aMinutos(reserva.hora_inicio)
 }
@@ -120,11 +168,21 @@ export function porAtender(reserva, ahora = new Date()) {
     return ESTADOS_ACTIVOS.includes(reserva.estado) && finDe(reserva) > ahora
 }
 
+// Regla 5: solo una cita completada o cancelada queda cerrada. Las demás (incluida la que
+// figura como no asistida) se pueden modificar en cualquier momento, aunque ya hayan pasado
+export const ESTADOS_MODIFICABLES = ['pendiente', 'confirmada', 'no_asistio']
+
+export function esModificable(reserva) {
+    return ESTADOS_MODIFICABLES.includes(reserva.estado)
+}
+
 export function accionesDe(reserva, ahora = new Date()) {
     const empezo = yaEmpezo(reserva, ahora)
 
     if (reserva.estado === 'pendiente') return empezo ? ['completar', 'no_asistio'] : ['confirmar', 'cancelar']
     if (reserva.estado === 'confirmada') return empezo ? ['completar', 'no_asistio'] : ['cancelar']
+    // Si quedó como no asistida pero llegó tarde y se atendió, todavía se puede completar
+    if (reserva.estado === 'no_asistio') return ['completar']
     return []
 }
 
@@ -135,9 +193,11 @@ export function admiteServicios(reserva) {
 export function notaAcciones(reserva, ahora = new Date()) {
     if (reserva.estado === 'completada') return 'La reserva está completada y ya no se puede modificar.'
     if (reserva.estado === 'cancelada') return 'La reserva está cancelada y no se puede reactivar.'
-    if (reserva.estado === 'no_asistio') return 'Quedó registrado que no asistió a la cita. Este estado ya no se puede cambiar.'
+    if (reserva.estado === 'no_asistio') {
+        return 'No vino a la cita. Puedes reprogramarla (vuelve a quedar pendiente) o, si llegó tarde y se atendió, completarla.'
+    }
     if (yaEmpezo(reserva, ahora)) {
-        return 'La cita ya empezó, así que ya no se puede cancelar. Puedes completarla o, si no vino, marcar que no asistió.'
+        return 'La cita ya empezó, así que ya no se puede cancelar. Puedes completarla, marcar que no asistió o modificarla para corregir el registro.'
     }
     if (reserva.estado === 'confirmada') return 'Podrás completarla desde la hora de inicio de la cita.'
     return ''

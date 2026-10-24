@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import { router } from '@inertiajs/vue3'
 import Button from '../../Components/Button.vue'
 import Monograma from '../../Components/Monograma.vue'
+import Icono from '../../Components/Icono.vue'
 import { establecerUsuario } from '../../auth'
 
 const props = defineProps({
@@ -198,9 +199,10 @@ async function ingresar() {
                 <p class="mt-8 text-center text-sm">
                     <a
                         href="/salon"
-                        class="text-bruma underline-offset-4 transition-colors hover:text-perla hover:underline focus-visible:outline-2 focus-visible:outline-orquidea"
+                        class="inline-flex items-center gap-1.5 text-bruma underline-offset-4 transition-colors hover:text-perla hover:underline focus-visible:outline-2 focus-visible:outline-orquidea"
                     >
-                        ← Volver al salón
+                        <Icono name="flecha-izquierda" class="h-4 w-4" />
+                        Volver al salón
                     </a>
                 </p>
             </div>

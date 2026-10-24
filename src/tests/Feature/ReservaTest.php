@@ -537,8 +537,9 @@ class ReservaTest extends TestCase
             ->assertStatus(422)->assertJsonValidationErrors(['estado']);
         $this->putJson("/api/reservas/{$ausente->id}", ['estado' => 'no_asistio'])
             ->assertStatus(200)->assertJsonPath('data.estado', 'no_asistio');
+        // Una ausencia se puede corregir: la clienta llegó tarde y se atendió igual
         $this->putJson("/api/reservas/{$ausente->id}", ['estado' => 'completada'])
-            ->assertStatus(422)->assertJsonValidationErrors(['estado']);
+            ->assertStatus(200)->assertJsonPath('data.estado', 'completada');
 
         $atendida = $this->reservaDirecta(Carbon::yesterday()->subDay()->toDateString());
         $this->putJson("/api/reservas/{$atendida->id}", ['estado' => 'completada'])
@@ -1093,5 +1094,126 @@ class ReservaTest extends TestCase
         $this->postJson('/api/reservas', $this->payload())->assertStatus(201); // cliente 1 queda con reserva
         $this->deleteJson('/api/clientes/1')->assertStatus(422)->assertJsonValidationErrors(['cliente']);
         $this->deleteJson('/api/clientes/' . $nueva->json('data.id'))->assertStatus(200);
+    }
+
+    /**
+     * Regla 5 (ajustada): solo completada y cancelada quedan bloqueadas. Una cita que ya pasó sin
+     * cerrarse se puede corregir, incluso con la fecha y hora reales en que se atendió.
+     */
+    public function test_una_cita_pasada_sin_cerrar_se_corrige_hacia_el_pasado(): void
+    {
+        $lunesPasado = Carbon::parse('last monday')->toDateString();
+        $pasada = $this->reservaDirecta($lunesPasado);
+
+        // Se atendió una hora más tarde y con otro servicio
+        $this->putJson("/api/reservas/{$pasada->id}", [
+            'hora_inicio' => '11:00',
+            'hora_fin' => '12:00',
+            'servicios' => [2],
+        ])->assertStatus(200)
+            ->assertJsonPath('data.hora_inicio', '11:00:00')
+            ->assertJsonPath('data.detalles.0.servicio_id', 2);
+
+        // Corregirla a otro día pasado también se permite, siempre respetando la Regla 2
+        $martesPasado = Carbon::parse($lunesPasado)->addDay()->toDateString();
+        $this->putJson("/api/reservas/{$pasada->id}", ['fecha' => $martesPasado])->assertStatus(200);
+    }
+
+    public function test_una_cita_que_no_empezo_no_se_mueve_al_pasado(): void
+    {
+        $futura = $this->postJson('/api/reservas', $this->payload())->assertStatus(201)->json('data.id');
+
+        $this->putJson("/api/reservas/{$futura}", ['fecha' => Carbon::parse('last monday')->toDateString()])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['horario']);
+    }
+
+    public function test_una_ausencia_se_reprograma_y_vuelve_a_quedar_pendiente(): void
+    {
+        $ausente = $this->reservaDirecta(Carbon::parse('last monday')->toDateString(), 'no_asistio');
+        $proximoLunes = $this->obtenerProximoLunes();
+
+        $this->putJson("/api/reservas/{$ausente->id}", ['fecha' => $proximoLunes])
+            ->assertStatus(200)
+            ->assertJsonPath('data.estado', 'pendiente')
+            ->assertJsonPath('data.fecha', $proximoLunes);
+    }
+
+    public function test_una_ausencia_que_vuelve_a_la_agenda_respeta_la_regla_1(): void
+    {
+        $lunesPasado = Carbon::parse('last monday')->toDateString();
+        $ausente = $this->reservaDirecta($lunesPasado, 'no_asistio');
+        // Mientras figuraba como ausente, ese horario se le dio a otra clienta
+        $this->reservaDirecta($lunesPasado, 'completada');
+
+        $this->putJson("/api/reservas/{$ausente->id}", ['estado' => 'completada'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['horario']);
+        $this->assertSame('no_asistio', $ausente->fresh()->estado);
+    }
+
+    public function test_completada_y_cancelada_siguen_bloqueadas(): void
+    {
+        $completada = $this->reservaDirecta(Carbon::parse('last monday')->toDateString(), 'completada');
+        $cancelada = $this->reservaDirecta($this->obtenerProximoLunes(), 'cancelada');
+
+        $this->putJson("/api/reservas/{$completada->id}", ['servicios' => [2]])->assertStatus(422)->assertJsonValidationErrors(['estado']);
+        $this->putJson("/api/reservas/{$cancelada->id}", ['servicios' => [2]])->assertStatus(422)->assertJsonValidationErrors(['estado']);
+    }
+
+    public function test_la_disponibilidad_de_una_cita_ya_empezada_muestra_horarios_pasados(): void
+    {
+        $lunesPasado = Carbon::parse('last monday')->toDateString();
+        $pasada = $this->reservaDirecta($lunesPasado);
+        $consulta = ['personal_id' => 1, 'fecha' => $lunesPasado, 'duracion_minutos' => 60];
+
+        $sinExcluir = $this->getJson('/api/disponibilidad?' . http_build_query($consulta))->json('data.horarios');
+        $alModificar = $this->getJson('/api/disponibilidad?' . http_build_query([...$consulta, 'excluir_reserva_id' => $pasada->id]))->json('data.horarios');
+
+        $this->assertSame('pasado', $sinExcluir[0]['motivo']);
+        $this->assertTrue($alModificar[0]['disponible']);
+    }
+
+    /**
+     * HU-22 desde la interfaz: la promoción se aplica o se quita al modificar la reserva.
+     */
+    public function test_aplicar_y_quitar_una_promocion_al_modificar(): void
+    {
+        $promo = Descuento::first(); // Promo Primavera: 10 %
+        $id = $this->postJson('/api/reservas', $this->payload(['servicios' => [1, 2], 'hora_fin' => '12:00']))
+            ->assertStatus(201)->json('data.id');
+
+        $this->putJson("/api/reservas/{$id}", ['descuento_id' => $promo->id])
+            ->assertStatus(200)
+            ->assertJsonPath('data.descuento.nombre', 'Promo Primavera')
+            ->assertJsonPath('data.total', 108000);
+
+        $this->putJson("/api/reservas/{$id}", ['descuento_id' => null])
+            ->assertStatus(200)
+            ->assertJsonPath('data.descuento_id', null)
+            ->assertJsonPath('data.total', 120000);
+    }
+
+    public function test_no_se_aplica_una_promocion_que_no_rige_el_dia_de_la_cita(): void
+    {
+        $vencida = Descuento::create([
+            'nombre' => 'Promo vencida', 'tipo' => 'porcentaje', 'valor' => 20,
+            'fecha_fin' => now()->subDay()->toDateString(),
+        ]);
+        $id = $this->postJson('/api/reservas', $this->payload())->assertStatus(201)->json('data.id');
+
+        $this->putJson("/api/reservas/{$id}", ['descuento_id' => $vencida->id])
+            ->assertStatus(422)->assertJsonValidationErrors(['descuento_id']);
+    }
+
+    public function test_una_promocion_no_deja_el_total_por_debajo_de_lo_pagado(): void
+    {
+        $id = $this->postJson('/api/reservas', $this->payload(['servicios' => [1, 2], 'hora_fin' => '12:00']))
+            ->assertStatus(201)->json('data.id');
+        Pago::create(['reserva_id' => $id, 'metodo_pago_id' => MetodoPago::first()->id, 'monto' => 120000, 'fecha' => now()]);
+
+        $this->putJson("/api/reservas/{$id}", ['descuento_id' => Descuento::first()->id])
+            ->assertStatus(422)->assertJsonValidationErrors(['descuento_id']);
+        $this->assertNull(Reserva::find($id)->descuento_id);
     }
 }

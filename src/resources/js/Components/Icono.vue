@@ -108,6 +108,15 @@ const iconos = {
         'M4 7h8M18 7h2M4 17h2M12 17h8',
         'M15 9.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5zM9 19.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z',
     ],
+    // Pin de mapa: "Estoy en casa" y "Cómo llegar"
+    ubicacion: [
+        'M12 21s-6.5-5.6-6.5-11a6.5 6.5 0 0113 0c0 5.4-6.5 11-6.5 11z',
+        'M12 12.5a2.5 2.5 0 100-5 2.5 2.5 0 000 5z',
+    ],
+    'flecha-izquierda': [
+        'M19 12H5',
+        'M11 6l-6 6 6 6',
+    ],
 }
 
 const trazos = computed(() => iconos[props.name] ?? [])

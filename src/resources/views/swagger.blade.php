@@ -71,12 +71,21 @@
 <body>
     <header class="header-banner">
         <div class="header-title">
-            <span style="font-size: 1.6rem;">✂️</span>
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M6 9a3 3 0 100-6 3 3 0 000 6zM6 21a3 3 0 100-6 3 3 0 000 6z" />
+                <path d="M20 4L8.1 15.9M14.5 14.5L20 20M8.1 8.1L12 12" />
+            </svg>
             <h1>Menina Coiffure — API REST</h1>
             <span class="header-tag">Avance al 18/09/2026</span>
         </div>
         <div class="header-links">
-            <a href="/openapi.json" target="_blank">📄 Ver OpenAPI JSON</a>
+            <a href="/openapi.json" target="_blank" style="display: inline-flex; align-items: center; gap: 0.4rem;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M14 3.5H7A1.5 1.5 0 005.5 5v14A1.5 1.5 0 007 20.5h10a1.5 1.5 0 001.5-1.5V8z" />
+                    <path d="M14 3.5V8h4.5M9 13h6M9 16.5h6" />
+                </svg>
+                Ver OpenAPI JSON
+            </a>
         </div>
     </header>
 

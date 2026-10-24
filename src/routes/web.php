@@ -15,7 +15,7 @@ Route::get('/', function () {
 
 // Página pública: catálogo, horario, promociones vigentes y contacto por WhatsApp
 Route::get('/salon', function () {
-    // Si una clienta entró con su cuenta, el encabezado la saluda y le ofrece salir
+    // Si una clienta entró con su cuenta, el encabezado la saluda y la lleva a sus citas
     $cuenta = null;
     if (auth()->check() && auth()->user()->hasRole('cliente')) {
         $cuenta = ['nombre' => auth()->user()->name];
@@ -24,12 +24,25 @@ Route::get('/salon', function () {
     return Inertia::render('Salon/Index', [
         'whatsapp' => config('app.salon_whatsapp'),
         'cuenta' => $cuenta,
+        // Con Keycloak, "Crear cuenta" abre directo el formulario de registro
+        'proveedor' => config('services.keycloak.proveedor'),
     ]);
 });
 
+// Mis citas: solo para clientas con cuenta
+Route::get('/mi-cuenta', function () {
+    return Inertia::render('MiCuenta/Index');
+})->middleware(['auth', 'rol:cliente']);
+
 Route::middleware('guest')->group(function () {
-    // Con AUTH_PROVEEDOR=keycloak la página muestra solo el botón que lleva a Keycloak
+    // Con AUTH_PROVEEDOR=keycloak se va directo al formulario de Keycloak (con el tema del salón):
+    // el paso intermedio con un solo botón sobraba. Solo se queda acá para mostrar un error del login
     Route::get('/login', function () {
+        $hayError = session()->has('error_login');
+        if (config('services.keycloak.proveedor') === 'keycloak' && !$hayError) {
+            return redirect('/auth/keycloak/redirigir');
+        }
+
         return Inertia::render('Auth/Login', [
             'proveedor' => config('services.keycloak.proveedor'),
             'error' => session('error_login'),

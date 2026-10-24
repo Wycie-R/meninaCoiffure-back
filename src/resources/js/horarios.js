@@ -289,3 +289,73 @@ export function resumenHorario(franjasDeLaSemana = []) {
 
     return `Atiende ${grupos.map((g) => `${textoDias(g.dias)}, ${g.texto}`).join('; ')}`
 }
+
+// ---------- Días de una promoción ("los miércoles") ----------
+
+const ABREVIATURA_DIA = { 1: 'Lun', 2: 'Mar', 3: 'Mié', 4: 'Jue', 5: 'Vie', 6: 'Sáb', 7: 'Dom' }
+
+function conMayuscula(texto) {
+    if (!texto) return ''
+    return texto.charAt(0).toUpperCase() + texto.slice(1)
+}
+
+// [] o los 7 días: "Todos los días"; [3]: "Los miércoles"; [1, 3]: "Lunes y miércoles";
+// de lunes a viernes seguidos: "De lunes a viernes"; tres o más sueltos: "Lun, Mié y Vie"
+export function textoDiasPromocion(dias = []) {
+    const lista = [...new Set((dias ?? []).map(Number))].filter((d) => d >= 1 && d <= 7).sort((a, b) => a - b)
+
+    if (lista.length === 0 || lista.length === 7) return 'Todos los días'
+    if (lista.length === 1) return `Los ${NOMBRE_DIAS[lista[0]]}`
+    if (lista.length === 2) return conMayuscula(`${NOMBRE_DIA[lista[0]]} y ${NOMBRE_DIA[lista[1]]}`)
+
+    const seguidos = lista.every((d, i) => i === 0 || d === lista[i - 1] + 1)
+    if (seguidos) return `De ${NOMBRE_DIA[lista[0]]} a ${NOMBRE_DIA[lista.at(-1)]}`
+
+    return enumerar(lista.map((d) => ABREVIATURA_DIA[d]))
+}
+
+// ---------- Días puntuales sin atención ("este miércoles no abrimos") ----------
+
+const cierres = ref([])
+const cierresCargados = ref(false)
+let consultaCierres = null
+
+export async function cargarCierres({ forzar = false } = {}) {
+    if (consultaCierres) return consultaCierres
+    if (cierresCargados.value && !forzar) return
+
+    consultaCierres = api('/api/cierres-salon')
+        .then((respuesta) => {
+            // Si falla no se bloquea nada: el backend igual rechaza agendar en un día cerrado
+            if (!respuesta.ok) return
+            cierres.value = respuesta.cuerpo?.data ?? []
+            cierresCargados.value = true
+        })
+        .finally(() => {
+            consultaCierres = null
+        })
+
+    return consultaCierres
+}
+
+// Después de agregar o quitar un cierre en Configuración, las demás pantallas lo ven sin recargar
+export function actualizarCierres(lista) {
+    cierres.value = [...lista].sort((a, b) => String(a.fecha).localeCompare(String(b.fecha)))
+    cierresCargados.value = true
+}
+
+// El cierre de ese día ({ id, fecha, motivo }) o null si el salón trabaja
+export function cierreDelDia(iso) {
+    const fecha = String(iso ?? '').slice(0, 10)
+    if (!fecha) return null
+    return cierres.value.find((c) => String(c.fecha).slice(0, 10) === fecha) ?? null
+}
+
+export function useCierres() {
+    return {
+        cierres: readonly(cierres),
+        cierresCargados: readonly(cierresCargados),
+        cargarCierres,
+        cierreDelDia,
+    }
+}

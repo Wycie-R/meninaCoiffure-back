@@ -163,18 +163,19 @@ async function eliminar() {
                         </div>
                     </form>
 
-                    <div v-else class="flex min-h-11 items-center justify-between gap-4">
+                    <!-- En celular las acciones van debajo del nombre: así el nombre se lee completo -->
+                    <div v-else class="flex min-h-11 flex-col gap-1 sm:flex-row sm:items-center sm:justify-between sm:gap-4">
                         <span class="flex min-w-0 items-center gap-3">
                             <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-raso text-orquidea" aria-hidden="true">
                                 <Icono name="billete" class="h-[1.125rem] w-[1.125rem]" />
                             </span>
-                            <span class="truncate text-perla">{{ m.nombre }}</span>
+                            <span class="min-w-0 break-words text-perla sm:truncate">{{ m.nombre }}</span>
                         </span>
-                        <span v-if="editando === null" class="flex shrink-0 gap-4 text-sm">
-                            <button type="button" :class="[claseEnfoque, 'rounded text-bruma underline-offset-4 hover:text-perla hover:underline']" :aria-label="`Renombrar ${m.nombre}`" @click="editar(m)">
+                        <span v-if="editando === null" class="flex shrink-0 gap-5 pl-12 text-sm sm:gap-4 sm:pl-0">
+                            <button type="button" :class="[claseEnfoque, 'min-h-11 rounded text-bruma underline-offset-4 hover:text-perla hover:underline sm:min-h-0']" :aria-label="`Renombrar ${m.nombre}`" @click="editar(m)">
                                 Renombrar
                             </button>
-                            <button type="button" :class="[claseEnfoque, 'rounded text-bruma underline-offset-4 hover:text-borgona hover:underline']" :aria-label="`Eliminar ${m.nombre}`" @click="porEliminar = m">
+                            <button type="button" :class="[claseEnfoque, 'min-h-11 rounded text-bruma underline-offset-4 hover:text-borgona hover:underline sm:min-h-0']" :aria-label="`Eliminar ${m.nombre}`" @click="porEliminar = m">
                                 Eliminar
                             </button>
                         </span>

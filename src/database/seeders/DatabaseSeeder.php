@@ -18,6 +18,7 @@ class DatabaseSeeder extends Seeder
         $this->call([
             SprintUnoDosSeeder::class,
             ReservasDemoSeeder::class,
+            ClientaDemoSeeder::class,
         ]);
     }
 }

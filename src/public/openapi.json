@@ -3,7 +3,7 @@
   "info": {
     "title": "Menina Coiffure — API REST",
     "version": "2.0.0",
-    "description": "API REST de **Menina Coiffure**, centro familiar de **peluquería y estética** de Villa Elisa (Paraguay): peluquería\n(cortes, brushing, peinados), colorimetría (tintes, mechas, balayage), tratamientos capilares y estética (depilación,\nlimpieza facial, maquillaje social), en el salón y a domicilio. Laravel 13 + PostgreSQL 18 + Vue/Inertia.\n\nMontos en **guaraníes (PYG)**, sin decimales en la práctica (los campos decimales de la base se serializan como\ntexto, por ejemplo `\"70000.00\"`; los montos calculados, como número). Fechas `YYYY-MM-DD`, horas `HH:MM[:SS]`,\nzona horaria America/Asuncion.\n\n### Roles\n- **`admin`**: la propietaria, Sra. Mónica. Su usuario `admin@meninacoiffure.com` está vinculado a su ficha de\n  personal porque también atiende clientes. Acceso total.\n- **`profesional`**: por ejemplo Carla (`carla@meninacoiffure.com`). Solo ve y opera **su propia agenda**: el listado\n  de reservas le devuelve solo las suyas y sobre reservas ajenas recibe 403. No accede a rutas de administración.\n  Además, la dueña le habilita o quita **permisos** desde Configuración (`/api/configuracion/permisos`); por defecto\n  están todos habilitados. Sin el permiso necesario la API responde **403** \"La administración no te habilitó para\n  esta acción.\":\n  - `puede_crear_reservas`: `POST /api/reservas`, `POST /api/reservas/{id}/servicios`, `GET /api/disponibilidad` y\n    reprogramar en `PUT /api/reservas/{id}` (fecha, horas, cliente, domicilio, descuento o `fuera_de_horario`).\n  - `puede_cambiar_estado`: `PUT /api/reservas/{id}` con un `estado` distinto y `DELETE /api/reservas/{id}`.\n  - `puede_reservar_fuera_de_horario`: crear o marcar una reserva con `fuera_de_horario = true`.\n  - `puede_ver_clientes`: ficha, edición, preferencias e historial de clientes. El listado (`GET /api/clientes`) y el\n    alta (`POST /api/clientes`) se permiten con este permiso **o** con `puede_crear_reservas`.\n- **`cliente`**: reservado para el futuro (la clientela todavía no usa el sistema); hoy recibe 403 en toda ruta\n  protegida.\n\nUsuarios de prueba (contraseña `password123`): `admin@meninacoiffure.com` y `carla@meninacoiffure.com`.\n\n### Proveedor de login (`AUTH_PROVEEDOR`)\n- **`local`** (por defecto): `POST /api/auth/login` con correo y contraseña.\n- **`keycloak`**: el login se delega en Keycloak (OpenID Connect, Authorization Code + PKCE S256) por\n  `GET /auth/keycloak/redirigir` y `GET /auth/keycloak/callback`; `POST /api/auth/login` responde **404**.\n  La dueña y el equipo se vinculan por correo verificado y conservan rol y permisos; una persona nueva\n  entra con rol `cliente`. `POST /api/auth/logout` devuelve `url_cierre` para cerrar también la sesión de Keycloak.\n\n### Autenticación y \"Try it out\"\nLa API usa la **sesión de Laravel** (cookie `laravel_session`, sesión guardada en PostgreSQL), no tokens.\nPúblicas: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, la consulta del catálogo\n(`GET /api/servicios`, `GET /api/servicios/{servicio}`, `GET /api/categorias-servicio`,\n`GET /api/categorias-servicio/{categorias_servicio}`) y lo que usa la página pública del salón (`/salon`):\n`GET /api/horarios-atencion` y `GET /api/promociones`. Todo lo demás exige sesión (**401** sin ella) y un rol del\nsalón (**403** si el rol no corresponde; varias rutas son solo `admin`).\n\n> Antes de usar **\"Try it out\"** en rutas protegidas, inicia sesión en [/login](/login) **en el mismo navegador**\n> (o ejecuta aquí `POST /api/auth/login`, que está en el mismo origen) y vuelve a esta página: el navegador envía la\n> cookie `laravel_session` solo. El esquema `cookieAuth` de \"Authorize\" es informativo; Swagger UI no puede fijar\n> cookies por sí mismo.\n\n**CSRF:** las rutas `api/*` están excluidas de la verificación CSRF (`bootstrap/app.php`), así que los métodos de\nescritura (POST/PUT/DELETE) **no** necesitan la cabecera `X-XSRF-TOKEN`; basta la cookie de sesión.\n\nErrores con formato JSON estándar de Laravel: `{\"message\": \"...\"}` (401/403/404) y\n`{\"message\": \"...\", \"errors\": {\"campo\": [\"...\"]}}` (422)."
+    "description": "API REST de **Menina Coiffure**, centro familiar de **peluquería y estética** de Villa Elisa (Paraguay): peluquería\n(cortes, brushing, peinados), colorimetría (tintes, mechas, balayage), tratamientos capilares y estética (depilación,\nlimpieza facial, maquillaje social), en el salón y a domicilio. Laravel 13 + PostgreSQL 18 + Vue/Inertia.\n\nMontos en **guaraníes (PYG)**, sin decimales en la práctica (los campos decimales de la base se serializan como\ntexto, por ejemplo `\"70000.00\"`; los montos calculados, como número). Fechas `YYYY-MM-DD`, horas `HH:MM[:SS]`,\nzona horaria America/Asuncion.\n\n### Roles\n- **`admin`**: la propietaria, Sra. Mónica. Su usuario `admin@meninacoiffure.com` está vinculado a su ficha de\n  personal porque también atiende clientes. Acceso total.\n- **`profesional`**: por ejemplo Carla (`carla@meninacoiffure.com`). Solo ve y opera **su propia agenda**: el listado\n  de reservas le devuelve solo las suyas y sobre reservas ajenas recibe 403. No accede a rutas de administración.\n  Además, la dueña le habilita o quita **permisos** desde Configuración (`/api/configuracion/permisos`); por defecto\n  están todos habilitados. Sin el permiso necesario la API responde **403** \"La administración no te habilitó para\n  esta acción.\":\n  - `puede_crear_reservas`: `POST /api/reservas`, `POST /api/reservas/{id}/servicios`, `GET /api/disponibilidad` y\n    reprogramar en `PUT /api/reservas/{id}` (fecha, horas, cliente, domicilio, descuento o `fuera_de_horario`).\n  - `puede_cambiar_estado`: `PUT /api/reservas/{id}` con un `estado` distinto y `DELETE /api/reservas/{id}`.\n  - `puede_reservar_fuera_de_horario`: crear o marcar una reserva con `fuera_de_horario = true`.\n  - `puede_ver_clientes`: ficha, edición, preferencias e historial de clientes. El listado (`GET /api/clientes`) y el\n    alta (`POST /api/clientes`) se permiten con este permiso **o** con `puede_crear_reservas`.\n- **`cliente`**: una clienta con cuenta (entra con Keycloak o, con login local, con contraseña). Solo accede a\n  `/api/mi-cuenta/*`: ve sus citas y sus pedidos y pide citas nuevas. Cualquier otra ruta protegida responde 403.\n\nUsuarios de prueba (contraseña `password123`): `admin@meninacoiffure.com`, `carla@meninacoiffure.com` y la clienta `clienta@meninacoiffure.com`.\n\n### Proveedor de login (`AUTH_PROVEEDOR`)\n- **`local`** (por defecto): `POST /api/auth/login` con correo y contraseña.\n- **`keycloak`**: el login se delega en Keycloak (OpenID Connect, Authorization Code + PKCE S256) por\n  `GET /auth/keycloak/redirigir` y `GET /auth/keycloak/callback`; `POST /api/auth/login` responde **404**.\n  La dueña y el equipo se vinculan por correo verificado y conservan rol y permisos; una persona nueva\n  entra con rol `cliente`. `POST /api/auth/logout` devuelve `url_cierre` para cerrar también la sesión de Keycloak y volver a `/login`.\n\n### Autenticación y \"Try it out\"\nLa API usa la **sesión de Laravel** (cookie `laravel_session`, sesión guardada en PostgreSQL), no tokens.\nPúblicas: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, la consulta del catálogo\n(`GET /api/servicios`, `GET /api/servicios/{servicio}`, `GET /api/categorias-servicio`,\n`GET /api/categorias-servicio/{categorias_servicio}`) y lo que usa la página pública del salón (`/salon`):\n`GET /api/horarios-atencion` y `GET /api/promociones`. Todo lo demás exige sesión (**401** sin ella) y un rol del\nsalón (**403** si el rol no corresponde; varias rutas son solo `admin`).\n\n> Antes de usar **\"Try it out\"** en rutas protegidas, inicia sesión en [/login](/login) **en el mismo navegador**\n> (o ejecuta aquí `POST /api/auth/login`, que está en el mismo origen) y vuelve a esta página: el navegador envía la\n> cookie `laravel_session` solo. El esquema `cookieAuth` de \"Authorize\" es informativo; Swagger UI no puede fijar\n> cookies por sí mismo.\n\n**CSRF:** las rutas `api/*` están excluidas de la verificación CSRF (`bootstrap/app.php`), así que los métodos de\nescritura (POST/PUT/DELETE) **no** necesitan la cabecera `X-XSRF-TOKEN`; basta la cookie de sesión.\n\nErrores con formato JSON estándar de Laravel: `{\"message\": \"...\"}` (401/403/404) y\n`{\"message\": \"...\", \"errors\": {\"campo\": [\"...\"]}}` (422)."
   },
   "servers": [
     {
@@ -68,6 +68,18 @@
     {
       "name": "Configuración",
       "description": "Permisos de cada empleada: la dueña decide qué puede hacer cada profesional en el sistema."
+    },
+    {
+      "name": "Mi cuenta",
+      "description": "Lo que ve y pide una clienta con cuenta: sus citas y sus pedidos de cita. La clienta no agenda sola: pide y el salón confirma."
+    },
+    {
+      "name": "Solicitudes de cita",
+      "description": "Bandeja de la dueña: convierte cada pedido en una reserva (con todas las reglas de `POST /api/reservas`) o lo rechaza con un motivo que la clienta ve."
+    },
+    {
+      "name": "Días sin atención",
+      "description": "Días puntuales en que el salón no trabaja (\"este miércoles no abrimos\"), sin cambiar el horario semanal. Ese día no hay horarios ni se agenda fuera de horario."
     }
   ],
   "paths": {
@@ -233,7 +245,7 @@
           "Autenticación"
         ],
         "summary": "Cerrar sesión",
-        "description": "HU-25. Cierra la sesión activa, invalida la sesión y regenera el token CSRF. Responde 200 aunque no haya sesión.\n\nSi la sesión se inició con Keycloak, `url_cierre` trae la dirección del `end_session_endpoint` (con\n`id_token_hint` y `post_logout_redirect_uri=/salon`) a la que el frontend redirige para cerrar también la sesión\nde Keycloak. Con login local es `null`.\n\n**Acceso:** público (no requiere sesión).",
+        "description": "HU-25. Cierra la sesión activa, invalida la sesión y regenera el token CSRF. Responde 200 aunque no haya sesión.\n\nSi la sesión se inició con Keycloak, `url_cierre` trae la dirección del `end_session_endpoint` (con\n`id_token_hint` y `post_logout_redirect_uri=/login`) a la que el frontend redirige para cerrar también la sesión\nde Keycloak. Con login local es `null`.\n\n**Acceso:** público (no requiere sesión).",
         "security": [],
         "responses": {
           "200": {
@@ -251,7 +263,7 @@
                       "type": "string",
                       "format": "uri",
                       "nullable": true,
-                      "example": "http://localhost:8080/realms/menina/protocol/openid-connect/logout?id_token_hint=eyJ...&post_logout_redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Fsalon"
+                      "example": "http://localhost:8080/realms/menina/protocol/openid-connect/logout?id_token_hint=eyJ...&post_logout_redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Flogin"
                     }
                   },
                   "required": [
@@ -379,7 +391,18 @@
           "404": {
             "description": "El proveedor de login es local"
           }
-        }
+        },
+        "parameters": [
+          {
+            "name": "registro",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            },
+            "description": "Con `1` abre directo el formulario de crear cuenta (`/protocol/openid-connect/registrations`)."
+          }
+        ]
       }
     },
     "/auth/keycloak/callback": {
@@ -388,7 +411,7 @@
           "Autenticación"
         ],
         "summary": "Vuelta desde Keycloak",
-        "description": "Keycloak redirige acá con `code` y `state`. Laravel compara el `state` con el de la sesión (protección\nCSRF), canjea el código servidor a servidor (`code_verifier` + `client_secret`), pide `userinfo` y busca\no crea la cuenta:\n\n| Situación | Resultado |\n|---|---|\n| Cuenta ya vinculada (`keycloak_id = sub`) | Inicia sesión con esa cuenta |\n| Mismo correo, verificado en Keycloak | Guarda el `sub` y conserva rol y permisos |\n| Mismo correo **sin verificar** | Rechaza (evita apropiarse de una cuenta del equipo) |\n| Persona nueva | Crea la cuenta con rol `cliente`, sin contraseña local |\n\nRedirige a `/dashboard` (equipo) o `/salon` (clienta). Ante cualquier error vuelve a `/login` con un aviso.\n\n**Acceso:** sin sesión. Solo existe con `AUTH_PROVEEDOR=keycloak` (si no, 404).",
+        "description": "Keycloak redirige acá con `code` y `state`. Laravel compara el `state` con el de la sesión (protección\nCSRF), canjea el código servidor a servidor (`code_verifier` + `client_secret`), pide `userinfo` y busca\no crea la cuenta:\n\n| Situación | Resultado |\n|---|---|\n| Cuenta ya vinculada (`keycloak_id = sub`) | Inicia sesión con esa cuenta |\n| Mismo correo, verificado en Keycloak | Guarda el `sub` y conserva rol y permisos |\n| Mismo correo **sin verificar** | Rechaza (evita apropiarse de una cuenta del equipo) |\n| Persona nueva | Crea la cuenta con rol `cliente`, sin contraseña local, y su ficha en `clientes` (reutiliza la que cargó la dueña si el correo coincide y está verificado) |\n\nRedirige a `/dashboard` (equipo) o `/mi-cuenta` (clienta). Ante cualquier error vuelve a `/login` con un aviso.\n\n**Acceso:** sin sesión. Solo existe con `AUTH_PROVEEDOR=keycloak` (si no, 404).",
         "security": [],
         "parameters": [
           {
@@ -412,7 +435,7 @@
         ],
         "responses": {
           "302": {
-            "description": "Sesión iniciada (`/dashboard` o `/salon`) o error (`/login`)"
+            "description": "Sesión iniciada (`/dashboard` o `/mi-cuenta`) o error (`/login`)"
           },
           "404": {
             "description": "El proveedor de login es local"
@@ -581,6 +604,12 @@
                   "activo": {
                     "type": "boolean",
                     "default": true
+                  },
+                  "especialidad_id": {
+                    "type": "integer",
+                    "nullable": true,
+                    "example": 2,
+                    "description": "Especialidad que pide el servicio: la agenda avisa si la profesional no la tiene"
                   }
                 },
                 "required": [
@@ -761,6 +790,12 @@
                   },
                   "activo": {
                     "type": "boolean"
+                  },
+                  "especialidad_id": {
+                    "type": "integer",
+                    "nullable": true,
+                    "example": 2,
+                    "description": "Especialidad que pide el servicio: la agenda avisa si la profesional no la tiene"
                   }
                 }
               },
@@ -3532,7 +3567,7 @@
           "Reservas"
         ],
         "summary": "Modificar una reserva",
-        "description": "HU-04 / HU-12 / HU-13. **Modifica** la reserva: todos los campos son opcionales y solo cambia lo que se envía.\nSi cambian fecha, horas, profesional, domicilio, traslado o `fuera_de_horario`, se revalidan las reglas (excluyendo\nla propia reserva del solapamiento). Si cambian los servicios, el front debe enviar también la nueva `hora_fin`.\n\n**Servicios:** `servicios` (lista de ids, mínimo uno, sin repetidos) **reemplaza** las líneas de la reserva. Los\nservicios que ya estaban conservan su precio congelado y su cantidad (Regla 4); los nuevos toman el precio vigente a\nla fecha de la cita (Reglas 3 y 4: 422 `servicio_id` si está inactivo, 422 `precio` si no tiene precio); los que no\nvienen se quitan. Si lo ya pagado supera el nuevo total responde 422 `servicios` y no se cambia nada.\n\n**Estados:** `pendiente → confirmada | completada | no_asistio | cancelada`; `confirmada → completada | no_asistio |\ncancelada`. `completada` y `no_asistio` solo después de la hora de inicio. Una reserva completada, cancelada o\nno_asistio ya no se modifica (422 `estado`). Pasar a `cancelada` por PUT sigue las reglas de `DELETE`.\n\n**Al pasar a `completada`** se emite `ReservaCompletada`: se registra la visita en el historial del cliente\n(`fecha_realizada` = hoy, con las `notas` enviadas, máx. 2000).\n\nUn profesional no puede reasignar la reserva a otra persona (403 \"Solo la administración puede reasignar una\nreserva a otro profesional.\").\n\n**Reglas de negocio** (`ReservaService`):\n\n- **Agenda propia:** un profesional solo ve y opera su agenda. Sobre una reserva ajena responde **403**\n  \"Esta reserva pertenece a la agenda de otro profesional.\"; no puede crear en otra agenda ni reasignar a otro profesional (403).\n- **Regla 1, sin solapamiento:** el profesional no puede tener otra reserva pendiente, confirmada o completada que\n  se cruce. Se comparan bloques `[inicio − minutos_traslado, fin + minutos_traslado]`, de la cita nueva y de las\n  existentes (422 `horario`).\n- **Regla 2, horario del salón:** las profesionales trabajan bajo demanda (sin turnos fijos). Toda cita, en el\n  salón o a domicilio, debe caber completa en el horario de atención del salón (`horarios_atencion`, franjas\n  contiguas unidas). Si el salón no abre ese día: 422 `horario` \"El salón no atiende ese día…\"; si no cabe:\n  422 `horario` \"La cita queda fuera del horario del salón…\".\n- **Fuera de horario:** con `fuera_de_horario = true` la dueña autoriza atender fuera del horario del salón (por\n  ejemplo, un sábado o a la noche). Solo se exige la jornada máxima de **06:00 a 22:00** (422 `horario`) y la\n  Regla 1. En `PUT`, si no se envía, la reserva conserva la marca que tenía.\n- **Reglas 3 y 4:** solo servicios activos (422 `servicio_id`) y con precio vigente en la fecha de la cita\n  (422 `precio`); el precio queda **congelado** en `detalle_reserva.precio_aplicado`.\n- **Horario pasado:** se tolera registrar una cita que empezó hace hasta **30 minutos** (clientes por orden de\n  llegada); más atrás responde 422 `horario` \"El horario seleccionado ya pasó…\".\n- **Profesional activo:** 422 `personal_id` si está inactivo.\n- **Domicilio (HU-14):** `a_domicilio = true` exige `direccion_domicilio`. `minutos_traslado` (0–240) es el viaje\n  antes y después de la cita: ocupa la agenda de la profesional (Regla 1). Solo aplica a domicilio: en el salón se\n  guarda 0 (CHECK `reservas_traslado_solo_domicilio`). La cita en sí respeta el horario del salón; el viaje puede\n  quedar fuera de él (por ejemplo, salir 07:30 para una cita a las 08:00).\n- **Descuento (HU-22):** debe estar activo y vigente en la fecha de la cita (422 `descuento_id`).\n- Las respuestas incluyen `subtotal`, `monto_descuento`, `total`, `pagado` y `saldo` (calculados, en guaraníes) y\n  las relaciones `cliente`, `personal`, `detalles.servicio`, `descuento` y `pagos`.\n\n**Permiso:** depende de lo que cambia: un `estado` distinto pide `puede_cambiar_estado`; fecha, horas, cliente,\ndomicilio, traslado, servicios, descuento o `fuera_de_horario` piden `puede_crear_reservas`; marcar `fuera_de_horario = true` en una\nreserva que no lo tenía pide además `puede_reservar_fuera_de_horario`. Las `notas` no piden permiso propio.\n\n**Acceso:** `admin` o `profesional`.",
+        "description": "HU-04 / HU-12 / HU-13. **Modifica** la reserva: todos los campos son opcionales y solo cambia lo que se envía.\nSi cambian fecha, horas, profesional, domicilio, traslado o `fuera_de_horario`, se revalidan las reglas (excluyendo\nla propia reserva del solapamiento). Si cambian los servicios, el front debe enviar también la nueva `hora_fin`.\n\n**Servicios:** `servicios` (lista de ids, mínimo uno, sin repetidos) **reemplaza** las líneas de la reserva. Los\nservicios que ya estaban conservan su precio congelado y su cantidad (Regla 4); los nuevos toman el precio vigente a\nla fecha de la cita (Reglas 3 y 4: 422 `servicio_id` si está inactivo, 422 `precio` si no tiene precio); los que no\nvienen se quitan. Si lo ya pagado supera el nuevo total responde 422 `servicios` y no se cambia nada.\n\n**Estados:** `pendiente → confirmada | completada | no_asistio | cancelada`; `confirmada → completada | no_asistio |\ncancelada`; `no_asistio → pendiente | confirmada | completada` (corregir una ausencia). `completada` y `no_asistio`\nsolo después de la hora de inicio. **Regla 5:** solo una reserva `completada` o `cancelada` ya no se modifica\n(422 `estado`); las demás se modifican en cualquier momento. Pasar a `cancelada` por PUT sigue las reglas de `DELETE`.\n\n**Citas pasadas:** una cita que todavía no empezó solo se reprograma hacia adelante (422 `horario`). Si ya empezó o\npasó, se puede corregir con la fecha y hora reales, también en el pasado (siguen valiendo las Reglas 1 y 2).\nReprogramar una `no_asistio` la vuelve `pendiente`; si vuelve a ocupar la agenda se revisa la Regla 1.\n\n**Al pasar a `completada`** se emite `ReservaCompletada`: se registra la visita en el historial del cliente\n(`fecha_realizada` = hoy, con las `notas` enviadas, máx. 2000).\n\nUn profesional no puede reasignar la reserva a otra persona (403 \"Solo la administración puede reasignar una\nreserva a otro profesional.\").\n\n**Reglas de negocio** (`ReservaService`):\n\n- **Agenda propia:** un profesional solo ve y opera su agenda. Sobre una reserva ajena responde **403**\n  \"Esta reserva pertenece a la agenda de otro profesional.\"; no puede crear en otra agenda ni reasignar a otro profesional (403).\n- **Regla 1, sin solapamiento:** el profesional no puede tener otra reserva pendiente, confirmada o completada que\n  se cruce. Se comparan bloques `[inicio − minutos_traslado, fin + minutos_traslado]`, de la cita nueva y de las\n  existentes (422 `horario`).\n- **Regla 2, horario del salón:** las profesionales trabajan bajo demanda (sin turnos fijos). Toda cita, en el\n  salón o a domicilio, debe caber completa en el horario de atención del salón (`horarios_atencion`, franjas\n  contiguas unidas). Si el salón no abre ese día: 422 `horario` \"El salón no atiende ese día…\"; si no cabe:\n  422 `horario` \"La cita queda fuera del horario del salón…\".\n- **Día sin atención:** si la dueña cerró ese día puntual (`/api/cierres-salon`), no se agenda nada, ni fuera de horario (422 `horario` \"El salón no trabaja ese día…\").\n- **Fuera de horario:** con `fuera_de_horario = true` la dueña autoriza atender fuera del horario del salón (por\n  ejemplo, un sábado o a la noche). Solo se exige la jornada máxima de **06:00 a 22:00** (422 `horario`) y la\n  Regla 1. En `PUT`, si no se envía, la reserva conserva la marca que tenía.\n- **Reglas 3 y 4:** solo servicios activos (422 `servicio_id`) y con precio vigente en la fecha de la cita\n  (422 `precio`); el precio queda **congelado** en `detalle_reserva.precio_aplicado`.\n- **Horario pasado:** se tolera registrar una cita que empezó hace hasta **30 minutos** (clientes por orden de\n  llegada); más atrás responde 422 `horario` \"El horario seleccionado ya pasó…\".\n- **Profesional activo:** 422 `personal_id` si está inactivo.\n- **Domicilio (HU-14):** `a_domicilio = true` exige `direccion_domicilio`. `minutos_traslado` (0–240) es el viaje\n  antes y después de la cita: ocupa la agenda de la profesional (Regla 1). Solo aplica a domicilio: en el salón se\n  guarda 0 (CHECK `reservas_traslado_solo_domicilio`). La cita en sí respeta el horario del salón; el viaje puede\n  quedar fuera de él (por ejemplo, salir 07:30 para una cita a las 08:00).\n- **Descuento (HU-22):** debe estar activo y vigente en la fecha de la cita (422 `descuento_id`). En `PUT`, `descuento_id: null`\n  lo quita; si con la promoción el total queda por debajo de lo ya pagado responde 422 `descuento_id`.\n- Las respuestas incluyen `subtotal`, `monto_descuento`, `total`, `pagado` y `saldo` (calculados, en guaraníes) y\n  las relaciones `cliente`, `personal`, `detalles.servicio`, `descuento` y `pagos`.\n\n**Permiso:** depende de lo que cambia: un `estado` distinto pide `puede_cambiar_estado`; fecha, horas, cliente,\ndomicilio, traslado, servicios, descuento o `fuera_de_horario` piden `puede_crear_reservas`; marcar `fuera_de_horario = true` en una\nreserva que no lo tenía pide además `puede_reservar_fuera_de_horario`. Las `notas` no piden permiso propio.\n\n**Acceso:** `admin` o `profesional`.",
         "requestBody": {
           "required": true,
           "content": {
@@ -3927,7 +3962,7 @@
             "name": "excluir_reserva_id",
             "in": "query",
             "required": false,
-            "description": "Al modificar una reserva: su propio horario no cuenta como ocupado.",
+            "description": "Al modificar una reserva, su propio horario no cuenta como ocupado. Si esa reserva ya empezó, los horarios pasados no se marcan como `pasado` (se puede corregir el registro).",
             "schema": {
               "type": "integer"
             }
@@ -4739,7 +4774,7 @@
           "Descuentos"
         ],
         "summary": "Crear descuento",
-        "description": "HU-22.\n\n**Acceso:** solo `admin`.",
+        "description": "HU-22.\n\n**Acceso:** solo `admin`.\n\n**Días de la semana:** `dias_semana` (por ejemplo `[3]` para \"los miércoles\"). Vacío o sin enviar al crear: todos los días. En `PUT`, si no se envía, se conservan los que tenía.",
         "requestBody": {
           "required": true,
           "content": {
@@ -4783,6 +4818,19 @@
                   "activo": {
                     "type": "boolean",
                     "default": true
+                  },
+                  "dias_semana": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 7
+                    },
+                    "uniqueItems": true,
+                    "example": [
+                      3
+                    ],
+                    "description": "Días en que rige (ISO: 1 = lunes … 7 = domingo). Vacío: todos los días."
                   }
                 },
                 "required": [
@@ -4851,7 +4899,7 @@
           "Descuentos"
         ],
         "summary": "Promociones vigentes (público)",
-        "description": "HU-22. Promociones que se pueden aprovechar **hoy**: activas y con la fecha de hoy dentro de su vigencia\n(`fecha_inicio` y `fecha_fin` vacías no limitan). Ordenadas por nombre. Sin datos internos (no incluye `activo` ni\n`reservas_count`). Si no hay ninguna, `data` viene vacío y `message` trae el aviso que muestra la página pública:\n\"No hay promociones vigentes por el momento.\".\n\n**Acceso:** público (no requiere sesión).",
+        "description": "Página pública del salón: promociones activas y dentro de su vigencia. Las de ciertos días (`dias_semana`, por ejemplo \"los miércoles\") se anuncian toda la semana; al aplicarlas a una reserva se exige que la cita caiga en uno de sus días.\n\n**Acceso:** público.",
         "security": [],
         "responses": {
           "200": {
@@ -4977,7 +5025,7 @@
           "Descuentos"
         ],
         "summary": "Actualizar descuento",
-        "description": "HU-22. Campos opcionales; las reglas cruzadas (porcentaje ≤ 100, fin ≥ inicio) se validan contra el resultado final.\n\n**Acceso:** solo `admin`.",
+        "description": "HU-22. Campos opcionales; las reglas cruzadas (porcentaje ≤ 100, fin ≥ inicio) se validan contra el resultado final.\n\n**Acceso:** solo `admin`.\n\n**Días de la semana:** `dias_semana` (por ejemplo `[3]` para \"los miércoles\"). Vacío o sin enviar al crear: todos los días. En `PUT`, si no se envía, se conservan los que tenía.",
         "requestBody": {
           "required": true,
           "content": {
@@ -5021,6 +5069,19 @@
                   "activo": {
                     "type": "boolean",
                     "default": true
+                  },
+                  "dias_semana": {
+                    "type": "array",
+                    "items": {
+                      "type": "integer",
+                      "minimum": 1,
+                      "maximum": 7
+                    },
+                    "uniqueItems": true,
+                    "example": [
+                      3
+                    ],
+                    "description": "Días en que rige (ISO: 1 = lunes … 7 = domingo). Vacío: todos los días."
                   }
                 }
               },
@@ -5796,6 +5857,952 @@
           }
         }
       }
+    },
+    "/api/mi-cuenta": {
+      "get": {
+        "tags": [
+          "Mi cuenta"
+        ],
+        "summary": "Mi ficha",
+        "description": "Datos de la ficha vinculada a la cuenta. Teléfono, dirección y ubicación son los que dejó en su último pedido: el formulario de pedido se completa solo con ellos.\n\n**Acceso:** `cliente` (siempre sobre la ficha vinculada a la sesión; el equipo recibe 403).",
+        "responses": {
+          "200": {
+            "description": "Ficha",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "nombre": {
+                          "type": "string"
+                        },
+                        "apellido": {
+                          "type": "string"
+                        },
+                        "email": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "telefono": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "direccion_domicilio": {
+                          "type": "string",
+                          "nullable": true
+                        },
+                        "latitud": {
+                          "type": "number",
+                          "nullable": true,
+                          "example": -25.3676
+                        },
+                        "longitud": {
+                          "type": "number",
+                          "nullable": true,
+                          "example": -57.5927
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "nombre": "Clienta",
+                    "apellido": "Demo",
+                    "email": "clienta@meninacoiffure.com",
+                    "telefono": "0981000111",
+                    "direccion_domicilio": "Calle Las Residentas 456, Villa Elisa (portón verde)",
+                    "latitud": -25.3676,
+                    "longitud": -57.5927
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "description": "La cuenta no tiene ficha de clienta vinculada"
+          }
+        }
+      }
+    },
+    "/api/mi-cuenta/citas": {
+      "get": {
+        "tags": [
+          "Mi cuenta"
+        ],
+        "summary": "Mis citas",
+        "description": "`proximas`: pendientes o confirmadas desde hoy, de la más cercana a la más lejana. `pasadas`: las anteriores a hoy o ya cerradas (últimas 10). Sin pagos ni datos internos.\n\n**Acceso:** `cliente` (siempre sobre la ficha vinculada a la sesión; el equipo recibe 403).",
+        "responses": {
+          "200": {
+            "description": "Citas",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "proximas": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/CitaDeClienta"
+                          }
+                        },
+                        "pasadas": {
+                          "type": "array",
+                          "items": {
+                            "$ref": "#/components/schemas/CitaDeClienta"
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "proximas": [
+                      {
+                        "id": 57,
+                        "fecha": "2026-10-27",
+                        "hora_inicio": "10:00",
+                        "hora_fin": "11:00",
+                        "estado": "confirmada",
+                        "a_domicilio": false,
+                        "direccion_domicilio": null,
+                        "profesional": "Carla",
+                        "servicios": [
+                          {
+                            "id": 1,
+                            "nombre": "Corte de dama",
+                            "activo": true
+                          }
+                        ],
+                        "total": 70000
+                      }
+                    ],
+                    "pasadas": []
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      }
+    },
+    "/api/mi-cuenta/solicitudes": {
+      "get": {
+        "tags": [
+          "Mi cuenta"
+        ],
+        "summary": "Mis pedidos de cita",
+        "description": "Los últimos 20 pedidos con su estado, el motivo si fue rechazado y la cita asignada si fue aceptado.\n\n**Acceso:** `cliente` (siempre sobre la ficha vinculada a la sesión; el equipo recibe 403).",
+        "responses": {
+          "200": {
+            "description": "Pedidos",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SolicitudDeClienta"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": 1,
+                      "fecha_preferida": "2026-10-27",
+                      "franja": "manana",
+                      "a_domicilio": false,
+                      "direccion_domicilio": null,
+                      "comentario": "Si se puede, temprano.",
+                      "estado": "pendiente",
+                      "motivo_rechazo": null,
+                      "cita_asignada": null,
+                      "creada": "2026-10-23 18:40:00",
+                      "servicios": [
+                        {
+                          "id": 1,
+                          "nombre": "Corte de dama",
+                          "activo": true
+                        },
+                        {
+                          "id": 2,
+                          "nombre": "Nutrición e hidratación capilar",
+                          "activo": true
+                        }
+                      ]
+                    }
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Mi cuenta"
+        ],
+        "summary": "Pedir una cita (uno o varios servicios)",
+        "description": "Crea un pedido `pendiente` con día y **hora** elegidos por la clienta. No ocupa la agenda: la dueña asigna la profesional al aceptarlo. Si al enviar ese horario ya no lo puede atender nadie responde 422 en `hora_preferida`. Teléfono, dirección (si es a domicilio) y ubicación quedan guardados en la ficha para el próximo pedido. A domicilio alcanza con la dirección escrita **o** la ubicación del celular; sin ninguna de las dos responde 422 en `direccion_domicilio`. Al crearse el pedido se avisa a la dueña por Telegram (si está configurado; un fallo de Telegram no afecta al pedido). Como máximo 3 pedidos pendientes por clienta (422 en `servicios`).\n\n**Acceso:** `cliente` (siempre sobre la ficha vinculada a la sesión; el equipo recibe 403).",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolicitudInput"
+              },
+              "example": {
+                "fecha_preferida": "2026-10-27",
+                "a_domicilio": false,
+                "comentario": "Si se puede, temprano.",
+                "telefono": "0981555123",
+                "servicios": [
+                  1,
+                  2
+                ],
+                "hora_preferida": "10:00",
+                "fuera_de_horario": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Pedido recibido",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SolicitudDeClienta"
+                    }
+                  }
+                },
+                "example": {
+                  "message": "Recibimos tu pedido. El salón te confirmará el horario.",
+                  "data": {
+                    "id": 1,
+                    "fecha_preferida": "2026-10-27",
+                    "franja": "manana",
+                    "a_domicilio": false,
+                    "direccion_domicilio": null,
+                    "comentario": "Si se puede, temprano.",
+                    "estado": "pendiente",
+                    "motivo_rechazo": null,
+                    "cita_asignada": null,
+                    "creada": "2026-10-23 18:40:00",
+                    "servicios": [
+                      {
+                        "id": 1,
+                        "nombre": "Corte de dama",
+                        "activo": true
+                      },
+                      {
+                        "id": 2,
+                        "nombre": "Nutrición e hidratación capilar",
+                        "activo": true
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        }
+      }
+    },
+    "/api/mi-cuenta/solicitudes/{solicitud}": {
+      "delete": {
+        "tags": [
+          "Mi cuenta"
+        ],
+        "summary": "Retirar un pedido",
+        "description": "Pasa a `cancelada` un pedido propio que sigue `pendiente` (no se borra). Uno ya respondido → 422; uno de otra clienta → 404, igual que si no existiera.\n\n**Acceso:** `cliente` (siempre sobre la ficha vinculada a la sesión; el equipo recibe 403).",
+        "parameters": [
+          {
+            "name": "solicitud",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "example": 1
+            },
+            "description": "ID de la solicitud de cita"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Pedido retirado",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SolicitudDeClienta"
+                    }
+                  }
+                },
+                "example": {
+                  "message": "Retiraste tu pedido.",
+                  "data": {
+                    "id": 1,
+                    "fecha_preferida": "2026-10-27",
+                    "franja": "manana",
+                    "a_domicilio": false,
+                    "direccion_domicilio": null,
+                    "comentario": "Si se puede, temprano.",
+                    "estado": "cancelada",
+                    "motivo_rechazo": null,
+                    "cita_asignada": null,
+                    "creada": "2026-10-23 18:40:00",
+                    "servicios": [
+                      {
+                        "id": 1,
+                        "nombre": "Corte de dama",
+                        "activo": true
+                      },
+                      {
+                        "id": 2,
+                        "nombre": "Nutrición e hidratación capilar",
+                        "activo": true
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        }
+      }
+    },
+    "/api/solicitudes-cita": {
+      "get": {
+        "tags": [
+          "Solicitudes de cita"
+        ],
+        "summary": "Bandeja de solicitudes",
+        "description": "Por defecto las `pendiente`, por fecha preferida. `pendientes` es el total de pendientes (para el contador del menú). Hasta 50 resultados.\n\n**Acceso:** solo `admin`.",
+        "parameters": [
+          {
+            "name": "estado",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "$ref": "#/components/schemas/EstadoSolicitud"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Solicitudes",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/SolicitudCita"
+                      }
+                    },
+                    "pendientes": {
+                      "type": "integer",
+                      "example": 2
+                    }
+                  }
+                },
+                "example": {
+                  "data": [],
+                  "pendientes": 2
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        }
+      }
+    },
+    "/api/solicitudes-cita/{solicitud}": {
+      "get": {
+        "tags": [
+          "Solicitudes de cita"
+        ],
+        "summary": "Ver una solicitud",
+        "description": "Con clienta (incluida su ubicación para \"Cómo llegar\"), servicios pedidos y reserva. `profesionales_libres` trae los ids de las profesionales libres ese día a la hora pedida, como sugerencia para agendar, primero las que tienen todas las especialidades que piden los servicios (vacío si ya fue respondida o si nadie está libre). La usa la pantalla de nueva reserva para precargar el pedido.\n\n**Acceso:** solo `admin`.",
+        "parameters": [
+          {
+            "name": "solicitud",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "example": 1
+            },
+            "description": "ID de la solicitud de cita"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Solicitud",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/SolicitudCita"
+                        },
+                        {
+                          "type": "object",
+                          "properties": {
+                            "profesionales_libres": {
+                              "type": "array",
+                              "items": {
+                                "type": "integer"
+                              }
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "id": 1
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/api/solicitudes-cita/{solicitud}/aceptar": {
+      "post": {
+        "tags": [
+          "Solicitudes de cita"
+        ],
+        "summary": "Aceptar y crear la reserva",
+        "description": "Recibe lo mismo que `POST /api/reservas` y crea la reserva con `ReservaService` (Reglas 1 a 5). `cliente_id` se toma siempre de la solicitud. Todo en una transacción con la solicitud bloqueada (`lockForUpdate`): si la reserva falla (choque de horario, fuera del horario del salón) la solicitud sigue `pendiente`. Una solicitud ya respondida → 422 en `estado`.\n\n**Acceso:** solo `admin`.",
+        "parameters": [
+          {
+            "name": "solicitud",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "example": 1
+            },
+            "description": "ID de la solicitud de cita"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ReservaInput"
+              },
+              "example": {
+                "cliente_id": 1,
+                "personal_id": 2,
+                "fecha": "2026-10-20",
+                "hora_inicio": "09:00",
+                "hora_fin": "12:00",
+                "servicios": [
+                  10
+                ],
+                "descuento_id": 1,
+                "estado": "confirmada",
+                "a_domicilio": false
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Reserva creada y solicitud aceptada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/Reserva"
+                    }
+                  }
+                },
+                "example": {
+                  "message": "Solicitud aceptada: la reserva quedó en la agenda.",
+                  "data": {
+                    "id": 58,
+                    "estado": "pendiente"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        }
+      }
+    },
+    "/api/solicitudes-cita/{solicitud}/rechazar": {
+      "post": {
+        "tags": [
+          "Solicitudes de cita"
+        ],
+        "summary": "Rechazar con motivo",
+        "description": "El motivo es obligatorio: la clienta lo ve en sus pedidos. Una solicitud ya respondida → 422.\n\n**Acceso:** solo `admin`.",
+        "parameters": [
+          {
+            "name": "solicitud",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "example": 1
+            },
+            "description": "ID de la solicitud de cita"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "motivo_rechazo": {
+                    "type": "string",
+                    "maxLength": 255
+                  }
+                },
+                "required": [
+                  "motivo_rechazo"
+                ]
+              },
+              "example": {
+                "motivo_rechazo": "Ese día el salón está cerrado. ¿Te sirve el martes?"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Solicitud rechazada",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": {
+                      "type": "string"
+                    },
+                    "data": {
+                      "$ref": "#/components/schemas/SolicitudCita"
+                    }
+                  }
+                },
+                "example": {
+                  "message": "Solicitud rechazada.",
+                  "data": {
+                    "id": 1,
+                    "estado": "rechazada"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        }
+      }
+    },
+    "/api/mi-cuenta/horarios": {
+      "get": {
+        "tags": [
+          "Mi cuenta"
+        ],
+        "summary": "Horarios libres para pedir una cita",
+        "description": "Un horario está `disponible` si **alguna** profesional activa está libre (Regla 1, sin traslado: lo define la dueña al aceptar). No dice quién atiende ni por qué un horario no está libre. Si el salón no abre ese día, `salon_abre` es `false` y, sin `fuera_de_horario`, no hay horarios; con `fuera_de_horario=1` se ofrece la jornada de 06:00 a 22:00, a confirmar por la dueña. Si la dueña cerró ese día puntual, `cerrado` trae el motivo y no hay horarios, tampoco fuera de horario.\n\n**Acceso:** `cliente`.",
+        "parameters": [
+          {
+            "name": "fecha",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "servicios[]",
+            "in": "query",
+            "required": true,
+            "style": "form",
+            "explode": true,
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "integer"
+              }
+            },
+            "description": "Servicios elegidos (la duración es la suma)"
+          },
+          {
+            "name": "a_domicilio",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          },
+          {
+            "name": "fuera_de_horario",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Horarios",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "object",
+                      "properties": {
+                        "fecha": {
+                          "type": "string",
+                          "format": "date"
+                        },
+                        "duracion_minutos": {
+                          "type": "integer"
+                        },
+                        "salon_abre": {
+                          "type": "boolean"
+                        },
+                        "fuera_de_horario": {
+                          "type": "boolean"
+                        },
+                        "franjas": {
+                          "type": "array",
+                          "items": {
+                            "type": "array",
+                            "items": {
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "horarios": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "hora": {
+                                "type": "string",
+                                "example": "10:00"
+                              },
+                              "disponible": {
+                                "type": "boolean"
+                              }
+                            }
+                          }
+                        },
+                        "cerrado": {
+                          "type": "object",
+                          "nullable": true,
+                          "properties": {
+                            "motivo": {
+                              "type": "string",
+                              "nullable": true
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": {
+                    "fecha": "2026-10-26",
+                    "duracion_minutos": 60,
+                    "salon_abre": true,
+                    "fuera_de_horario": false,
+                    "franjas": [
+                      [
+                        "08:00",
+                        "17:00"
+                      ]
+                    ],
+                    "horarios": [
+                      {
+                        "hora": "08:00",
+                        "disponible": true
+                      },
+                      {
+                        "hora": "08:30",
+                        "disponible": false
+                      }
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        }
+      }
+    },
+    "/api/cierres-salon": {
+      "get": {
+        "tags": [
+          "Días sin atención"
+        ],
+        "summary": "Próximos días sin atención",
+        "description": "De hoy en adelante (hasta 60).\n\n**Acceso:** público.",
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Cierres",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "data": {
+                      "type": "array",
+                      "items": {
+                        "$ref": "#/components/schemas/CierreSalon"
+                      }
+                    }
+                  }
+                },
+                "example": {
+                  "data": [
+                    {
+                      "id": 1,
+                      "fecha": "2026-10-28",
+                      "motivo": "Capacitación del equipo"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Días sin atención"
+        ],
+        "summary": "Cerrar un día puntual",
+        "description": "Marca un día (de hoy en adelante, uno por fecha) en que el salón no trabaja. No cancela las citas que ya hubiera: `citas_afectadas` cuenta las pendientes o confirmadas de ese día para que la dueña las reprograme.\n\n**Acceso:** solo `admin`.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "fecha"
+                ],
+                "properties": {
+                  "fecha": {
+                    "type": "string",
+                    "format": "date"
+                  },
+                  "motivo": {
+                    "type": "string",
+                    "maxLength": 120,
+                    "nullable": true
+                  }
+                }
+              },
+              "example": {
+                "fecha": "2026-10-28",
+                "motivo": "Capacitación del equipo"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Día cerrado",
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Listo. Ojo: ese día ya hay 2 cita(s) agendada(s); reprográmalas o avisa a las clientas.",
+                  "data": {
+                    "id": 1,
+                    "fecha": "2026-10-28",
+                    "motivo": "Capacitación del equipo"
+                  },
+                  "citas_afectadas": 2
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "422": {
+            "$ref": "#/components/responses/ValidationError"
+          }
+        }
+      }
+    },
+    "/api/cierres-salon/{cierre}": {
+      "delete": {
+        "tags": [
+          "Días sin atención"
+        ],
+        "summary": "Volver a abrir ese día",
+        "description": "Quita el cierre: ese día vuelve a regir el horario de siempre.\n\n**Acceso:** solo `admin`.",
+        "parameters": [
+          {
+            "name": "cierre",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Cierre quitado"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthenticated"
+          },
+          "403": {
+            "$ref": "#/components/responses/Forbidden"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
     }
   },
   "components": {
@@ -6140,6 +7147,25 @@
               }
             ],
             "description": "Presente cuando se carga la relación."
+          },
+          "especialidad_id": {
+            "type": "integer",
+            "nullable": true,
+            "example": 2,
+            "description": "Especialidad que pide el servicio: la agenda avisa si la profesional no la tiene"
+          },
+          "especialidad": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "nombre": {
+                "type": "string",
+                "example": "Colorimetría"
+              }
+            }
           }
         },
         "description": "Servicio tal como lo serializa el modelo."
@@ -6184,6 +7210,25 @@
             "type": "string",
             "format": "date",
             "nullable": true
+          },
+          "especialidad_id": {
+            "type": "integer",
+            "nullable": true,
+            "example": 2,
+            "description": "Especialidad que pide el servicio: la agenda avisa si la profesional no la tiene"
+          },
+          "especialidad": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "nombre": {
+                "type": "string",
+                "example": "Colorimetría"
+              }
+            }
           }
         }
       },
@@ -6225,6 +7270,25 @@
               "$ref": "#/components/schemas/PrecioServicio"
             },
             "description": "Solo en el detalle (GET)."
+          },
+          "especialidad_id": {
+            "type": "integer",
+            "nullable": true,
+            "example": 2,
+            "description": "Especialidad que pide el servicio: la agenda avisa si la profesional no la tiene"
+          },
+          "especialidad": {
+            "type": "object",
+            "nullable": true,
+            "properties": {
+              "id": {
+                "type": "integer"
+              },
+              "nombre": {
+                "type": "string",
+                "example": "Colorimetría"
+              }
+            }
           }
         }
       },
@@ -6401,6 +7465,18 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "direccion_domicilio": {
+            "type": "string",
+            "nullable": true
+          },
+          "latitud": {
+            "type": "number",
+            "nullable": true
+          },
+          "longitud": {
+            "type": "number",
+            "nullable": true
           }
         }
       },
@@ -7044,6 +8120,19 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "dias_semana": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7
+            },
+            "uniqueItems": true,
+            "example": [
+              3
+            ],
+            "description": "Días en que rige (ISO: 1 = lunes … 7 = domingo). Vacío: todos los días."
           }
         }
       },
@@ -7415,6 +8504,359 @@
             "type": "string",
             "format": "date",
             "nullable": true
+          },
+          "dias_semana": {
+            "type": "array",
+            "items": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 7
+            },
+            "uniqueItems": true,
+            "example": [
+              3
+            ],
+            "description": "Días en que rige (ISO: 1 = lunes … 7 = domingo). Vacío: todos los días."
+          }
+        }
+      },
+      "FranjaHoraria": {
+        "type": "string",
+        "enum": [
+          "manana",
+          "tarde",
+          "indistinto"
+        ],
+        "description": "Parte del día que prefiere la clienta (`manana`, sin eñe)."
+      },
+      "EstadoSolicitud": {
+        "type": "string",
+        "enum": [
+          "pendiente",
+          "aceptada",
+          "rechazada",
+          "cancelada"
+        ],
+        "description": "`pendiente` → `aceptada` (la dueña creó la reserva), `rechazada` (con motivo) o `cancelada` (la clienta la retiró)."
+      },
+      "CitaDeClienta": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 57
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-27"
+          },
+          "hora_inicio": {
+            "type": "string",
+            "example": "10:00"
+          },
+          "hora_fin": {
+            "type": "string",
+            "example": "11:00"
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoReserva"
+          },
+          "a_domicilio": {
+            "type": "boolean",
+            "example": false
+          },
+          "direccion_domicilio": {
+            "type": "string",
+            "nullable": true,
+            "example": null
+          },
+          "profesional": {
+            "type": "string",
+            "nullable": true,
+            "example": "Carla"
+          },
+          "servicios": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServicioDeClienta"
+            }
+          },
+          "total": {
+            "type": "number",
+            "example": 70000
+          }
+        }
+      },
+      "SolicitudDeClienta": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "fecha_preferida": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-27"
+          },
+          "franja": {
+            "$ref": "#/components/schemas/FranjaHoraria"
+          },
+          "a_domicilio": {
+            "type": "boolean",
+            "example": false
+          },
+          "direccion_domicilio": {
+            "type": "string",
+            "nullable": true,
+            "example": null
+          },
+          "comentario": {
+            "type": "string",
+            "nullable": true,
+            "example": "Si se puede, temprano."
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoSolicitud"
+          },
+          "motivo_rechazo": {
+            "type": "string",
+            "nullable": true,
+            "example": null
+          },
+          "cita_asignada": {
+            "type": "object",
+            "nullable": true,
+            "description": "Día y hora que asignó el salón (solo si fue aceptada)",
+            "properties": {
+              "fecha": {
+                "type": "string",
+                "format": "date",
+                "example": "2026-10-27"
+              },
+              "hora_inicio": {
+                "type": "string",
+                "example": "10:00"
+              }
+            }
+          },
+          "creada": {
+            "type": "string",
+            "example": "2026-10-23 18:40:00"
+          },
+          "servicios": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ServicioDeClienta"
+            }
+          },
+          "hora_preferida": {
+            "type": "string",
+            "nullable": true,
+            "example": "10:00"
+          },
+          "fuera_de_horario": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "SolicitudInput": {
+        "type": "object",
+        "properties": {
+          "servicios": {
+            "type": "array",
+            "minItems": 1,
+            "maxItems": 8,
+            "uniqueItems": true,
+            "items": {
+              "type": "integer"
+            },
+            "example": [
+              1,
+              2
+            ],
+            "description": "Servicios activos que pide en la misma cita (1 a 8, sin repetir)"
+          },
+          "fecha_preferida": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-27",
+            "description": "Hoy o posterior"
+          },
+          "franja": {
+            "$ref": "#/components/schemas/FranjaHoraria",
+            "description": "Opcional: se deduce de la hora (antes de las 12:00, `manana`)"
+          },
+          "a_domicilio": {
+            "type": "boolean",
+            "example": false
+          },
+          "direccion_domicilio": {
+            "type": "string",
+            "maxLength": 255,
+            "nullable": true,
+            "description": "A domicilio hace falta esta dirección **o** la ubicación (latitud y longitud). Si solo llega la ubicación, se guarda el texto \"Ubicación compartida desde el celular (ver \"Cómo llegar\")\"."
+          },
+          "comentario": {
+            "type": "string",
+            "maxLength": 500,
+            "nullable": true,
+            "example": "Si se puede, temprano."
+          },
+          "telefono": {
+            "type": "string",
+            "maxLength": 30,
+            "nullable": true,
+            "example": "0981555123",
+            "description": "Si se envía, se guarda en la ficha"
+          },
+          "hora_preferida": {
+            "type": "string",
+            "example": "10:00",
+            "description": "Uno de los horarios disponibles de GET /api/mi-cuenta/horarios"
+          },
+          "fuera_de_horario": {
+            "type": "boolean",
+            "example": false,
+            "description": "Pide un horario fuera del horario del salón (a confirmar)"
+          },
+          "latitud": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -90,
+            "maximum": 90,
+            "example": -25.3676,
+            "description": "Ubicación del celular (\"Estoy en casa\"), junto con longitud"
+          },
+          "longitud": {
+            "type": "number",
+            "nullable": true,
+            "minimum": -180,
+            "maximum": 180,
+            "example": -57.5927
+          }
+        },
+        "required": [
+          "servicios",
+          "fecha_preferida",
+          "hora_preferida"
+        ]
+      },
+      "SolicitudCita": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "cliente_id": {
+            "type": "integer",
+            "example": 7
+          },
+          "fecha_preferida": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-27"
+          },
+          "franja": {
+            "$ref": "#/components/schemas/FranjaHoraria"
+          },
+          "a_domicilio": {
+            "type": "boolean",
+            "example": false
+          },
+          "direccion_domicilio": {
+            "type": "string",
+            "nullable": true
+          },
+          "comentario": {
+            "type": "string",
+            "nullable": true
+          },
+          "estado": {
+            "$ref": "#/components/schemas/EstadoSolicitud"
+          },
+          "motivo_rechazo": {
+            "type": "string",
+            "nullable": true
+          },
+          "reserva_id": {
+            "type": "integer",
+            "nullable": true,
+            "description": "Reserva creada al aceptar"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "cliente": {
+            "$ref": "#/components/schemas/Cliente"
+          },
+          "reserva": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/Reserva"
+              }
+            ],
+            "nullable": true
+          },
+          "servicios": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Servicio"
+            }
+          },
+          "hora_preferida": {
+            "type": "string",
+            "nullable": true,
+            "example": "10:00"
+          },
+          "fuera_de_horario": {
+            "type": "boolean",
+            "example": false
+          }
+        }
+      },
+      "ServicioDeClienta": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "nombre": {
+            "type": "string",
+            "example": "Corte de dama"
+          },
+          "activo": {
+            "type": "boolean",
+            "example": true,
+            "description": "Solo los activos se pueden volver a pedir"
+          }
+        }
+      },
+      "CierreSalon": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": 1
+          },
+          "fecha": {
+            "type": "string",
+            "format": "date",
+            "example": "2026-10-28"
+          },
+          "motivo": {
+            "type": "string",
+            "nullable": true,
+            "example": "Capacitación del equipo"
           }
         }
       }

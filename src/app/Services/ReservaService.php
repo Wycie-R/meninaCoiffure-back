@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Events\ReservaCompletada;
+use App\Models\CierreSalon;
 use App\Models\Descuento;
 use App\Models\DetalleReserva;
 use App\Models\HorarioAtencion;
@@ -35,6 +36,8 @@ class ReservaService
     protected const TRANSICIONES = [
         'pendiente' => ['confirmada', 'completada', 'no_asistio', 'cancelada'],
         'confirmada' => ['completada', 'no_asistio', 'cancelada'],
+        // Corregir una ausencia: llegó tarde y se atendió, o se reprograma para otro día
+        'no_asistio' => ['pendiente', 'confirmada', 'completada'],
     ];
 
     /** Estados a los que solo se llega cuando la cita ya empezó. */
@@ -148,12 +151,6 @@ class ReservaService
             ]);
         }
 
-        if ($reserva->estado === 'no_asistio') {
-            throw ValidationException::withMessages([
-                'estado' => ['La reserva quedó registrada como no asistida y ya no puede modificarse.'],
-            ]);
-        }
-
         $nuevoEstado = $datos['estado'] ?? $reserva->estado;
 
         // Cancelar por PUT sigue las mismas reglas que DELETE (no se cancela una cita ya empezada)
@@ -202,7 +199,18 @@ class ReservaService
                 $domicilio['minutos_traslado'] !== (int) $reserva->minutos_traslado
             );
 
-            if ($horarioCambiado) {
+            // Reprogramar una cita a la que no vino: vuelve a quedar pendiente en la agenda
+            if ($horarioCambiado && $estadoAnterior === 'no_asistio' && !isset($datos['estado'])) {
+                $nuevoEstado = 'pendiente';
+                $datos['estado'] = 'pendiente';
+                $this->validarTransicion($reserva, $nuevoEstado);
+            }
+
+            // Una ausencia no ocupa la agenda: si vuelve a un estado que ocupa, hay que revisar choques
+            $vuelveAOcupar = !in_array($estadoAnterior, Reserva::ESTADOS_QUE_OCUPAN, true)
+                && in_array($nuevoEstado, Reserva::ESTADOS_QUE_OCUPAN, true);
+
+            if ($horarioCambiado || $vuelveAOcupar) {
                 if ($horaFin <= $horaInicio) {
                     throw ValidationException::withMessages([
                         'hora_fin' => ['La hora de fin debe ser posterior a la hora de inicio.'],
@@ -210,7 +218,13 @@ class ReservaService
                 }
 
                 $this->validarPersonalActivo($personalId, bloquear: true);
-                $this->validarHorarioFuturo($fecha, $horaInicio);
+
+                // Una cita que todavía no empezó solo se mueve hacia adelante. Si ya empezó o pasó,
+                // se permite corregir el registro con la fecha y hora reales en que se atendió
+                $yaEmpezo = $this->inicioDe($reserva)->isPast();
+                if ($horarioCambiado && !$yaEmpezo) {
+                    $this->validarHorarioFuturo($fecha, $horaInicio);
+                }
 
                 // Revalidar Regla 1 excluyendo la reserva actual
                 $this->validarSolapamiento($personalId, $fecha, $horaInicio, $horaFin, $domicilio['minutos_traslado'], $reserva->id);
@@ -245,6 +259,19 @@ class ReservaService
             // Modificar la reserva: la lista de servicios enviada reemplaza a la actual
             if (array_key_exists('servicios', $datos)) {
                 $this->reemplazarServicios($reserva, $datos['servicios'], substr((string) $fecha, 0, 10));
+            }
+
+            // Una promoción nueva baja el total: no puede quedar por debajo de lo que ya se pagó
+            if (array_key_exists('descuento_id', $datos)) {
+                $reserva->load(['detalles', 'descuento', 'pagos']);
+                if ($reserva->pagado > $reserva->total) {
+                    $pagado = number_format($reserva->pagado, 0, ',', '.');
+                    $total = number_format($reserva->total, 0, ',', '.');
+
+                    throw ValidationException::withMessages([
+                        'descuento_id' => ["Ya se pagaron Gs. {$pagado} y con la promoción el total sería Gs. {$total}. Anula un pago antes de aplicarla."],
+                    ]);
+                }
             }
 
             // HU-13: al completar, la visita pasa al historial de la clienta
@@ -420,6 +447,11 @@ class ReservaService
             $traslado = 0;
         }
 
+        // Día que el salón no trabaja: no hay horarios, tampoco fuera de horario
+        if (CierreSalon::delDia($fecha) !== null) {
+            return ['franjas' => [], 'horarios' => []];
+        }
+
         if ($fueraDeHorario) {
             $franjas = [self::JORNADA_MAXIMA];
         } else {
@@ -429,6 +461,15 @@ class ReservaService
         // Al modificar una reserva, su propio horario no cuenta como ocupado
         $ocupados = $this->bloquesOcupados($personalId, $fecha, $excluirReservaId);
         $limitePasado = now()->subMinutes(self::TOLERANCIA_SIN_CITA);
+
+        // Si la reserva que se modifica ya empezó, se puede corregir hacia un horario pasado
+        $permitePasado = false;
+        if ($excluirReservaId !== null) {
+            $reservaModificada = Reserva::find($excluirReservaId);
+            if ($reservaModificada !== null && $this->inicioDe($reservaModificada)->isPast()) {
+                $permitePasado = true;
+            }
+        }
         $horarios = [];
 
         foreach ($franjas as [$inicioFranja, $finFranja]) {
@@ -439,7 +480,8 @@ class ReservaService
                 $fin = $inicio + $duracion;
                 $motivo = null;
 
-                if (Carbon::parse($fecha)->startOfDay()->addMinutes($inicio)->lt($limitePasado)) {
+                $esPasado = Carbon::parse($fecha)->startOfDay()->addMinutes($inicio)->lt($limitePasado);
+                if ($esPasado && !$permitePasado) {
                     $motivo = 'pasado';
                 } elseif ($this->chocaConBloques($inicio - $traslado, $fin + $traslado, $ocupados)) {
                     $motivo = 'ocupado';
@@ -452,6 +494,46 @@ class ReservaService
         return [
             'franjas' => array_map(fn ($f) => [substr($f[0], 0, 5), substr($f[1], 0, 5)], $franjas),
             'horarios' => $horarios,
+        ];
+    }
+
+    /**
+     * Horarios para el pedido de una clienta: un horario está libre si al menos una profesional
+     * activa puede atenderlo. La clienta no elige profesional (la asigna la dueña), así que se
+     * unen las agendas de todas. Cada horario lleva qué profesionales están libres, para que la
+     * dueña tenga una sugerencia al aceptar; ese dato no se le muestra a la clienta.
+     *
+     * @return array{franjas: array<int, array{0: string, 1: string}>, horarios: array<int, array{hora: string, disponible: bool, profesionales: array<int, int>}>}
+     */
+    public function horariosDelSalon(string $fecha, int $duracion, bool $fueraDeHorario = false, bool $aDomicilio = false): array
+    {
+        $profesionales = Personal::where('activo', true)->orderBy('id')->get();
+
+        $franjas = [];
+        $porHora = [];
+        foreach ($profesionales as $profesional) {
+            // El traslado lo define la dueña al aceptar: acá se calcula sin traslado
+            $agenda = $this->horariosDisponibles($profesional->id, $fecha, $duracion, $fueraDeHorario, $aDomicilio);
+            $franjas = $agenda['franjas'];
+
+            foreach ($agenda['horarios'] as $horario) {
+                $hora = $horario['hora'];
+                if (!isset($porHora[$hora])) {
+                    $porHora[$hora] = ['hora' => $hora, 'disponible' => false, 'profesionales' => []];
+                }
+
+                if ($horario['disponible']) {
+                    $porHora[$hora]['disponible'] = true;
+                    $porHora[$hora]['profesionales'][] = $profesional->id;
+                }
+            }
+        }
+
+        ksort($porHora);
+
+        return [
+            'franjas' => $franjas,
+            'horarios' => array_values($porHora),
         ];
     }
 
@@ -535,6 +617,19 @@ class ReservaService
         $inicioEnMinutos = $this->aMinutos($horaInicio);
         $finEnMinutos = $this->aMinutos($horaFin);
 
+        // Un cierre puntual manda sobre todo: ese día no se atiende ni fuera de horario
+        $cierre = CierreSalon::delDia($fecha);
+        if ($cierre !== null) {
+            $motivo = '';
+            if ($cierre->motivo) {
+                $motivo = " ({$cierre->motivo})";
+            }
+
+            throw ValidationException::withMessages([
+                'horario' => ["El salón no trabaja ese día{$motivo}. Elige otro día."],
+            ]);
+        }
+
         if ($fueraDeHorario) {
             if (!$this->cabeEnFranjas($inicioEnMinutos, $finEnMinutos, [self::JORNADA_MAXIMA])) {
                 throw ValidationException::withMessages([
@@ -608,11 +703,12 @@ class ReservaService
         $vigente = $descuento
             && $descuento->activo
             && ($descuento->fecha_inicio === null || $descuento->fecha_inicio <= $fecha)
-            && ($descuento->fecha_fin === null || $descuento->fecha_fin >= $fecha);
+            && ($descuento->fecha_fin === null || $descuento->fecha_fin >= $fecha)
+            && $descuento->rigeElDia($fecha);
 
         if (!$vigente) {
             throw ValidationException::withMessages([
-                'descuento_id' => ['La promoción elegida no está activa o no rige en la fecha de la cita.'],
+                'descuento_id' => ['La promoción elegida no está activa o no rige en la fecha de la cita (revisa sus días).'],
             ]);
         }
     }
@@ -647,6 +743,11 @@ class ReservaService
      */
     public function franjasLocal(string $fecha): array
     {
+        // Un día cerrado puntualmente no tiene franjas, aunque ese día de la semana sí abra
+        if (CierreSalon::delDia($fecha) !== null) {
+            return [];
+        }
+
         $diaDeLaSemana = Carbon::parse($fecha)->dayOfWeekIso;
 
         $horarios = HorarioAtencion::where('dia_semana', $diaDeLaSemana)

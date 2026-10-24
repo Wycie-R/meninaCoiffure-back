@@ -17,7 +17,7 @@ class ServicioController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
-        $query = Servicio::with(['categoria', 'precios']);
+        $query = Servicio::with(['categoria', 'especialidad', 'precios']);
 
         // Filtro por categoría
         if ($request->filled('categoria_id')) {
@@ -54,6 +54,12 @@ class ServicioController extends Controller
                     'id' => $servicio->categoria->id,
                     'nombre' => $servicio->categoria->nombre,
                 ] : null,
+                // Especialidad que pide (opcional): la agenda avisa si la profesional no la tiene
+                'especialidad_id' => $servicio->especialidad_id,
+                'especialidad' => $servicio->especialidad ? [
+                    'id' => $servicio->especialidad->id,
+                    'nombre' => $servicio->especialidad->nombre,
+                ] : null,
                 'precio_vigente' => $precioVigente ? (float) $precioVigente->precio : null,
                 'precio_vigente_desde' => $precioVigente ? $precioVigente->vigente_desde : null,
             ];
@@ -71,6 +77,7 @@ class ServicioController extends Controller
     {
         $validated = $request->validate([
             'categoria_id' => ['required', 'integer', 'exists:categorias_servicio,id'],
+            'especialidad_id' => ['nullable', 'integer', 'exists:especialidades,id'],
             'nombre' => ['required', 'string', 'max:255'],
             'descripcion' => ['nullable', 'string'],
             'duracion_minutos' => ['required', 'integer', 'min:5', 'max:480'],
@@ -79,6 +86,7 @@ class ServicioController extends Controller
         ], [
             'categoria_id.required' => 'La categoría es obligatoria.',
             'categoria_id.exists' => 'La categoría seleccionada no existe.',
+            'especialidad_id.exists' => 'La especialidad seleccionada no existe.',
             'nombre.required' => 'El nombre del servicio es obligatorio.',
             'duracion_minutos.required' => 'La duración en minutos es obligatoria.',
             'precio.required' => 'El precio inicial es obligatorio.',
@@ -88,6 +96,7 @@ class ServicioController extends Controller
         $servicio = DB::transaction(function () use ($validated) {
             $nuevoServicio = Servicio::create([
                 'categoria_id' => $validated['categoria_id'],
+                'especialidad_id' => $validated['especialidad_id'] ?? null,
                 'nombre' => $validated['nombre'],
                 'descripcion' => $validated['descripcion'] ?? null,
                 'duracion_minutos' => $validated['duracion_minutos'],
@@ -102,7 +111,7 @@ class ServicioController extends Controller
                 'vigente_hasta' => null,
             ]);
 
-            return $nuevoServicio->load(['categoria', 'precios']);
+            return $nuevoServicio->load(['categoria', 'especialidad', 'precios']);
         });
 
         return response()->json([
@@ -114,6 +123,8 @@ class ServicioController extends Controller
                 'duracion_minutos' => $servicio->duracion_minutos,
                 'activo' => $servicio->activo,
                 'categoria' => $servicio->categoria,
+                'especialidad_id' => $servicio->especialidad_id,
+                'especialidad' => $servicio->especialidad,
                 'precio_actual' => (float) $validated['precio'],
             ],
         ], 201);
@@ -134,6 +145,8 @@ class ServicioController extends Controller
                 'duracion_minutos' => $servicio->duracion_minutos,
                 'activo' => $servicio->activo,
                 'categoria' => $servicio->categoria,
+                'especialidad_id' => $servicio->especialidad_id,
+                'especialidad' => $servicio->especialidad,
                 'precio_actual' => $precio ? (float) $precio->precio : null,
                 'historial_precios' => $servicio->precios()->orderByDesc('vigente_desde')->get(),
             ],
@@ -147,6 +160,8 @@ class ServicioController extends Controller
     {
         $validated = $request->validate([
             'categoria_id' => ['sometimes', 'integer', 'exists:categorias_servicio,id'],
+            // null quita la especialidad: el servicio lo puede hacer cualquiera sin aviso
+            'especialidad_id' => ['sometimes', 'nullable', 'integer', 'exists:especialidades,id'],
             'nombre' => ['sometimes', 'string', 'max:255'],
             'descripcion' => ['nullable', 'string'],
             'duracion_minutos' => ['sometimes', 'integer', 'min:5', 'max:480'],
@@ -157,7 +172,7 @@ class ServicioController extends Controller
 
         return response()->json([
             'message' => 'Servicio actualizado exitosamente.',
-            'data' => $servicio->fresh(['categoria']),
+            'data' => $servicio->fresh(['categoria', 'especialidad']),
         ]);
     }
 

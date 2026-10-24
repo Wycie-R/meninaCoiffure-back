@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Models\Cliente;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -136,9 +137,11 @@ class KeycloakTest extends TestCase
             'email' => 'lucia@gmail.com',
             'email_verified' => false,
             'name' => 'Lucía Benítez',
+            'given_name' => 'Lucía',
+            'family_name' => 'Benítez',
         ]);
 
-        $this->volverDeKeycloak()->assertRedirect('/salon');
+        $this->volverDeKeycloak()->assertRedirect('/mi-cuenta');
 
         $clienta = User::where('email', 'lucia@gmail.com')->first();
         $this->assertNotNull($clienta);
@@ -153,6 +156,46 @@ class KeycloakTest extends TestCase
             ->assertJsonPath('data.rol', 'cliente')
             ->assertJsonPath('data.permisos.puede_crear_reservas', false)
             ->assertJsonPath('data.permisos.puede_ver_clientes', false);
+
+        // Se le crea su ficha para que pueda pedir citas
+        $ficha = $clienta->cliente;
+        $this->assertNotNull($ficha);
+        $this->assertSame('Lucía', $ficha->nombre);
+        $this->assertSame('Benítez', $ficha->apellido);
+        $this->assertSame('lucia@gmail.com', $ficha->email);
+    }
+
+    public function test_clienta_con_correo_verificado_se_vincula_a_la_ficha_que_cargo_la_duena(): void
+    {
+        $fichaExistente = Cliente::create(['nombre' => 'Ana', 'apellido' => 'Gómez', 'email' => 'ana@gmail.com']);
+        $this->simularKeycloak(['sub' => 'sub-ana', 'email' => 'ana@gmail.com', 'email_verified' => true, 'name' => 'Ana Gómez']);
+
+        $this->volverDeKeycloak()->assertRedirect('/mi-cuenta');
+
+        $clienta = User::where('email', 'ana@gmail.com')->first();
+        $this->assertSame($fichaExistente->id, $clienta->cliente->id);
+        $this->assertSame(1, Cliente::where('email', 'ana@gmail.com')->count());
+    }
+
+    public function test_correo_sin_verificar_no_toma_la_ficha_de_otra_clienta(): void
+    {
+        $fichaAjena = Cliente::create(['nombre' => 'Ana', 'apellido' => 'Gómez', 'email' => 'ana@gmail.com']);
+        $this->simularKeycloak(['sub' => 'sub-intrusa', 'email' => 'ana@gmail.com', 'email_verified' => false, 'name' => 'Intrusa']);
+
+        $this->volverDeKeycloak()->assertRedirect('/mi-cuenta');
+
+        // Entra como clienta nueva, con una ficha propia y vacía
+        $this->assertNull($fichaAjena->fresh()->user_id);
+        $clienta = User::where('keycloak_id', 'sub-intrusa')->first();
+        $this->assertNotSame($fichaAjena->id, $clienta->cliente->id);
+    }
+
+    public function test_registro_lleva_al_formulario_de_crear_cuenta_de_keycloak(): void
+    {
+        $destino = $this->get('/auth/keycloak/redirigir?registro=1')->headers->get('Location');
+
+        $this->assertStringStartsWith('http://localhost:8080/realms/menina/protocol/openid-connect/registrations?', $destino);
+        $this->assertStringContainsString('code_challenge_method=S256', $destino);
     }
 
     public function test_correo_sin_verificar_no_se_apropia_de_una_cuenta_del_equipo(): void
@@ -206,18 +249,19 @@ class KeycloakTest extends TestCase
         $urlCierre = $respuesta->json('url_cierre');
         $this->assertStringStartsWith('http://localhost:8080/realms/menina/protocol/openid-connect/logout?', $urlCierre);
         $this->assertStringContainsString('id_token_hint=token-de-identidad', $urlCierre);
-        $this->assertStringContainsString('post_logout_redirect_uri=' . urlencode(url('/salon')), $urlCierre);
+        $this->assertStringContainsString('post_logout_redirect_uri=' . urlencode(url('/login')), $urlCierre);
         $this->assertGuest();
     }
 
-    public function test_una_clienta_con_sesion_no_entra_al_panel_y_la_raiz_la_lleva_al_salon(): void
+    public function test_una_clienta_con_sesion_no_entra_al_panel_y_la_raiz_la_lleva_a_sus_citas(): void
     {
         $rolCliente = Role::firstOrCreate(['nombre' => 'cliente']);
         $clienta = User::factory()->create(['name' => 'Lucia Benitez', 'rol_id' => $rolCliente->id]);
 
         $this->actingAs($clienta);
-        $this->get('/')->assertRedirect('/salon');
-        $this->get('/login')->assertRedirect('/salon');
+        $this->get('/')->assertRedirect('/mi-cuenta');
+        $this->get('/login')->assertRedirect('/mi-cuenta');
+        $this->get('/mi-cuenta')->assertStatus(200);
         $this->get('/dashboard')->assertStatus(403);
         $this->get('/salon')->assertStatus(200)->assertSee('"cuenta":{"nombre":"Lucia Benitez"}', false);
     }
@@ -230,5 +274,16 @@ class KeycloakTest extends TestCase
         $this->get('/auth/keycloak/callback?code=x&state=y')->assertStatus(404);
         $this->get('/login')->assertStatus(200)->assertSee('"proveedor":"local"', false);
         $this->postJson('/api/auth/logout')->assertJsonPath('url_cierre', null);
+    }
+
+    public function test_con_keycloak_el_login_va_directo_al_formulario_del_salon_en_keycloak(): void
+    {
+        $this->get('/login')->assertRedirect('/auth/keycloak/redirigir');
+
+        // Si el login falló, se queda en /login para mostrar el aviso (sin volver a redirigir en bucle)
+        $this->withSession(['error_login' => 'El inicio de sesión expiró o no es válido. Inténtalo de nuevo.'])
+            ->get('/login')
+            ->assertStatus(200)
+            ->assertSee('"proveedor":"keycloak"', false);
     }
 }

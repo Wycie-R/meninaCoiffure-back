@@ -39,6 +39,12 @@ return [
         'client_secret' => env('KEYCLOAK_CLIENT_SECRET'),
     ],
 
+    // Aviso a la dueña cuando una clienta pide una cita. El chat se obtiene con: php artisan telegram:chats
+    'telegram' => [
+        'token' => env('TELEGRAM_BOT_TOKEN'),
+        'chat_id' => env('TELEGRAM_CHAT_ID'),
+    ],
+
     'slack' => [
         'notifications' => [
             'bot_user_oauth_token' => env('SLACK_BOT_USER_OAUTH_TOKEN'),

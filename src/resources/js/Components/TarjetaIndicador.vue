@@ -20,8 +20,8 @@ defineProps({
 </script>
 
 <template>
-    <div class="flex min-w-0 flex-col rounded-3xl border border-hilo bg-velo p-5">
-        <p class="text-sm text-bruma">{{ etiqueta }}</p>
+    <div class="flex min-w-0 flex-col rounded-3xl border border-hilo bg-velo p-4 sm:p-5">
+        <p class="text-xs text-bruma sm:text-sm">{{ etiqueta }}</p>
 
         <template v-if="cargando">
             <span class="mt-3 block h-8 w-24 animate-pulse rounded-full bg-terciopelo"></span>
@@ -29,8 +29,8 @@ defineProps({
         </template>
 
         <template v-else>
-            <p class="mt-2 break-words text-3xl font-semibold leading-none text-perla">{{ valor }}</p>
-            <p v-if="detalle" class="mt-auto pt-3 text-sm text-niebla">{{ detalle }}</p>
+            <p class="mt-2 break-words text-2xl font-semibold leading-none text-perla sm:text-3xl">{{ valor }}</p>
+            <p v-if="detalle" class="mt-auto pt-2 text-xs text-niebla sm:pt-3 sm:text-sm">{{ detalle }}</p>
         </template>
     </div>
 </template>

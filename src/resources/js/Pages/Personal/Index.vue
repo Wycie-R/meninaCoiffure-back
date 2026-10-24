@@ -334,7 +334,7 @@ watch(aviso, (valor) => {
 
 <template>
     <AppLayout>
-        <div class="mx-auto max-w-6xl px-6 py-10">
+        <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
             <PageHeader titulo="Equipo" :descripcion="cargando && !personal.length ? 'Cargando al equipo…' : resumen">
                 <Button v-if="esAdmin" @click="abrirNuevo">
                     <Icono name="agregar" class="h-4 w-4" />
