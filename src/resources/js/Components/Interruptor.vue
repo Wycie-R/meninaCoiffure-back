@@ -1,4 +1,6 @@
 <script setup>
+import { useId } from 'vue'
+
 defineProps({
     modelValue: {
         type: Boolean,
@@ -19,11 +21,13 @@ defineProps({
 })
 
 const emit = defineEmits(['update:modelValue'])
+const id = useId()
 </script>
 
 <template>
     <label class="inline-flex items-start gap-3" :class="disabled ? 'cursor-not-allowed opacity-50' : 'cursor-pointer'">
         <input
+            :id="id"
             type="checkbox"
             class="peer sr-only"
             role="switch"
