@@ -113,13 +113,14 @@ async function guardar(visita) {
                     </div>
                 </div>
 
-                <div v-else class="mt-2 flex items-start justify-between gap-4">
-                    <p v-if="v.notas" class="min-w-0 whitespace-pre-line break-words rounded-xl bg-terciopelo px-3 py-2 text-sm text-perla">{{ v.notas }}</p>
+                <!-- En celular la nota ocupa todo el ancho y "Editar notas" va debajo, con lugar para tocarlo -->
+                <div v-else class="mt-2 flex flex-col items-start gap-1 sm:flex-row sm:justify-between sm:gap-4">
+                    <p v-if="v.notas" class="w-full min-w-0 whitespace-pre-line break-words rounded-xl bg-terciopelo px-3 py-2 text-sm text-perla sm:w-auto">{{ v.notas }}</p>
                     <p v-else class="text-sm text-niebla">Sin notas.</p>
                     <button
                         v-if="puedeEditar(v) && editando === null"
                         type="button"
-                        :class="[claseEnfoque, 'shrink-0 rounded text-sm text-bruma underline-offset-4 hover:text-perla hover:underline']"
+                        :class="[claseEnfoque, 'min-h-11 shrink-0 rounded text-sm text-bruma underline-offset-4 hover:text-perla hover:underline sm:min-h-0']"
                         :aria-label="`${v.notas ? 'Editar' : 'Agregar'} notas de la visita del ${fechaCorta(v.fecha_realizada)}`"
                         @click="editar(v)"
                     >

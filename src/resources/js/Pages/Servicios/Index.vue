@@ -29,6 +29,7 @@ const servicioNuevo = ref(Number(new URL(page.url, window.location.origin).searc
 const aviso = ref('')
 
 onMounted(async () => {
+    cargarEspecialidades()
     await cargarCatalogo({ forzar: Boolean(servicioNuevo.value) })
     const nuevo = servicios.value.find((s) => s.id === servicioNuevo.value)
     if (nuevo) aviso.value = `Servicio «${nuevo.nombre}» agregado a la carta.`
@@ -96,12 +97,26 @@ function limpiarFiltros() {
 
 const opcionesCategoria = computed(() => categorias.value.map((c) => ({ label: c.nombre, value: c.id })))
 
+// Especialidades del equipo: el servicio puede pedir una (opcional)
+const especialidades = ref([])
+
+async function cargarEspecialidades() {
+    const respuesta = await api('/api/especialidades')
+    if (respuesta.ok) especialidades.value = respuesta.cuerpo?.data ?? []
+}
+
+// La primera opción deja el servicio sin especialidad: cualquiera lo hace sin aviso
+const opcionesEspecialidad = computed(() => [
+    { label: 'Ninguna (cualquiera lo hace)', value: null },
+    ...especialidades.value.map((e) => ({ label: e.nombre, value: e.id })),
+])
+
 const seleccionado = ref(null)
 const detalle = ref(null)
 const cargandoDetalle = ref(false)
 const errorDetalle = ref('')
 
-const form = ref({ nombre: '', categoria_id: null, duracion_minutos: '', descripcion: '' })
+const form = ref({ nombre: '', categoria_id: null, especialidad_id: null, duracion_minutos: '', descripcion: '' })
 const erroresDatos = ref({})
 const guardandoDatos = ref(false)
 
@@ -145,6 +160,7 @@ async function cargarDetalle() {
     form.value = {
         nombre: detalle.value.nombre,
         categoria_id: detalle.value.categoria?.id ?? null,
+        especialidad_id: detalle.value.especialidad_id ?? null,
         duracion_minutos: detalle.value.duracion_minutos,
         descripcion: detalle.value.descripcion ?? '',
     }
@@ -159,6 +175,7 @@ const cambiosPendientes = computed(() => {
     return (
         form.value.nombre.trim() !== detalle.value.nombre ||
         form.value.categoria_id !== (detalle.value.categoria?.id ?? null) ||
+        form.value.especialidad_id !== (detalle.value.especialidad_id ?? null) ||
         Number(form.value.duracion_minutos) !== detalle.value.duracion_minutos ||
         form.value.descripcion.trim() !== (detalle.value.descripcion ?? '')
     )
@@ -183,6 +200,7 @@ async function guardarDatos() {
         datos: {
             nombre: form.value.nombre.trim(),
             categoria_id: form.value.categoria_id,
+            especialidad_id: form.value.especialidad_id,
             duracion_minutos: Number(form.value.duracion_minutos),
             descripcion: form.value.descripcion.trim() || null,
         },
@@ -324,7 +342,7 @@ watch(aviso, (valor) => {
 
 <template>
     <AppLayout>
-        <div class="mx-auto max-w-6xl px-6 py-10">
+        <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
             <PageHeader titulo="Carta de servicios" :descripcion="cargando && !servicios.length ? 'Cargando la carta…' : resumen">
                 <template v-if="esAdmin">
                     <Button href="/categorias" variant="secondary">
@@ -338,13 +356,18 @@ watch(aviso, (valor) => {
                 </template>
             </PageHeader>
 
-            <div class="mt-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                <div class="flex flex-wrap gap-2" role="group" aria-label="Filtrar por categoría">
+            <div class="mt-6 flex flex-col gap-4 sm:mt-8 lg:flex-row lg:items-center lg:justify-between">
+                <!-- En celular, una sola fila que se desliza (antes ocupaba tres filas) -->
+                <div
+                    class="filtros-deslizables -mx-4 flex gap-2 overflow-x-auto px-4 pb-1 sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0"
+                    role="group"
+                    aria-label="Filtrar por categoría"
+                >
                     <button
                         v-for="filtro in filtrosCategoria"
                         :key="filtro.id"
                         type="button"
-                        class="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors"
+                        class="inline-flex min-h-11 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-4 py-2 text-sm transition-colors"
                         :class="[
                             claseEnfoque,
                             categoria === filtro.id
@@ -359,7 +382,8 @@ watch(aviso, (valor) => {
                     </button>
                 </div>
 
-                <div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+                <!-- En celular primero la búsqueda (lo más usado) y el interruptor debajo -->
+                <div class="flex flex-col-reverse gap-3 sm:flex-row sm:items-center">
                     <Interruptor v-model="verInactivos" etiqueta="Mostrar inactivos" />
                     <div class="sm:w-64">
                         <SearchInput v-model="busqueda" placeholder="Buscar servicio..." />
@@ -367,7 +391,7 @@ watch(aviso, (valor) => {
                 </div>
             </div>
 
-            <div class="mt-10">
+            <div class="mt-8 sm:mt-10">
                 <div v-if="cargando && !servicios.length" class="space-y-10" aria-busy="true" aria-label="Cargando servicios">
                     <div v-for="n in 2" :key="n" class="animate-pulse">
                         <div class="flex items-center gap-4">
@@ -394,16 +418,16 @@ watch(aviso, (valor) => {
                     <Button label="Ver toda la carta" variant="secondary" @click="limpiarFiltros" />
                 </EstadoVacio>
 
-                <div v-else class="space-y-12">
+                <div v-else class="space-y-10 sm:space-y-12">
                     <section v-for="grupo in grupos" :key="grupo.id" :aria-labelledby="`categoria-${grupo.id}`">
-                        <!-- Encabezado de la categoría con su ilustración y tono -->
+                        <!-- Encabezado de la categoría con su ilustración y tono; más compacto en celular -->
                         <div
-                            class="relative flex items-center gap-5 overflow-hidden rounded-[26px] border border-hilo bg-linear-to-br to-transparent p-5"
+                            class="relative flex items-center gap-4 overflow-hidden rounded-[22px] border border-hilo bg-linear-to-br to-transparent p-4 sm:gap-5 sm:rounded-[26px] sm:p-5"
                             :class="grupo.tono.fondo"
                         >
-                            <Ilustracion :nombre="grupo.ilustracion" class="h-20 w-20 shrink-0 drop-shadow-[0_12px_24px_rgba(0,0,0,0.45)]" />
+                            <Ilustracion :nombre="grupo.ilustracion" class="h-14 w-14 shrink-0 drop-shadow-[0_12px_24px_rgba(0,0,0,0.45)] sm:h-20 sm:w-20" />
                             <div class="min-w-0">
-                                <h2 :id="`categoria-${grupo.id}`" class="text-3xl">{{ grupo.nombre }}</h2>
+                                <h2 :id="`categoria-${grupo.id}`" class="text-2xl leading-tight sm:text-3xl">{{ grupo.nombre }}</h2>
                                 <p v-if="grupo.descripcion" class="mt-1 text-sm text-bruma">{{ grupo.descripcion }}</p>
                                 <p class="mt-1 text-xs uppercase tracking-[0.16em]" :class="grupo.tono.texto">
                                     {{ plural(grupo.servicios.length, 'servicio', 'servicios') }}
@@ -411,7 +435,7 @@ watch(aviso, (valor) => {
                             </div>
                         </div>
 
-                        <ul class="mt-4 grid gap-4 md:grid-cols-2">
+                        <ul class="mt-3 grid gap-3 sm:mt-4 sm:gap-4 md:grid-cols-2">
                             <li v-for="servicio in grupo.servicios" :key="servicio.id">
                                 <TarjetaServicio
                                     :servicio="servicio"
@@ -419,6 +443,7 @@ watch(aviso, (valor) => {
                                     clicable
                                     :seleccionado="servicio.id === seleccionado"
                                     :nuevo="servicio.id === servicioNuevo"
+                                    mostrar-especialidad
                                     @elegir="abrirServicio(servicio)"
                                 />
                             </li>
@@ -550,6 +575,18 @@ watch(aviso, (valor) => {
                                 <Dropdown v-model="form.categoria_id" :options="opcionesCategoria" placeholder="Seleccionar" />
                             </Campo>
 
+                            <Campo
+                                etiqueta="Especialidad que requiere"
+                                :error="erroresDatos.especialidad_id"
+                                ayuda="Si se agenda con una profesional que no la tiene, el sistema avisa antes de guardar."
+                            >
+                                <Dropdown
+                                    v-model="form.especialidad_id"
+                                    :options="opcionesEspecialidad"
+                                    placeholder="Ninguna (cualquiera lo hace)"
+                                />
+                            </Campo>
+
                             <Campo etiqueta="Duración (minutos)" para="editar-duracion" :error="erroresDatos.duracion_minutos">
                                 <input
                                     id="editar-duracion"
@@ -650,3 +687,21 @@ watch(aviso, (valor) => {
         <Aviso :mensaje="aviso" @cerrar="aviso = ''" />
     </AppLayout>
 </template>
+
+<style scoped>
+.filtros-deslizables {
+    scrollbar-width: none;
+}
+
+.filtros-deslizables::-webkit-scrollbar {
+    display: none;
+}
+
+/* Bordes desvanecidos solo mientras la fila se desliza (celular) */
+@media (max-width: 639px) {
+    .filtros-deslizables {
+        -webkit-mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+        mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+    }
+}
+</style>

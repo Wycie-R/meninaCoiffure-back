@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\CategoriaServicioController;
+use App\Http\Controllers\CierreSalonController;
 use App\Http\Controllers\ClienteController;
 use App\Http\Controllers\ConfiguracionController;
 use App\Http\Controllers\DescuentoController;
@@ -9,12 +10,14 @@ use App\Http\Controllers\EspecialidadController;
 use App\Http\Controllers\HistorialVisitaController;
 use App\Http\Controllers\HorarioAtencionController;
 use App\Http\Controllers\MetodoPagoController;
+use App\Http\Controllers\MiCuentaController;
 use App\Http\Controllers\PagoController;
 use App\Http\Controllers\PersonalController;
 use App\Http\Controllers\PreferenciaClienteController;
 use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\ReservaController;
 use App\Http\Controllers\ServicioController;
+use App\Http\Controllers\SolicitudCitaController;
 use Illuminate\Support\Facades\Route;
 
 // HU-25 y T-02: Autenticación por rol y sesiones centralizadas
@@ -30,7 +33,19 @@ Route::apiResource('servicios', ServicioController::class)->only(['index', 'show
 
 // Página pública del salón: horario de atención y promociones vigentes hoy
 Route::get('horarios-atencion', [HorarioAtencionController::class, 'index']);
+// Días puntuales en que el salón no trabaja (de hoy en adelante)
+Route::get('cierres-salon', [CierreSalonController::class, 'index']);
 Route::get('promociones', [DescuentoController::class, 'promociones']);
+
+// Mis citas: la clienta con cuenta ve sus citas y pide nuevas. Todo se filtra por la ficha de su sesión
+Route::prefix('mi-cuenta')->middleware(['web', 'auth', 'rol:cliente'])->group(function () {
+    Route::get('/', [MiCuentaController::class, 'show']);
+    Route::get('citas', [MiCuentaController::class, 'citas']);
+    Route::get('horarios', [MiCuentaController::class, 'horarios']);
+    Route::get('solicitudes', [MiCuentaController::class, 'solicitudes']);
+    Route::post('solicitudes', [MiCuentaController::class, 'pedirCita']);
+    Route::delete('solicitudes/{solicitud}', [MiCuentaController::class, 'cancelarSolicitud']);
+});
 
 // El resto exige sesión iniciada (la sesión vive en PostgreSQL, compartida entre nodos)
 // y un rol del salón: admin (la dueña) o profesional (solo opera sobre su propia agenda)
@@ -91,6 +106,8 @@ Route::middleware(['web', 'auth', 'rol:admin,profesional'])->group(function () {
         Route::apiResource('especialidades', EspecialidadController::class)->except(['index'])
             ->parameters(['especialidades' => 'especialidad']);
         Route::put('horarios-atencion', [HorarioAtencionController::class, 'guardar']);
+        Route::post('cierres-salon', [CierreSalonController::class, 'store']);
+        Route::delete('cierres-salon/{cierre}', [CierreSalonController::class, 'destroy']);
 
         Route::delete('clientes/{cliente}', [ClienteController::class, 'destroy']);
 
@@ -98,6 +115,12 @@ Route::middleware(['web', 'auth', 'rol:admin,profesional'])->group(function () {
         Route::apiResource('pagos', PagoController::class)->only(['index', 'store', 'show', 'destroy']);
         Route::apiResource('metodos-pago', MetodoPagoController::class)->except(['index']);
         Route::apiResource('descuentos', DescuentoController::class)->except(['index']);
+
+        // Bandeja de solicitudes de cita: la dueña las convierte en reserva o las rechaza
+        Route::get('solicitudes-cita', [SolicitudCitaController::class, 'index']);
+        Route::get('solicitudes-cita/{solicitud}', [SolicitudCitaController::class, 'show']);
+        Route::post('solicitudes-cita/{solicitud}/aceptar', [SolicitudCitaController::class, 'aceptar']);
+        Route::post('solicitudes-cita/{solicitud}/rechazar', [SolicitudCitaController::class, 'rechazar']);
 
         // Configuración: la dueña habilita o quita permisos a cada empleada
         Route::get('configuracion/permisos', [ConfiguracionController::class, 'permisos']);

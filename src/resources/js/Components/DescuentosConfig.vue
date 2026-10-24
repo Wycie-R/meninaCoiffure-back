@@ -9,6 +9,7 @@ import PanelLateral from './PanelLateral.vue'
 import { api, mensajeError, primerosErrores } from '../api'
 import { fechaCorta, guaranies, hoyISO, plural } from '../formato'
 import { claseEntrada, claseEnfoque } from '../ui'
+import { DIAS, textoDiasPromocion } from '../horarios'
 
 const emit = defineEmits(['aviso'])
 
@@ -60,7 +61,7 @@ function vigenciaDe(d) {
 
 const lista = computed(() =>
     descuentos.value
-        .map((d) => ({ ...d, estado: estadoDe(d), valorTexto: valorDe(d), vigencia: vigenciaDe(d) }))
+        .map((d) => ({ ...d, estado: estadoDe(d), valorTexto: valorDe(d), vigencia: vigenciaDe(d), diasTexto: textoDiasPromocion(d.dias_semana) }))
         .sort((a, b) => a.estado.orden - b.estado.orden || a.nombre.localeCompare(b.nombre, 'es'))
 )
 
@@ -94,7 +95,7 @@ const guardando = ref(false)
 
 function abrirNuevo() {
     editando.value = null
-    form.value = { nombre: '', tipo: 'porcentaje', valor: '', fecha_inicio: '', fecha_fin: '', activo: true }
+    form.value = { nombre: '', tipo: 'porcentaje', valor: '', fecha_inicio: '', fecha_fin: '', activo: true, dias_semana: [] }
     errores.value = {}
     abierto.value = true
 }
@@ -108,9 +109,34 @@ function abrirEdicion(d) {
         fecha_inicio: fecha(d.fecha_inicio),
         fecha_fin: fecha(d.fecha_fin),
         activo: Boolean(d.activo),
+        dias_semana: [...(d.dias_semana ?? [])].map(Number),
     }
     errores.value = {}
     abierto.value = true
+}
+
+// Días en que rige: ninguno marcado es "todos los días"
+function alternarDia(dia) {
+    const actuales = form.value.dias_semana
+    let nuevos = [...actuales, dia]
+    if (actuales.includes(dia)) {
+        nuevos = actuales.filter((d) => d !== dia)
+    }
+    nuevos.sort((a, b) => a - b)
+    // Marcar los siete es lo mismo que todos los días
+    if (nuevos.length === 7) nuevos = []
+    form.value = { ...form.value, dias_semana: nuevos }
+    limpiar('dias_semana')
+}
+
+function todosLosDias() {
+    form.value = { ...form.value, dias_semana: [] }
+    limpiar('dias_semana')
+}
+
+function claseDiaPromocion(seleccionado) {
+    if (seleccionado) return 'border-orquidea bg-orquidea/12 text-orquidea-claro'
+    return 'border-hilo text-bruma hover:border-hilo-fuerte hover:text-perla'
 }
 
 function cambiarTipo(tipo) {
@@ -167,6 +193,7 @@ async function guardar() {
         fecha_inicio: f.fecha_inicio || null,
         fecha_fin: f.fecha_fin || null,
         activo: f.activo,
+        dias_semana: f.dias_semana,
     }
 
     guardando.value = true
@@ -260,7 +287,11 @@ async function eliminar() {
                         <p class="shrink-0 font-display text-3xl leading-none tabular-nums" :class="d.estado.orden >= 2 ? 'text-bruma' : 'text-orquidea-claro'">{{ d.valorTexto }}</p>
                     </div>
 
-                    <p class="mt-3 text-sm text-bruma">{{ d.vigencia }}</p>
+                    <p class="mt-3 inline-flex items-center gap-1.5 text-sm text-perla">
+                        <Icono name="reservas" class="h-4 w-4 text-orquidea" />
+                        {{ d.diasTexto }}
+                    </p>
+                    <p class="mt-1 text-sm text-bruma">{{ d.vigencia }}</p>
                     <p class="mt-1 text-sm text-bruma">
                         {{ d.reservas_count ? `Aplicada en ${plural(d.reservas_count, 'reserva', 'reservas')}` : 'Todavía no se aplicó en ninguna reserva' }}
                     </p>
@@ -350,7 +381,8 @@ async function eliminar() {
                 <fieldset class="min-w-0">
                     <legend class="text-sm font-medium text-perla">Vigencia <span class="font-normal text-niebla">(opcional)</span></legend>
                     <p class="mt-1 text-sm text-bruma">Sin fechas, la promoción vale mientras esté activa.</p>
-                    <div class="mt-3 grid gap-5 sm:grid-cols-2">
+                    <!-- Desde y Hasta entran lado a lado aun en celular: el formulario queda más corto -->
+                    <div class="mt-3 grid grid-cols-2 gap-3 sm:gap-5">
                         <Campo etiqueta="Desde" para="descuento-inicio" :error="errores.fecha_inicio">
                             <input id="descuento-inicio" v-model="form.fecha_inicio" type="date" :class="claseEntrada(Boolean(errores.fecha_inicio))" @input="limpiar('fecha_inicio')" />
                         </Campo>
@@ -358,6 +390,34 @@ async function eliminar() {
                             <input id="descuento-fin" v-model="form.fecha_fin" type="date" :min="form.fecha_inicio || undefined" :class="claseEntrada(Boolean(errores.fecha_fin))" @input="limpiar('fecha_fin')" />
                         </Campo>
                     </div>
+                </fieldset>
+
+                <fieldset class="min-w-0">
+                    <legend class="text-sm font-medium text-perla">Días en que rige</legend>
+                    <p class="mt-1 text-sm text-bruma">Por ejemplo, solo los miércoles. Sin días marcados, rige todos los días.</p>
+                    <div class="mt-3 flex flex-wrap gap-2">
+                        <button
+                            type="button"
+                            :aria-pressed="!form.dias_semana.length"
+                            :class="[claseEnfoque, 'min-h-10 rounded-full border px-4 text-sm transition-colors', claseDiaPromocion(!form.dias_semana.length)]"
+                            @click="todosLosDias"
+                        >
+                            Todos los días
+                        </button>
+                        <button
+                            v-for="d in DIAS"
+                            :key="d.dia"
+                            type="button"
+                            :aria-pressed="form.dias_semana.includes(d.dia)"
+                            :aria-label="d.nombre"
+                            :class="[claseEnfoque, 'min-h-10 min-w-12 rounded-full border px-3 text-sm transition-colors', claseDiaPromocion(form.dias_semana.includes(d.dia))]"
+                            @click="alternarDia(d.dia)"
+                        >
+                            {{ d.nombre.slice(0, 3) }}
+                        </button>
+                    </div>
+                    <p class="mt-2 text-sm text-niebla">{{ textoDiasPromocion(form.dias_semana) }}</p>
+                    <p v-if="errores.dias_semana" role="alert" class="mt-1.5 text-sm text-borgona">{{ errores.dias_semana }}</p>
                 </fieldset>
 
                 <Interruptor v-model="form.activo" etiqueta="Activa" descripcion="Solo las activas y dentro de su vigencia se ofrecen al crear reservas." />

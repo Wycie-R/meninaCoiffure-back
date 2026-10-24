@@ -36,7 +36,8 @@ function elegir(id) {
 }
 
 function mostrarPestana(id) {
-    document.getElementById(`pestana-${id}`)?.scrollIntoView({ block: 'nearest', inline: 'nearest' })
+    // Centrada: en celular se ve también un poco de la pestaña siguiente, así se nota que hay más
+    document.getElementById(`pestana-${id}`)?.scrollIntoView({ block: 'nearest', inline: 'center' })
 }
 
 onMounted(() => mostrarPestana(actual.value))
@@ -55,14 +56,16 @@ async function mover(evento, indice) {
 
 <template>
     <AppLayout>
-        <div class="mx-auto max-w-6xl px-6 py-10">
+        <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
             <PageHeader
                 titulo="Configuración"
                 descripcion="Los ajustes generales del salón. Solo la administración puede verlos y cambiarlos."
             />
 
+            <!-- En celular las pestañas no entran: se deslizan, sin barra de scroll y con los bordes
+                 desvanecidos como indicio de que hay más (los 24 px del borde son el padding) -->
             <div
-                class="scroll-fino mt-8 -mx-6 flex gap-2 overflow-x-auto border-b border-hilo px-6"
+                class="pestanas-deslizables mt-6 -mx-4 flex gap-1 overflow-x-auto border-b border-hilo px-4 sm:mt-8 sm:-mx-6 sm:gap-2 sm:px-6"
                 role="tablist"
                 aria-label="Secciones de configuración"
             >
@@ -77,7 +80,7 @@ async function mover(evento, indice) {
                     :tabindex="actual === s.id ? 0 : -1"
                     :class="[
                         claseEnfoque,
-                        '-mb-px flex shrink-0 items-center gap-2 rounded-t-xl border-b-2 px-4 py-3 text-sm transition-colors',
+                        '-mb-px flex min-h-12 shrink-0 items-center gap-2 rounded-t-xl border-b-2 px-3 py-3 text-sm transition-colors sm:px-4',
                         actual === s.id
                             ? 'border-orquidea font-medium text-orquidea-claro'
                             : 'border-transparent text-bruma hover:text-perla',
@@ -107,3 +110,23 @@ async function mover(evento, indice) {
         <Aviso :mensaje="aviso" @cerrar="aviso = ''" />
     </AppLayout>
 </template>
+
+<style scoped>
+.pestanas-deslizables {
+    scrollbar-width: none;
+    -webkit-mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+    mask-image: linear-gradient(to right, transparent, #000 16px, #000 calc(100% - 16px), transparent);
+}
+
+/* Desde 1024 px entran todas (a 768 todavía no): sin desvanecido */
+@media (min-width: 1024px) {
+    .pestanas-deslizables {
+        -webkit-mask-image: none;
+        mask-image: none;
+    }
+}
+
+.pestanas-deslizables::-webkit-scrollbar {
+    display: none;
+}
+</style>

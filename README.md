@@ -4,7 +4,7 @@ Sistema web de gestión para Menina Coiffure, salón de estética y peluquería 
 
 
 
-## 🚀 Instalación
+## Instalación
 
 Requisitos: [Docker](https://docs.docker.com/engine/install/) con Docker Compose y [Git](https://git-scm.com/).
 
@@ -37,11 +37,11 @@ Requisitos: [Docker](https://docs.docker.com/engine/install/) con Docker Compose
 
 El sistema queda en [http://localhost:8000](http://localhost:8000) y la documentación de la API en [http://localhost:8000/docs](http://localhost:8000/docs).
 
-Usuarios de prueba (contraseña `password123`): `admin@meninacoiffure.com` (administración) y `carla@meninacoiffure.com` (profesional).
+Usuarios de prueba (contraseña `password123`): `admin@meninacoiffure.com` (administración), `carla@meninacoiffure.com` (profesional) y `clienta@meninacoiffure.com` (clienta con cuenta: ve sus citas y pide nuevas en /mi-cuenta).
 
 
 
-## 🔄 Actualización
+## Actualización
 
 Después de traer cambios del repositorio:
 
@@ -57,7 +57,7 @@ docker compose exec app npm run build
 
 
 
-## 🔐 Keycloak (login con proveedor de identidad)
+## Keycloak (login con proveedor de identidad)
 
 Keycloak corre en su propio contenedor y ya viene configurado desde `keycloak/realm-menina.json` (realm `menina`, cliente `menina-web` con PKCE y usuarios de prueba). No usa la base del salón.
 
@@ -73,12 +73,32 @@ docker compose up -d keycloak
 
 
 
-## 🛠️ Comandos frecuentes
+## Avisos por Telegram
+
+Cuando una clienta pide una cita, la dueña recibe un mensaje de Telegram con la clienta, los servicios, el día, la hora y, si es a domicilio, el enlace para llegar. Es opcional: sin configurar, el sistema funciona igual.
+
+1. En Telegram, abrir **@BotFather**, enviar `/newbot` y copiar el *token* que devuelve en `TELEGRAM_BOT_TOKEN` de `src/.env`.
+2. La dueña abre el bot recién creado y toca **Iniciar**.
+3. Ver el chat de la dueña y copiarlo en `TELEGRAM_CHAT_ID`:
+   ```bash
+   docker compose exec app php artisan config:clear
+   docker compose exec app php artisan telegram:chats
+   ```
+4. Probar el aviso:
+   ```bash
+   docker compose exec app php artisan config:clear
+   docker compose exec app php artisan telegram:probar
+   ```
+
+
+
+## Comandos frecuentes
 
 - **Compilar el frontend:** `docker compose exec app npm run build`
 - **Aplicar migraciones:** `docker compose exec app php artisan migrate`
 - **Reiniciar la base con datos de prueba** (borra todo): `docker compose exec app php artisan migrate:fresh --seed`
 - **Cargar datos de volumen para el benchmark:** `docker compose exec app php artisan db:seed --class=VolumenReservasSeeder`
+- **Cargar solo la clienta de demo y sus pedidos** (en una base ya cargada): `docker compose exec app php artisan db:seed --class=ClientaDemoSeeder`
 - **Ejecutar las pruebas:** `docker compose exec app php artisan test`
 - **Limpiar la caché de rutas:** `docker compose exec app php artisan route:clear`
 - **Ver logs:** `docker compose logs -f app`

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Descuento;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -26,6 +27,9 @@ class DescuentoController extends Controller
         'fecha_inicio.date' => 'La fecha de inicio no es una fecha válida.',
         'fecha_fin.date' => 'La fecha de fin no es una fecha válida.',
         'activo.boolean' => 'El campo activo debe ser verdadero o falso.',
+        'dias_semana.array' => 'Los días deben enviarse como una lista.',
+        'dias_semana.*.between' => 'Cada día debe ser entre 1 (lunes) y 7 (domingo).',
+        'dias_semana.*.distinct' => 'Elegiste el mismo día dos veces.',
     ];
 
     /**
@@ -38,6 +42,7 @@ class DescuentoController extends Controller
 
         $descuentos = Descuento::query()
             ->withCount('reservas')
+            ->with('dias')
             ->when($request->boolean('solo_vigentes'), fn ($q) => $q->vigentes($hoy))
             ->orderBy('nombre')
             ->get();
@@ -48,15 +53,17 @@ class DescuentoController extends Controller
     }
 
     /**
-     * Página pública del salón: solo las promociones vigentes hoy, sin datos internos
-     * (cuántas reservas la usaron). Sin promociones, el mensaje lo muestra la página.
+     * Página pública del salón: las promociones en vigencia, sin datos internos (cuántas
+     * reservas la usaron). Las de ciertos días ("los miércoles") se anuncian toda la semana,
+     * con sus días. Sin promociones, el mensaje lo muestra la página.
      */
     public function promociones(): JsonResponse
     {
         $hoy = now()->toDateString();
 
         $vigentes = Descuento::query()
-            ->vigentes($hoy)
+            ->with('dias')
+            ->enPeriodo($hoy)
             ->orderBy('nombre')
             ->get(['id', 'nombre', 'tipo', 'valor', 'fecha_inicio', 'fecha_fin']);
 
@@ -80,12 +87,23 @@ class DescuentoController extends Controller
             'fecha_inicio' => ['nullable', 'date'],
             'fecha_fin' => ['nullable', 'date'],
             'activo' => ['nullable', 'boolean'],
+            // Días en que rige (1 = lunes … 7 = domingo); vacío o sin enviar: todos los días
+            'dias_semana' => ['nullable', 'array', 'max:7'],
+            'dias_semana.*' => ['integer', 'between:1,7', 'distinct'],
         ], self::MENSAJES);
+
+        $dias = $validated['dias_semana'] ?? [];
+        unset($validated['dias_semana']);
 
         $datos = [...$validated, 'activo' => $validated['activo'] ?? true];
         $this->validarCoherencia($datos);
 
-        $descuento = Descuento::create($datos);
+        $descuento = DB::transaction(function () use ($datos, $dias) {
+            $nuevo = Descuento::create($datos);
+            $nuevo->guardarDias($dias);
+
+            return $nuevo;
+        });
 
         return response()->json([
             'message' => 'Descuento registrado exitosamente.',
@@ -109,7 +127,13 @@ class DescuentoController extends Controller
             'fecha_inicio' => ['nullable', 'date'],
             'fecha_fin' => ['nullable', 'date'],
             'activo' => ['sometimes', 'boolean'],
+            'dias_semana' => ['sometimes', 'nullable', 'array', 'max:7'],
+            'dias_semana.*' => ['integer', 'between:1,7', 'distinct'],
         ], self::MENSAJES);
+
+        $cambianLosDias = array_key_exists('dias_semana', $validated);
+        $dias = $validated['dias_semana'] ?? [];
+        unset($validated['dias_semana']);
 
         // Las reglas cruzadas se validan contra el resultado final (lo enviado + lo que ya estaba)
         $this->validarCoherencia([
@@ -119,7 +143,12 @@ class DescuentoController extends Controller
             'fecha_fin' => array_key_exists('fecha_fin', $validated) ? $validated['fecha_fin'] : $descuento->fecha_fin,
         ]);
 
-        $descuento->update($validated);
+        DB::transaction(function () use ($descuento, $validated, $cambianLosDias, $dias) {
+            $descuento->update($validated);
+            if ($cambianLosDias) {
+                $descuento->guardarDias($dias);
+            }
+        });
 
         return response()->json([
             'message' => 'Descuento actualizado exitosamente.',

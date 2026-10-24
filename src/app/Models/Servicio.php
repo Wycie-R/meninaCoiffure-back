@@ -8,11 +8,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class Servicio extends Model
 {
     protected $table = 'servicios';
-    protected $fillable = ['categoria_id', 'nombre', 'descripcion', 'duracion_minutos', 'activo'];
+    protected $fillable = ['categoria_id', 'especialidad_id', 'nombre', 'descripcion', 'duracion_minutos', 'activo'];
 
     public function categoria(): \Illuminate\Database\Eloquent\Relations\BelongsTo
     {
         return $this->belongsTo(CategoriaServicio::class, 'categoria_id');
+    }
+
+    /** Especialidad que pide el servicio (opcional): se avisa si se agenda con quien no la tiene. */
+    public function especialidad(): \Illuminate\Database\Eloquent\Relations\BelongsTo
+    {
+        return $this->belongsTo(Especialidad::class, 'especialidad_id');
     }
 
     public function detalles(): HasMany

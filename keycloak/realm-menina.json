@@ -1,6 +1,7 @@
 {
   "realm": "menina",
   "displayName": "Menina Coiffure",
+  "loginTheme": "menina",
   "enabled": true,
   "sslRequired": "external",
   "registrationAllowed": true,

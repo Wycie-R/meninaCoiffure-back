@@ -87,3 +87,17 @@ export function guaraniesCompacto(monto) {
 export function fechaBreve(iso) {
     return aFecha(iso).toLocaleDateString('es-PY', { day: 'numeric', month: 'short' }).replace('.', '')
 }
+
+// "martes 27/10": el día de la semana ayuda a no confundirse de fecha
+export function diaYFecha(iso) {
+    const fecha = aFecha(iso)
+    const nombreDelDia = fecha.toLocaleDateString('es-PY', { weekday: 'long' })
+    const dia = String(fecha.getDate()).padStart(2, '0')
+    const mes = String(fecha.getMonth() + 1).padStart(2, '0')
+    return `${nombreDelDia} ${dia}/${mes}`
+}
+
+// Enlace para abrir una ubicación en Google Maps (no hace falta ninguna librería de mapas)
+export function enlaceMapa(latitud, longitud) {
+    return `https://www.google.com/maps?q=${latitud},${longitud}`
+}

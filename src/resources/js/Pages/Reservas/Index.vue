@@ -17,6 +17,7 @@ import { aFecha, aISO, fechaLarga, guaranies, hora, plural } from '../../formato
 import { claseEntrada, claseEnfoque } from '../../ui'
 import { useReservas } from '../../reservas'
 import { usePermisos } from '../../auth'
+import { ATAJOS_PERIODO, rangoDe, atajoDeRango } from '../../rangos'
 import {
     aDomicilio,
     agruparPorDia,
@@ -119,6 +120,30 @@ const opcionesPersonal = computed(() => {
 
 const rangoInvalido = computed(() => Boolean(desde.value && hasta.value && desde.value > hasta.value))
 
+// ---------- Atajos de período ----------
+
+// En la agenda "Este mes" llega al último día del mes: también interesan las citas que vienen
+const OPCIONES_RANGO = { hastaFinDeMes: true }
+
+const atajoActivo = computed(() => atajoDeRango(desde.value, hasta.value, OPCIONES_RANGO))
+const sinFechas = computed(() => !desde.value && !hasta.value)
+
+function elegirAtajo(clave) {
+    const rango = rangoDe(clave, OPCIONES_RANGO)
+    desde.value = rango.desde
+    hasta.value = rango.hasta
+}
+
+function quitarFechas() {
+    desde.value = ''
+    hasta.value = ''
+}
+
+function clasePeriodo(activo) {
+    if (activo) return 'border-orquidea bg-orquidea/12 text-orquidea-claro'
+    return 'border-hilo text-bruma hover:border-hilo-fuerte hover:text-perla'
+}
+
 const base = computed(() =>
     filtrarBase(
         reservas.value,
@@ -191,9 +216,13 @@ const resumen = computed(() => {
     return partes.join(' ')
 })
 
-const filtrosSecundarios = computed(
-    () => (personalId.value !== 'todos' ? 1 : 0) + (desde.value || hasta.value ? 1 : 0)
-)
+const filtrosSecundarios = computed(() => {
+    let cantidad = 0
+    if (personalId.value !== 'todos') cantidad++
+    // Las fechas de un atajo ya se ven en la fila de período; solo cuentan las escritas a mano
+    if ((desde.value || hasta.value) && !atajoActivo.value) cantidad++
+    return cantidad
+})
 
 const descripcion = computed(() => {
     if (!cargado.value && !error.value) return 'Cargando las reservas…'
@@ -260,7 +289,7 @@ function abrir(reserva) {
 
 <template>
     <AppLayout>
-        <div class="mx-auto max-w-6xl px-6 py-10">
+        <div class="mx-auto max-w-6xl px-4 py-8 sm:px-6 sm:py-10">
             <PageHeader :titulo="esProfesional ? 'Tu agenda' : 'Agenda de reservas'" :descripcion="descripcion">
                 <Button variant="secondary" :disabled="cargando" @click="cargarReservas({ forzar: true })">
                     {{ cargando && reservas.length ? 'Actualizando…' : 'Actualizar' }}
@@ -272,13 +301,14 @@ function abrir(reserva) {
             </PageHeader>
 
             <template v-if="reservas.length">
-                <div class="mt-8 flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-                    <div class="flex w-fit gap-1 rounded-full border border-hilo bg-velo p-1" role="group" aria-label="Elegir qué reservas ver">
+                <div class="mt-6 flex flex-col gap-3 sm:mt-8 lg:flex-row lg:items-center lg:justify-between lg:gap-4">
+                    <!-- En celular las tres pestañas ocupan todo el ancho, con toques cómodos -->
+                    <div class="flex w-full gap-1 rounded-full border border-hilo bg-velo p-1 sm:w-fit" role="group" aria-label="Elegir qué reservas ver">
                         <button
                             v-for="opcion in opcionesVista"
                             :key="opcion.value"
                             type="button"
-                            class="inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-sm transition-colors"
+                            class="inline-flex min-h-10 flex-1 items-center justify-center gap-2 rounded-full px-3 py-1.5 text-sm transition-colors sm:flex-none sm:px-4"
                             :class="[
                                 claseEnfoque,
                                 vista === opcion.value ? 'bg-raso text-perla' : 'text-bruma hover:text-perla',
@@ -296,13 +326,53 @@ function abrir(reserva) {
                     </div>
                 </div>
 
-                <div class="mt-5 flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-                    <div class="flex flex-wrap gap-2" role="group" aria-label="Filtrar por estado">
+                <!-- Período: atajos rápidos; las fechas exactas siguen en "Más filtros".
+                     En celular es una fila que se desliza de costado, para no ocupar varios renglones -->
+                <div class="relative mt-4 sm:mt-5">
+                    <div
+                        class="-mx-4 flex items-center gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden"
+                        role="group"
+                        aria-label="Elegir período"
+                    >
+                    <span class="mr-1 shrink-0 text-sm text-niebla">Período</span>
+                    <button
+                        type="button"
+                        class="min-h-10 shrink-0 whitespace-nowrap rounded-full border px-4 py-2 text-sm transition-colors"
+                        :class="[claseEnfoque, clasePeriodo(sinFechas)]"
+                        :aria-pressed="sinFechas"
+                        @click="quitarFechas"
+                    >
+                        Todas las fechas
+                    </button>
+                    <button
+                        v-for="atajo in ATAJOS_PERIODO"
+                        :key="atajo.clave"
+                        type="button"
+                        class="min-h-10 shrink-0 whitespace-nowrap rounded-full border px-4 py-2 text-sm transition-colors"
+                        :class="[claseEnfoque, clasePeriodo(atajoActivo === atajo.clave)]"
+                        :aria-pressed="atajoActivo === atajo.clave"
+                        @click="elegirAtajo(atajo.clave)"
+                    >
+                        {{ atajo.etiqueta }}
+                    </button>
+                    <span v-if="!sinFechas && !atajoActivo" class="shrink-0 whitespace-nowrap text-sm text-niebla">Fechas elegidas en "Más filtros"</span>
+                    </div>
+                    <!-- Degradado en el borde: indica que hay más opciones deslizando -->
+                    <div class="pointer-events-none absolute inset-y-0 -right-4 w-10 bg-linear-to-l from-noche to-transparent sm:hidden" aria-hidden="true"></div>
+                </div>
+
+                <div class="mt-3 flex flex-col gap-3 sm:mt-4 sm:gap-4 lg:flex-row lg:items-start lg:justify-between">
+                    <div class="relative min-w-0">
+                        <div
+                            class="-mx-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:overflow-visible sm:px-0 sm:pb-0 [&::-webkit-scrollbar]:hidden"
+                            role="group"
+                            aria-label="Filtrar por estado"
+                        >
                         <button
                             v-for="opcion in opcionesEstado"
                             :key="opcion.value"
                             type="button"
-                            class="inline-flex items-center gap-2 rounded-full border px-4 py-2 text-sm transition-colors"
+                            class="inline-flex min-h-10 shrink-0 items-center gap-2 whitespace-nowrap rounded-full border px-4 py-2 text-sm transition-colors"
                             :class="[
                                 claseEnfoque,
                                 estado === opcion.value
@@ -316,6 +386,8 @@ function abrir(reserva) {
                             {{ opcion.label }}
                             <span class="tabular-nums text-niebla">{{ conteo(opcion.value) }}</span>
                         </button>
+                        </div>
+                        <div class="pointer-events-none absolute inset-y-0 -right-4 w-10 bg-linear-to-l from-noche to-transparent sm:hidden" aria-hidden="true"></div>
                     </div>
 
                     <div class="flex shrink-0 flex-wrap gap-2">
@@ -394,16 +466,16 @@ function abrir(reserva) {
                 <Button label="Ver todas las reservas" variant="secondary" @click="verTodas" />
             </EstadoVacio>
 
-            <div v-else class="mt-10">
+            <div v-else class="mt-8 sm:mt-10">
                 <p v-if="error" role="alert" class="mb-6 rounded-xl border border-borgona/40 bg-borgona-hondo px-4 py-3 text-sm text-borgona">
                     {{ error }} Se muestran los últimos datos cargados.
                 </p>
 
-                <div class="space-y-10">
+                <div class="space-y-8 sm:space-y-10">
                     <section
                         v-for="grupo in dias"
                         :key="grupo.fecha"
-                        class="grid gap-4 md:grid-cols-[8rem_minmax(0,1fr)] md:gap-8"
+                        class="grid gap-3 md:grid-cols-[8rem_minmax(0,1fr)] md:gap-8"
                         :aria-label="`${grupo.semana} ${grupo.numero} de ${grupo.mes}`"
                     >
                         <div class="flex items-baseline gap-3 md:block">
@@ -422,7 +494,7 @@ function abrir(reserva) {
                             <li v-for="reserva in grupo.reservas" :key="reserva.id">
                                 <button
                                     type="button"
-                                    class="group relative flex w-full flex-wrap items-center gap-x-5 gap-y-2 overflow-hidden rounded-2xl bg-velo py-4 pl-6 pr-4 text-left transition-colors hover:bg-terciopelo"
+                                    class="group relative flex w-full flex-wrap items-center gap-x-4 gap-y-2 overflow-hidden rounded-2xl bg-velo py-4 pl-6 pr-4 text-left transition-colors hover:bg-terciopelo sm:gap-x-5"
                                     :class="[
                                         claseEnfoque,
                                         reserva.id === reservaAbierta ? 'ring-1 ring-orquidea/50' : '',
@@ -431,7 +503,7 @@ function abrir(reserva) {
                                 >
                                     <span class="absolute inset-y-3 left-2 w-1.5 rounded-full" :class="tinteEstado[reserva.estado]" aria-hidden="true"></span>
 
-                                    <span class="w-36 shrink-0 whitespace-nowrap tabular-nums">
+                                    <span class="shrink-0 whitespace-nowrap tabular-nums sm:w-36">
                                         <span class="block">
                                             <span class="font-display text-2xl" :class="{ 'text-bruma': descartada(reserva) }">{{ hora(reserva.hora_inicio) }}</span>
                                             <span class="ml-1 text-sm text-niebla">a {{ hora(reserva.hora_fin) }}</span>
@@ -443,8 +515,8 @@ function abrir(reserva) {
                                     </span>
 
                                     <span class="order-3 block w-full min-w-0 sm:order-none sm:w-auto sm:flex-1">
-                                        <span class="flex min-w-0 items-center gap-2">
-                                            <span class="min-w-[7rem] truncate font-medium" :class="{ 'text-bruma': descartada(reserva) }">{{ nombreCliente(reserva) }}</span>
+                                        <span class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+                                            <span class="min-w-0 max-w-full truncate font-medium" :class="{ 'text-bruma': descartada(reserva) }" :title="nombreCliente(reserva)">{{ nombreCliente(reserva) }}</span>
                                             <span
                                                 v-if="aDomicilio(reserva)"
                                                 class="inline-flex min-w-0 items-center gap-1 overflow-hidden rounded-full bg-orquidea/12 px-2 py-0.5 text-xs text-orquidea-claro"
@@ -481,7 +553,7 @@ function abrir(reserva) {
                                         {{ guaranies(montosReserva(reserva).total) }}
                                     </span>
 
-                                    <span class="ml-auto flex w-28 shrink-0 justify-end sm:ml-0">
+                                    <span class="ml-auto flex shrink-0 justify-end sm:ml-0 sm:w-28">
                                         <StatusBadge :status="reserva.estado" />
                                     </span>
                                 </button>

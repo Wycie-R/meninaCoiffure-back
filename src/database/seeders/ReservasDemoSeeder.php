@@ -3,6 +3,7 @@
 namespace Database\Seeders;
 
 use App\Models\Cliente;
+use App\Models\Descuento;
 use App\Models\HorarioAtencion;
 use App\Models\HistorialVisita;
 use App\Models\MetodoPago;
@@ -67,28 +68,31 @@ class ReservasDemoSeeder extends Seeder
         $efectivo = MetodoPago::where('nombre', 'Efectivo')->first();
         $transferencia = MetodoPago::where('nombre', 'Transferencia bancaria')->first();
 
-        // [días hábiles desde hoy, profesional, cliente, inicio, servicios, estado, minutos de traslado si es a domicilio, fuera de horario]
+        // [días hábiles desde hoy, profesional, cliente, inicio, servicios, estado, minutos de traslado si es a domicilio,
+        //  fuera de horario, con la promoción vigente (HU-22)]
         // La atención fuera de horario cae el próximo sábado, día en que el salón no abre
         $agenda = [
-            [-6, $monica, 0, '09:00', [$corte, $color], 'completada', null, false],
-            [-6, $carla, 1, '10:00', [$peinado, $maquillaje], 'completada', 30, false],
-            [-5, $monica, 2, '14:00', [$corte, $nutricion], 'completada', null, false],
-            [-4, $carla, 3, '11:00', [$nutricion], 'no_asistio', null, false],
-            [-3, $monica, 4, '15:00', [$depilacion], 'cancelada', null, false],
-            [-2, $carla, 5, '09:00', [$corte], 'completada', null, false],
-            [-1, $monica, 1, '10:30', [$caballero], 'completada', null, false],
-            [0, $monica, 0, '09:00', [$nutricion], 'completada', null, false],
-            [0, $carla, 2, '13:00', [$peinado], 'confirmada', null, false],
-            [0, $monica, 3, '15:00', [$corte, $nutricion], 'pendiente', null, false],
-            [1, $carla, 4, '09:30', [$maquillaje], 'confirmada', 20, false],
-            [1, $monica, 5, '11:00', [$color], 'pendiente', null, false],
-            [2, $monica, 2, '08:30', [$corte, $nutricion], 'confirmada', null, false],
-            [3, $carla, 0, '14:00', [$peinado, $maquillaje], 'pendiente', 30, false],
-            [5, $monica, 1, '16:00', [$depilacion], 'pendiente', null, false],
-            [null, $carla, 3, '10:00', [$peinado, $maquillaje], 'confirmada', 45, true],
+            [-6, $monica, 0, '09:00', [$corte, $color], 'completada', null, false, false],
+            [-6, $carla, 1, '10:00', [$peinado, $maquillaje], 'completada', 30, false, false],
+            [-5, $monica, 2, '14:00', [$corte, $nutricion], 'completada', null, false, true],
+            [-4, $carla, 3, '11:00', [$nutricion], 'no_asistio', null, false, false],
+            [-3, $monica, 4, '15:00', [$depilacion], 'cancelada', null, false, false],
+            [-2, $carla, 5, '09:00', [$corte], 'completada', null, false, false],
+            [-1, $monica, 1, '10:30', [$caballero], 'completada', null, false, false],
+            [0, $monica, 0, '09:00', [$nutricion], 'completada', null, false, false],
+            [0, $carla, 2, '13:00', [$peinado], 'confirmada', null, false, false],
+            [0, $monica, 3, '15:00', [$corte, $nutricion], 'pendiente', null, false, false],
+            [1, $carla, 4, '09:30', [$maquillaje], 'confirmada', 20, false, false],
+            [1, $monica, 5, '11:00', [$color], 'pendiente', null, false, false],
+            [2, $monica, 2, '08:30', [$corte, $nutricion], 'confirmada', null, false, true],
+            [3, $carla, 0, '14:00', [$peinado, $maquillaje], 'pendiente', 30, false, false],
+            [5, $monica, 1, '16:00', [$depilacion], 'pendiente', null, false, false],
+            [null, $carla, 3, '10:00', [$peinado, $maquillaje], 'confirmada', 45, true, false],
         ];
 
-        foreach ($agenda as [$dias, $personal, $indiceCliente, $inicio, $servicios, $estado, $traslado, $fueraDeHorario]) {
+        $promocion = Descuento::where('nombre', 'Promo Primavera')->first();
+
+        foreach ($agenda as [$dias, $personal, $indiceCliente, $inicio, $servicios, $estado, $traslado, $fueraDeHorario, $conPromocion]) {
             $aDomicilio = $traslado !== null;
 
             if ($fueraDeHorario) {
@@ -118,6 +122,11 @@ class ReservasDemoSeeder extends Seeder
                 'fuera_de_horario' => $fueraDeHorario,
             ]);
 
+            if ($conPromocion && $promocion !== null) {
+                $reserva->descuento_id = $promocion->id;
+                $reserva->save();
+            }
+
             foreach ($servicios as $servicioReservado) {
                 $reserva->detalles()->create([
                     'servicio_id' => $servicioReservado->id,
@@ -127,7 +136,8 @@ class ReservasDemoSeeder extends Seeder
                 ]);
             }
 
-            $total = $reserva->load('detalles')->subtotal;
+            // Lo que se cobra es el total con la promoción, no el subtotal
+            $total = $reserva->load(['detalles', 'descuento'])->total;
 
             // HU-20: las citas confirmadas a domicilio dejan seña; las completadas quedan pagadas
             if ($estado === 'completada') {

@@ -16,6 +16,8 @@ import {
     aDomicilio,
     accionesDe,
     admiteServicios,
+    esModificable,
+    yaEmpezo,
     etiquetaDescuento,
     minutosReserva,
     montosReserva,
@@ -26,7 +28,7 @@ import {
     fueraDeHorario,
     textoTraslado,
 } from '../agenda'
-import { capitalizar, duracion, fechaLarga, guaranies, hora } from '../formato'
+import { capitalizar, duracion, enlaceMapa, fechaLarga, guaranies, hora } from '../formato'
 import { usePermisos } from '../auth'
 
 const props = defineProps({
@@ -73,13 +75,27 @@ const abandonada = computed(() => (mostrada.value ? sinCerrar(mostrada.value, pr
 const montos = computed(() => (mostrada.value ? montosReserva(mostrada.value) : { subtotal: 0, descuento: 0, total: 0 }))
 const tieneDescuento = computed(() => Boolean(mostrada.value && (mostrada.value.descuento || mostrada.value.descuento_id || montos.value.descuento)))
 const detalles = computed(() => mostrada.value?.detalles ?? [])
+// Ubicación que la clienta guardó en su ficha ("Estoy en casa"): la profesional la abre en el mapa
+const mapaDeLaClienta = computed(() => {
+    if (!mostrada.value || !aDomicilio(mostrada.value)) return ''
+    const latitud = mostrada.value.cliente?.latitud
+    const longitud = mostrada.value.cliente?.longitud
+    if (latitud === null || latitud === undefined || longitud === null || longitud === undefined) return ''
+    return enlaceMapa(latitud, longitud)
+})
+
 const traslado = computed(() => (mostrada.value ? textoTraslado(mostrada.value) : ''))
-// Se modifica mientras la cita no empezó (las mismas condiciones que para cancelarla)
-const puedeModificar = computed(() => accionesPosibles.value.includes('cancelar') && puedeCrearReservas.value)
-// Agregar un servicio suelto queda para la cita ya empezada: antes, se hace desde Modificar
-const puedeAgregar = computed(() =>
-    mostrada.value ? admiteServicios(mostrada.value) && puedeCrearReservas.value && !puedeModificar.value : false
-)
+// Se modifica siempre que no esté completada ni cancelada, aunque ya haya empezado o pasado
+const puedeModificar = computed(() => {
+    if (!mostrada.value || !puedeCrearReservas.value) return false
+    return esModificable(mostrada.value)
+})
+// Agregar un servicio "en el momento" es para la cita en curso: queda marcado como agregado ahí.
+// Antes de que empiece, los servicios se cambian desde Modificar
+const puedeAgregar = computed(() => {
+    if (!mostrada.value || !puedeCrearReservas.value) return false
+    return admiteServicios(mostrada.value) && yaEmpezo(mostrada.value, props.ahora)
+})
 
 const opcionesServicio = computed(() =>
     servicios.value
@@ -140,6 +156,7 @@ const estadoDeAccion = {
 }
 
 const etiquetaModal = {
+    especialidad: 'Confirmar especialidad',
     cancelar: 'Confirmar cancelación',
     completar: 'Confirmar cierre de la reserva',
     no_asistio: 'Confirmar ausencia',
@@ -173,6 +190,8 @@ const modificando = ref(false)
 const eleccion = ref({})
 const formulario = ref(null)
 const guardandoCambio = ref(false)
+// Texto del diálogo "¿Agendar igual?" cuando la profesional no tiene una especialidad
+const textoEspecialidad = ref('')
 const errorModificacion = ref('')
 const erroresModificacion = ref({})
 
@@ -195,6 +214,7 @@ function abrirModificacion() {
         a_domicilio: Boolean(actual.a_domicilio),
         direccion_domicilio: actual.direccion_domicilio ?? '',
         minutos_traslado: actual.a_domicilio ? Number(actual.minutos_traslado) || 0 : 0,
+        descuento_id: actual.descuento_id ?? null,
     }
     errorModificacion.value = ''
     erroresModificacion.value = {}
@@ -208,18 +228,28 @@ function cerrarModificacion() {
     guardandoCambio.value = false
 }
 
-watch(accionesPosibles, (lista) => {
-    if (modificando.value && !lista.includes('cancelar')) cerrarModificacion()
+// Si la reserva pasa a un estado bloqueado (completada o cancelada) mientras se modifica, se cierra el formulario
+watch(puedeModificar, (puede) => {
+    if (modificando.value && !puede) cerrarModificacion()
 })
 
 // Los errores que el formulario muestra junto a cada sección; el resto va al pie
 const CAMPOS_DEL_FORMULARIO = [
     'servicios', 'servicio_id', 'precio', 'direccion_domicilio', 'minutos_traslado', 'horario', 'hora_inicio', 'hora_fin', 'fecha',
+    'descuento_id',
 ]
 
-async function guardarCambio() {
+// La profesional no tiene la especialidad que pide algún servicio: se confirma antes de guardar
+async function guardarCambio(confirmado = false) {
     const datos = formulario.value?.datosCambio
     if (!datos) return
+
+    if (!confirmado && formulario.value?.textoEspecialidad) {
+        textoEspecialidad.value = formulario.value.textoEspecialidad
+        confirmacion.value = 'especialidad'
+        return
+    }
+    confirmacion.value = null
 
     const actual = mostrada.value
     guardandoCambio.value = true
@@ -322,6 +352,16 @@ async function agregarServicio() {
                         >
                             {{ mostrada.direccion_domicilio || 'Sin dirección registrada' }}
                         </span>
+                        <a
+                            v-if="mapaDeLaClienta"
+                            :href="mapaDeLaClienta"
+                            target="_blank"
+                            rel="noopener"
+                            class="mt-2 inline-flex min-h-9 items-center gap-1.5 rounded-full border border-orquidea/40 bg-orquidea/10 px-3 text-sm text-orquidea-claro transition-colors hover:border-orquidea hover:bg-orquidea/20 focus-visible:outline-2 focus-visible:outline-orquidea"
+                        >
+                            <Icono name="casa" class="h-4 w-4" />
+                            Cómo llegar
+                        </a>
                         <span v-if="traslado" class="mt-1 flex items-center gap-1.5 text-bruma">
                             <Icono name="pendiente" class="h-4 w-4 shrink-0 text-niebla" />
                             {{ traslado }}
@@ -444,46 +484,66 @@ async function agregarServicio() {
 
         <template #pie>
             <div v-if="mostrada && modificando">
-                <p v-if="errorModificacion" role="alert" class="mb-3 text-sm text-borgona">{{ errorModificacion }}</p>
-                <p v-else-if="formulario?.falta" class="mb-3 text-sm text-bruma">{{ formulario.falta }}</p>
-                <div class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <p v-if="errorModificacion" role="alert" class="mb-2 text-sm text-borgona sm:mb-3">{{ errorModificacion }}</p>
+                <p v-else-if="formulario?.falta" class="mb-2 text-xs text-bruma sm:mb-3 sm:text-sm">{{ formulario.falta }}</p>
+                <!-- En celular los dos botones van lado a lado: el pie fijo no le quita media pantalla al formulario -->
+                <div class="grid grid-cols-[auto_minmax(0,1fr)] gap-2 sm:flex sm:justify-end sm:gap-3">
                     <Button label="Volver" variant="secondary" :disabled="guardandoCambio" @click="cerrarModificacion" />
-                    <Button :disabled="guardandoCambio || !cambioListo" @click="guardarCambio">
+                    <Button :disabled="guardandoCambio || !cambioListo" @click="guardarCambio()">
                         {{ guardandoCambio ? 'Guardando…' : 'Guardar cambios' }}
                     </Button>
                 </div>
             </div>
             <div v-else-if="mostrada">
-                <p v-if="errorAccion" role="alert" class="mb-3 text-sm text-borgona">{{ errorAccion }}</p>
-                <p v-if="nota" class="mb-3 text-sm text-bruma">{{ nota }}</p>
-                <p v-if="sinPermisosDeAccion" class="mb-3 text-sm text-bruma">
+                <p v-if="errorAccion" role="alert" class="mb-2 text-sm text-borgona sm:mb-3">{{ errorAccion }}</p>
+                <p v-if="nota" class="mb-2 text-xs leading-relaxed text-bruma sm:mb-3 sm:text-sm">{{ nota }}</p>
+                <p v-if="sinPermisosDeAccion" class="mb-2 text-xs text-bruma sm:mb-3 sm:text-sm">
                     La administración no te habilitó para cambiar el estado ni modificar esta cita.
                 </p>
 
-                <div v-if="acciones.length || puedeModificar" class="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <!-- Celular: la acción principal arriba a todo el ancho y las demás de a dos por fila -->
+                <div v-if="acciones.length || puedeModificar" class="flex flex-wrap gap-2 sm:flex-nowrap sm:justify-end sm:gap-3">
                     <Button
                         v-if="acciones.includes('cancelar')"
                         variant="danger"
+                        class="min-w-[8rem] flex-1 sm:flex-none"
                         :disabled="procesando"
                         @click="confirmacion = 'cancelar'"
                     >
                         Cancelar
                     </Button>
-                    <Button v-if="puedeModificar" variant="secondary" :disabled="procesando" @click="abrirModificacion">
+                    <Button
+                        v-if="puedeModificar"
+                        variant="secondary"
+                        class="min-w-[8rem] flex-1 sm:flex-none"
+                        :disabled="procesando"
+                        @click="abrirModificacion"
+                    >
                         Modificar
                     </Button>
-                    <Button v-if="acciones.includes('confirmar')" :disabled="procesando" @click="ejecutar('confirmar')">
+                    <Button
+                        v-if="acciones.includes('confirmar')"
+                        class="order-first basis-full sm:order-none sm:basis-auto"
+                        :disabled="procesando"
+                        @click="ejecutar('confirmar')"
+                    >
                         {{ procesando ? 'Confirmando…' : 'Confirmar reserva' }}
                     </Button>
                     <Button
                         v-if="acciones.includes('no_asistio')"
                         variant="secondary"
+                        class="min-w-[8rem] flex-1 sm:flex-none"
                         :disabled="procesando"
                         @click="confirmacion = 'no_asistio'"
                     >
-                        Marcar que no asistió
+                        No asistió
                     </Button>
-                    <Button v-if="acciones.includes('completar')" :disabled="procesando" @click="confirmacion = 'completar'">
+                    <Button
+                        v-if="acciones.includes('completar')"
+                        class="order-first basis-full sm:order-none sm:basis-auto"
+                        :disabled="procesando"
+                        @click="confirmacion = 'completar'"
+                    >
                         Completar
                     </Button>
                 </div>
@@ -508,6 +568,15 @@ async function agregarServicio() {
                 <Button variant="danger" :disabled="procesando" @click="ejecutar('cancelar')">
                     {{ procesando ? 'Cancelando…' : 'Cancelar reserva' }}
                 </Button>
+            </div>
+        </template>
+
+        <template v-else-if="mostrada && confirmacion === 'especialidad'">
+            <h2 class="text-2xl">¿Agendar igual?</h2>
+            <p class="mt-2 text-sm text-bruma">{{ textoEspecialidad }}</p>
+            <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                <Button label="Volver" variant="secondary" @click="confirmacion = null" />
+                <Button label="Agendar igual" :disabled="guardandoCambio" @click="guardarCambio(true)" />
             </div>
         </template>
 

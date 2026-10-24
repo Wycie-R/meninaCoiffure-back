@@ -69,6 +69,8 @@ services:
       - "8080:8080"
     volumes:
       - ./keycloak/realm-menina.json:/opt/keycloak/data/import/realm-menina.json:ro
+      # Tema propio del login (misma estética que /login); start-dev no cachea los temas
+      - ./keycloak/themes:/opt/keycloak/themes:ro
       - keycloak_data:/opt/keycloak/data
     networks:
       - menina_net

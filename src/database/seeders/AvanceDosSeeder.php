@@ -173,5 +173,29 @@ class AvanceDosSeeder extends Seeder
                 collect($nombres)->map(fn ($nombre) => $especialidades[$nombre]->id)->all()
             );
         }
+
+        // Qué especialidad pide cada servicio: si se agenda con quien no la tiene, la pantalla avisa.
+        // Es la misma lista que la migración 2026_10_26_100000 aplica en bases ya cargadas
+        $especialidadDeServicio = [
+            'Corte de dama' => 'Peluquería',
+            'Corte de caballero' => 'Peluquería',
+            'Corte de niños' => 'Peluquería',
+            'Lavado, secado y modelado' => 'Peluquería',
+            'Nutrición e hidratación capilar' => 'Peluquería',
+            'Coloración completa' => 'Colorimetría',
+            'Mechas y reflejos' => 'Colorimetría',
+            'Balayage' => 'Colorimetría',
+            'Peinado para eventos' => 'Peinados para eventos',
+            'Maquillaje social' => 'Maquillaje',
+            'Depilación facial' => 'Estética',
+            'Depilación corporal' => 'Estética',
+            'Limpieza facial e hidratación' => 'Estética',
+        ];
+
+        foreach ($especialidadDeServicio as $servicio => $especialidad) {
+            Servicio::where('nombre', $servicio)
+                ->whereNull('especialidad_id')
+                ->update(['especialidad_id' => $especialidades[$especialidad]->id]);
+        }
     }
 }

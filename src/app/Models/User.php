@@ -11,7 +11,7 @@ use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 
 #[Fillable([
-    'name', 'email', 'password', 'rol_id', 'personal_id',
+    'name', 'email', 'keycloak_id', 'password', 'rol_id', 'personal_id',
     'puede_crear_reservas', 'puede_cambiar_estado', 'puede_reservar_fuera_de_horario',
     'puede_ver_clientes',
 ])]
@@ -71,6 +71,12 @@ class User extends Authenticatable
         return $this->belongsTo(Personal::class, 'personal_id');
     }
 
+    /** Ficha de clienta vinculada a la cuenta (solo para el rol cliente). */
+    public function cliente(): \Illuminate\Database\Eloquent\Relations\HasOne
+    {
+        return $this->hasOne(Cliente::class, 'user_id');
+    }
+
     public function hasRole(string $rolNombre): bool
     {
         return $this->role && strtolower($this->role->nombre) === strtolower($rolNombre);
@@ -82,6 +88,18 @@ class User extends Authenticatable
     }
 
     /**
+     * Adónde va la cuenta al iniciar sesión: el equipo a su panel, una clienta a sus citas.
+     */
+    public function paginaInicial(): string
+    {
+        if ($this->hasRole('cliente')) {
+            return '/mi-cuenta';
+        }
+
+        return '/dashboard';
+    }
+
+    /**
      * La administración tiene todos los permisos; una profesional, solo los que la dueña le habilitó.
      */
     public function tienePermiso(string $permiso): bool
@@ -90,7 +108,8 @@ class User extends Authenticatable
             return true;
         }
 
-        if (!array_key_exists($permiso, self::PERMISOS)) {
+        // Los permisos son del equipo: una clienta no tiene ninguno
+        if ($this->hasRole('cliente') || !array_key_exists($permiso, self::PERMISOS)) {
             return false;
         }
 

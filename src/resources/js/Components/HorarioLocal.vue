@@ -3,8 +3,11 @@ import { ref, computed, watch, onMounted } from 'vue'
 import Button from './Button.vue'
 import EditorSemana from './EditorSemana.vue'
 import Icono from './Icono.vue'
+import Campo from './Campo.vue'
+import Modal from './Modal.vue'
 import { api, mensajeError, primerosErrores } from '../api'
-import { fechaCorta, hora } from '../formato'
+import { fechaCorta, fechaLarga, hora, hoyISO } from '../formato'
+import { claseEntrada } from '../ui'
 import {
     comoFranjas,
     semanaDesdeFranjas,
@@ -15,6 +18,8 @@ import {
     erroresVacios,
     erroresSemanaDesdeServidor,
     actualizarHorarioSalon,
+    useCierres,
+    actualizarCierres,
 } from '../horarios'
 
 const emit = defineEmits(['aviso'])
@@ -47,7 +52,11 @@ async function cargar() {
     aplicar(respuesta.cuerpo?.data ?? [])
 }
 
-onMounted(cargar)
+onMounted(() => {
+    cargar()
+    // Se pide de nuevo: la lista tiene que estar al día para agregar o quitar cierres
+    cargarCierres({ forzar: true })
+})
 
 watch(semana, () => {
     if (semanaTieneErrores(errores.value)) errores.value = erroresVacios()
@@ -105,6 +114,67 @@ async function guardar() {
     fueraDeHorario.value = respuesta.cuerpo?.reservas_fuera_de_horario ?? []
     emit('aviso', 'Horario del local actualizado.')
 }
+
+// ---------- Días sin atención ("este miércoles no abrimos") ----------
+
+const { cierres, cierresCargados, cargarCierres } = useCierres()
+const nuevoCierre = ref({ fecha: '', motivo: '' })
+const erroresCierre = ref({})
+const avisoCierre = ref('')
+const guardandoCierre = ref(false)
+const cierrePorQuitar = ref(null)
+const quitandoCierre = ref(false)
+
+const listaCierres = computed(() =>
+    cierres.value.map((c) => ({ ...c, texto: fechaLarga(String(c.fecha).slice(0, 10), true) }))
+)
+
+async function cerrarDia() {
+    erroresCierre.value = {}
+    avisoCierre.value = ''
+
+    if (!nuevoCierre.value.fecha) {
+        erroresCierre.value = { fecha: 'Elige el día que el salón no trabaja.' }
+        return
+    }
+
+    guardandoCierre.value = true
+    const respuesta = await api('/api/cierres-salon', {
+        metodo: 'POST',
+        datos: { fecha: nuevoCierre.value.fecha, motivo: nuevoCierre.value.motivo.trim() || null },
+    })
+    guardandoCierre.value = false
+
+    if (!respuesta.ok) {
+        if (respuesta.status === 422) {
+            erroresCierre.value = primerosErrores(respuesta.cuerpo)
+        } else {
+            erroresCierre.value = { general: mensajeError(respuesta, 'cerrar ese día') }
+        }
+        return
+    }
+
+    actualizarCierres([...cierres.value, respuesta.cuerpo.data])
+    // El mensaje avisa si ese día ya había citas agendadas
+    avisoCierre.value = respuesta.cuerpo?.message ?? 'Listo.'
+    nuevoCierre.value = { fecha: '', motivo: '' }
+}
+
+async function quitarCierre() {
+    const cierre = cierrePorQuitar.value
+    quitandoCierre.value = true
+    const respuesta = await api(`/api/cierres-salon/${cierre.id}`, { metodo: 'DELETE' })
+    quitandoCierre.value = false
+    cierrePorQuitar.value = null
+
+    if (!respuesta.ok && respuesta.status !== 404) {
+        erroresCierre.value = { general: mensajeError(respuesta, 'quitar el cierre') }
+        return
+    }
+
+    actualizarCierres(cierres.value.filter((c) => c.id !== cierre.id))
+    avisoCierre.value = respuesta.cuerpo?.message ?? 'Ese día vuelve a tener el horario de siempre.'
+}
 </script>
 
 <template>
@@ -150,12 +220,79 @@ async function guardar() {
                 texto-descanso="Cerrado"
             />
 
-            <div class="sticky bottom-0 -mx-1 mt-6 flex flex-col-reverse gap-3 bg-gradient-to-t from-noche from-60% to-transparent px-1 pb-4 pt-6 sm:flex-row sm:justify-end">
+            <!-- Solo con cambios sin guardar la barra queda pegada abajo; si no, es un botón más al final -->
+            <div
+                class="-mx-1 mt-6 flex flex-col-reverse gap-3 px-1 sm:flex-row sm:justify-end"
+                :class="cambios ? 'sticky bottom-0 z-10 bg-gradient-to-t from-noche from-60% to-transparent pb-[max(1rem,env(safe-area-inset-bottom))] pt-6' : 'pb-2'"
+            >
                 <Button v-if="cambios" label="Descartar cambios" variant="secondary" :disabled="guardando" @click="descartar" />
                 <Button :disabled="guardando || !cambios" @click="guardar">
                     {{ guardando ? 'Guardando…' : 'Guardar horario' }}
                 </Button>
             </div>
         </div>
+
+        <!-- Días puntuales sin atención: no tocan el horario de la semana -->
+        <section class="mt-12 max-w-2xl" aria-labelledby="config-cierres">
+            <h2 id="config-cierres" class="text-3xl">Días sin atención</h2>
+            <p class="mt-2 text-sm leading-relaxed text-bruma">
+                Para un día puntual en que el salón no trabaja, por ejemplo "este miércoles no abrimos". El horario de la semana no
+                cambia: solo ese día queda sin citas, ni siquiera fuera de horario.
+            </p>
+
+            <p v-if="avisoCierre" role="status" class="mt-4 rounded-xl border border-miel/40 bg-miel/10 px-4 py-3 text-sm text-miel">
+                {{ avisoCierre }}
+            </p>
+            <p v-if="erroresCierre.general" role="alert" class="mt-4 rounded-xl border border-borgona/40 bg-borgona-hondo px-4 py-3 text-sm text-borgona">
+                {{ erroresCierre.general }}
+            </p>
+
+            <form class="mt-5 grid gap-4 rounded-[24px] border border-hilo bg-velo p-5 sm:grid-cols-[auto_1fr_auto] sm:items-end" novalidate @submit.prevent="cerrarDia">
+                <Campo etiqueta="Día" para="cierre-fecha" :error="erroresCierre.fecha">
+                    <input id="cierre-fecha" v-model="nuevoCierre.fecha" type="date" :min="hoyISO()" :class="claseEntrada(Boolean(erroresCierre.fecha))" />
+                </Campo>
+                <Campo etiqueta="Motivo (opcional)" para="cierre-motivo" :error="erroresCierre.motivo">
+                    <input
+                        id="cierre-motivo"
+                        v-model="nuevoCierre.motivo"
+                        type="text"
+                        maxlength="120"
+                        placeholder="Ej.: feriado, capacitación"
+                        :class="claseEntrada(Boolean(erroresCierre.motivo))"
+                    />
+                </Campo>
+                <Button type="submit" :disabled="guardandoCierre">
+                    {{ guardandoCierre ? 'Guardando…' : 'Cerrar ese día' }}
+                </Button>
+            </form>
+
+            <p v-if="cierresCargados && !listaCierres.length" class="mt-4 text-sm text-niebla">No hay días sin atención programados.</p>
+            <ul v-else-if="listaCierres.length" class="mt-4 divide-y divide-hilo rounded-[24px] border border-hilo">
+                <li v-for="cierre in listaCierres" :key="cierre.id" class="flex items-center justify-between gap-4 px-5 py-3.5">
+                    <div class="min-w-0">
+                        <p class="text-sm font-medium text-perla first-letter:uppercase">{{ cierre.texto }}</p>
+                        <p v-if="cierre.motivo" class="mt-0.5 text-sm text-bruma">{{ cierre.motivo }}</p>
+                    </div>
+                    <button
+                        type="button"
+                        class="shrink-0 rounded text-sm text-bruma underline-offset-4 hover:text-perla hover:underline focus-visible:outline-2 focus-visible:outline-orquidea"
+                        @click="cierrePorQuitar = cierre"
+                    >
+                        Quitar
+                    </button>
+                </li>
+            </ul>
+        </section>
+
+        <Modal :show="cierrePorQuitar !== null" label="Confirmar quitar el cierre" max-width="sm" @close="cierrePorQuitar = null">
+            <template v-if="cierrePorQuitar">
+                <h2 class="text-2xl">¿Volver a atender ese día?</h2>
+                <p class="mt-2 text-sm text-bruma first-letter:uppercase">{{ cierrePorQuitar.texto }} vuelve a tener el horario de siempre.</p>
+                <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+                    <Button label="Volver" variant="secondary" :disabled="quitandoCierre" @click="cierrePorQuitar = null" />
+                    <Button :disabled="quitandoCierre" @click="quitarCierre">{{ quitandoCierre ? 'Quitando…' : 'Sí, atender' }}</Button>
+                </div>
+            </template>
+        </Modal>
     </section>
 </template>
