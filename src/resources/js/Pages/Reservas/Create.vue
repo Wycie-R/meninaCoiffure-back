@@ -1469,6 +1469,8 @@ const lugares = [
                                 >
                                     <input
                                         type="checkbox"
+                                        name="servicios"
+                                        :value="servicio.id"
                                         class="sr-only"
                                         :checked="form.servicios.includes(servicio.id)"
                                         @change="alternarServicio(servicio.id)"
@@ -1558,7 +1560,7 @@ const lugares = [
                                     class="relative flex min-h-16 w-14 shrink-0 snap-start flex-col items-center justify-center rounded-lg border py-2 transition-colors sm:w-auto focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orquidea"
                                     :class="claseDia(dia)"
                                     :aria-pressed="form.fecha === dia.iso"
-                                    :aria-label="etiquetaDia(dia)"
+                                    :title="etiquetaDia(dia)"
                                     @click="elegirDia(dia)"
                                 >
                                     <span
@@ -1568,6 +1570,7 @@ const lugares = [
                                         {{ dia.semana }}
                                     </span>
                                     <span class="font-display text-xl leading-tight tabular-nums sm:text-2xl">{{ dia.dia }}</span>
+                                    <span class="sr-only">de {{ dia.mes }}{{ dia.disponible ? '' : ', el salón no atiende' }}</span>
                                     <span
                                         v-if="dia.esHoy"
                                         class="absolute bottom-1 h-1 w-1 rounded-full"
@@ -1839,51 +1842,52 @@ const lugares = [
 
                             <dl class="mt-4 space-y-3 text-sm">
                                 <div class="flex items-start gap-2.5">
-                                    <Icono name="personal" class="mt-0.5 h-4 w-4 shrink-0 text-orquidea" />
-                                    <div>
-                                        <dt class="sr-only">Profesional</dt>
-                                        <dd :class="profesionalElegido ? 'text-perla' : 'text-niebla'">
-                                            {{ profesionalElegido || 'Profesional sin elegir' }}
-                                        </dd>
-                                    </div>
+                                    <dt class="flex shrink-0">
+                                        <Icono name="personal" class="mt-0.5 h-4 w-4 shrink-0 text-orquidea" />
+                                        <span class="sr-only">Profesional</span>
+                                    </dt>
+                                    <dd :class="profesionalElegido ? 'text-perla' : 'text-niebla'">
+                                        {{ profesionalElegido || 'Profesional sin elegir' }}
+                                    </dd>
                                 </div>
                                 <div class="flex items-start gap-2.5">
-                                    <Icono name="reservas" class="mt-0.5 h-4 w-4 shrink-0 text-orquidea" />
-                                    <div>
-                                        <dt class="sr-only">Fecha</dt>
-                                        <dd class="first-letter:uppercase" :class="fechaElegida ? 'text-perla' : 'text-niebla'">
-                                            {{ fechaElegida || 'Fecha sin elegir' }}
-                                        </dd>
-                                    </div>
+                                    <dt class="flex shrink-0">
+                                        <Icono name="reservas" class="mt-0.5 h-4 w-4 shrink-0 text-orquidea" />
+                                        <span class="sr-only">Fecha</span>
+                                    </dt>
+                                    <dd class="first-letter:uppercase" :class="fechaElegida ? 'text-perla' : 'text-niebla'">
+                                        {{ fechaElegida || 'Fecha sin elegir' }}
+                                    </dd>
                                 </div>
                                 <div class="flex items-start gap-2.5">
-                                    <Icono name="pendiente" class="mt-0.5 h-4 w-4 shrink-0 text-orquidea" />
-                                    <div>
-                                        <dt class="sr-only">Horario</dt>
-                                        <dd class="tabular-nums" :class="form.hora_inicio ? 'text-perla' : 'text-niebla'">
-                                            <template v-if="form.hora_inicio">
-                                                {{ form.hora_inicio }}{{ horaFin ? ` – ${horaFin}` : '' }}
-                                                <span v-if="form.fuera_de_horario" class="mt-0.5 block text-miel">Fuera de horario</span>
-                                            </template>
-                                            <template v-else>Horario sin elegir</template>
-                                        </dd>
-                                    </div>
+                                    <dt class="flex shrink-0">
+                                        <Icono name="pendiente" class="mt-0.5 h-4 w-4 shrink-0 text-orquidea" />
+                                        <span class="sr-only">Horario</span>
+                                    </dt>
+                                    <dd class="tabular-nums" :class="form.hora_inicio ? 'text-perla' : 'text-niebla'">
+                                        <template v-if="form.hora_inicio">
+                                            {{ form.hora_inicio }}{{ horaFin ? ` – ${horaFin}` : '' }}
+                                            <span v-if="form.fuera_de_horario" class="mt-0.5 block text-miel">Fuera de horario</span>
+                                        </template>
+                                        <template v-else>Horario sin elegir</template>
+                                    </dd>
                                 </div>
                                 <div class="flex items-start gap-2.5">
-                                    <Icono :name="form.a_domicilio ? 'casa' : 'servicios'" class="mt-0.5 h-4 w-4 shrink-0 text-orquidea" />
-                                    <div class="min-w-0">
-                                        <dt class="sr-only">Lugar de atención</dt>
-                                        <dd class="text-perla">
-                                            {{ form.a_domicilio ? 'A domicilio' : 'En el salón' }}
-                                            <span
-                                                v-if="form.a_domicilio"
-                                                class="mt-0.5 block whitespace-pre-line break-words text-bruma"
-                                                :class="{ 'text-niebla': !form.direccion_domicilio.trim() }"
-                                            >
-                                                {{ form.direccion_domicilio.trim() || 'Dirección sin indicar' }}
-                                            </span>
-                                            <span v-if="form.a_domicilio" class="mt-0.5 block text-bruma">{{ textoTraslado }}</span>                                        </dd>
-                                    </div>
+                                    <dt class="flex shrink-0">
+                                        <Icono :name="form.a_domicilio ? 'casa' : 'servicios'" class="mt-0.5 h-4 w-4 shrink-0 text-orquidea" />
+                                        <span class="sr-only">Lugar de atención</span>
+                                    </dt>
+                                    <dd class="min-w-0 text-perla">
+                                        {{ form.a_domicilio ? 'A domicilio' : 'En el salón' }}
+                                        <span
+                                            v-if="form.a_domicilio"
+                                            class="mt-0.5 block whitespace-pre-line break-words text-bruma"
+                                            :class="{ 'text-niebla': !form.direccion_domicilio.trim() }"
+                                        >
+                                            {{ form.direccion_domicilio.trim() || 'Dirección sin indicar' }}
+                                        </span>
+                                        <span v-if="form.a_domicilio" class="mt-0.5 block text-bruma">{{ textoTraslado }}</span>
+                                    </dd>
                                 </div>
                             </dl>
                         </div>

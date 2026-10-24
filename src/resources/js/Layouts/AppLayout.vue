@@ -5,6 +5,7 @@ import { usePermisos, cerrarSesion } from '../auth'
 import { usePendientes, cargarPendientes } from '../solicitudes'
 import Monograma from '../Components/Monograma.vue'
 import Icono from '../Components/Icono.vue'
+import BuscadorRapido from '../Components/BuscadorRapido.vue'
 
 const page = usePage()
 const rutaActual = computed(() => page.url.split('?')[0])
@@ -68,6 +69,61 @@ const gruposVisibles = computed(() =>
 )
 
 const enlaces = grupos.flatMap((grupo) => grupo.items.filter((item) => item.href))
+
+const palabrasClave = {
+    '/dashboard': 'inicio hoy resumen agenda del dia',
+    '/reservas': 'citas turnos agenda pagos cobros',
+    '/reservas/crear': 'agendar cita turno nueva',
+    '/clientes': 'clientas fichas alergias preferencias historial',
+    '/servicios': 'precios carta catalogo',
+    '/servicios/crear': 'agregar servicio precio',
+    '/categorias': 'rubros tipos de servicio',
+    '/personal': 'equipo profesionales estilistas especialidades',
+    '/reportes': 'ingresos estadisticas graficos ventas',
+    '/configuracion': 'ajustes',
+}
+
+const seccionesConfiguracion = [
+    { label: 'Horario del salón', icono: 'reloj', seccion: 'horario', palabras: 'atencion abre cierra dias' },
+    { label: 'Permisos del equipo', icono: 'usuario', seccion: 'permisos', palabras: 'accesos roles profesionales' },
+    { label: 'Métodos de pago', icono: 'billete', seccion: 'metodos', palabras: 'efectivo transferencia tarjeta cobros' },
+    { label: 'Promociones', icono: 'etiqueta', seccion: 'descuentos', palabras: 'descuentos ofertas' },
+    { label: 'Especialidades', icono: 'destello', seccion: 'especialidades', palabras: 'habilidades equipo' },
+]
+
+const enlacesBuscador = computed(() => {
+    const base = gruposVisibles.value.flatMap((grupo) =>
+        grupo.items.map((item) => ({ ...item, grupo: grupo.titulo, palabras: palabrasClave[item.href] ?? '' }))
+    )
+    if (!esAdmin.value) return base
+
+    return [
+        ...base,
+        ...seccionesConfiguracion.map((s) => ({
+            label: s.label,
+            icono: s.icono,
+            href: `/configuracion?seccion=${s.seccion}`,
+            grupo: 'Configuración',
+            palabras: `configuracion ${s.palabras}`,
+        })),
+    ]
+})
+
+const buscadorAbierto = ref(false)
+const esMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform ?? '')
+const atajo = esMac ? '⌘ K' : 'Ctrl K'
+
+async function alternarBuscador() {
+    if (buscadorAbierto.value) {
+        buscadorAbierto.value = false
+        return
+    }
+    if (abierto.value) {
+        abierto.value = false
+        await nextTick()
+    }
+    buscadorAbierto.value = true
+}
 
 const nombresRol = { admin: 'Administración', profesional: 'Profesional' }
 
@@ -143,7 +199,12 @@ function cerrar() {
 }
 
 function manejarTecla(event) {
-    if (event.key === 'Escape') cerrar()
+    if ((event.ctrlKey || event.metaKey) && !event.altKey && !event.shiftKey && event.key.toLowerCase() === 'k') {
+        event.preventDefault()
+        alternarBuscador()
+        return
+    }
+    if (event.key === 'Escape' && !buscadorAbierto.value) cerrar()
 }
 
 function manejarCambio() {
@@ -153,6 +214,7 @@ function manejarCambio() {
 
 watch(rutaActual, () => {
     abierto.value = false
+    buscadorAbierto.value = false
 })
 
 watch(abierto, (valor) => {
@@ -335,10 +397,26 @@ onBeforeUnmount(() => {
                 </template>
             </nav>
 
-            <p class="ml-auto hidden text-sm text-bruma first-letter:uppercase sm:block">
-                {{ fechaHoy }}
-            </p>
+            <div class="ml-auto flex shrink-0 items-center gap-4">
+                <p class="hidden text-sm text-bruma first-letter:uppercase lg:block">
+                    {{ fechaHoy }}
+                </p>
+                <button
+                    type="button"
+                    class="flex items-center gap-2 rounded-full border border-hilo p-2 text-sm text-bruma transition-colors hover:border-hilo-fuerte hover:text-perla sm:py-1.5 sm:pl-3 sm:pr-2"
+                    :class="focusClass"
+                    aria-haspopup="dialog"
+                    :aria-keyshortcuts="esMac ? 'Meta+K' : 'Control+K'"
+                    @click="alternarBuscador"
+                >
+                    <Icono name="buscar" class="h-4 w-4" />
+                    <span class="sr-only sm:not-sr-only">Buscar</span>
+                    <kbd class="hidden rounded-md border border-hilo-fuerte px-1.5 py-0.5 font-sans text-xs text-bruma sm:block">{{ atajo }}</kbd>
+                </button>
+            </div>
         </header>
+
+        <BuscadorRapido :abierto="buscadorAbierto" :enlaces="enlacesBuscador" @cerrar="buscadorAbierto = false" />
 
         <main>
             <slot />

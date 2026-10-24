@@ -753,6 +753,8 @@ defineExpose({ datosCambio, falta, textoEspecialidad })
                     >
                         <input
                             type="checkbox"
+                            name="servicios"
+                            :value="servicio.id"
                             class="sr-only"
                             :checked="eleccion.servicios.includes(servicio.id)"
                             @change="alternarServicio(servicio.id)"

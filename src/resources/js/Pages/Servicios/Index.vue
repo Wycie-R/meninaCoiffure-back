@@ -444,7 +444,6 @@ watch(aviso, (valor) => {
                                     :seleccionado="servicio.id === seleccionado"
                                     :nuevo="servicio.id === servicioNuevo"
                                     mostrar-especialidad
-                                    :etiqueta="`${esAdmin ? 'Ver y editar' : 'Ver'} ${servicio.nombre}`"
                                     @elegir="abrirServicio(servicio)"
                                 />
                             </li>

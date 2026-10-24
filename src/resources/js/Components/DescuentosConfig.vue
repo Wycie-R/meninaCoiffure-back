@@ -276,15 +276,15 @@ async function eliminar() {
                 <li
                     v-for="d in lista"
                     :key="d.id"
-                    class="flex flex-col rounded-[24px] border border-hilo bg-velo p-5"
-                    :class="{ 'opacity-75': d.estado.orden >= 2 }"
+                    class="flex flex-col rounded-[24px] border border-hilo p-5"
+                    :class="d.estado.orden >= 2 ? 'bg-noche' : 'bg-velo'"
                 >
                     <div class="flex items-start justify-between gap-4">
                         <div class="min-w-0">
                             <span class="inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium" :class="d.estado.clase">{{ d.estado.texto }}</span>
-                            <h3 class="mt-2 break-words text-xl">{{ d.nombre }}</h3>
+                            <h3 class="mt-2 break-words text-xl" :class="{ 'text-bruma': d.estado.orden >= 2 }">{{ d.nombre }}</h3>
                         </div>
-                        <p class="shrink-0 font-display text-3xl leading-none tabular-nums text-orquidea-claro">{{ d.valorTexto }}</p>
+                        <p class="shrink-0 font-display text-3xl leading-none tabular-nums" :class="d.estado.orden >= 2 ? 'text-bruma' : 'text-orquidea-claro'">{{ d.valorTexto }}</p>
                     </div>
 
                     <p class="mt-3 inline-flex items-center gap-1.5 text-sm text-perla">

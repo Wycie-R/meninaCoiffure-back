@@ -79,7 +79,7 @@ async function ingresar() {
 </script>
 
 <template>
-    <div class="grid min-h-screen bg-noche text-perla lg:grid-cols-[1.1fr_1fr]">
+    <main class="grid min-h-screen bg-noche text-perla lg:grid-cols-[1.1fr_1fr]">
         <section class="relative hidden overflow-hidden border-r border-hilo bg-velo lg:flex lg:flex-col lg:justify-between lg:p-12">
             <div class="pointer-events-none absolute -bottom-24 -left-16 h-[34rem] w-[34rem] rounded-full bg-orquidea-hondo/25 blur-3xl"></div>
 
@@ -207,5 +207,5 @@ async function ingresar() {
                 </p>
             </div>
         </section>
-    </div>
+    </main>
 </template>

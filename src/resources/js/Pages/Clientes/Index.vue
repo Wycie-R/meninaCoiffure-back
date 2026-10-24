@@ -229,7 +229,6 @@ watch(aviso, (valor) => {
                                     c.id === destacado ? 'bg-menta/8' : '',
                                     c.id === modo ? 'bg-orquidea/8' : '',
                                 ]"
-                                :aria-label="`Ver la ficha de ${c.nombre} ${c.apellido}`"
                                 @click="abrirCliente(c)"
                             >
                                 <span class="flex min-w-0 items-center gap-3 md:col-span-1">

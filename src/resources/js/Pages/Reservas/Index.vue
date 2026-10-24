@@ -282,12 +282,6 @@ function verTodas() {
     vista.value = 'todas'
 }
 
-function etiquetaReserva(reserva) {
-    const lugar = aDomicilio(reserva) ? `, a domicilio${minutosTraslado(reserva) ? `. ${textoTraslado(reserva)}` : ''}` : ''
-    const horario = fueraDeHorario(reserva) ? ', fuera del horario del salón' : ''
-    return `Ver la reserva de ${nombreCliente(reserva)} a las ${hora(reserva.hora_inicio)}${lugar}${horario}`
-}
-
 function abrir(reserva) {
     reservaAbierta.value = reserva.id
 }
@@ -503,17 +497,15 @@ function abrir(reserva) {
                                     class="group relative flex w-full flex-wrap items-center gap-x-4 gap-y-2 overflow-hidden rounded-2xl bg-velo py-4 pl-6 pr-4 text-left transition-colors hover:bg-terciopelo sm:gap-x-5"
                                     :class="[
                                         claseEnfoque,
-                                        descartada(reserva) ? 'opacity-60' : '',
                                         reserva.id === reservaAbierta ? 'ring-1 ring-orquidea/50' : '',
                                     ]"
-                                    :aria-label="etiquetaReserva(reserva)"
                                     @click="abrir(reserva)"
                                 >
                                     <span class="absolute inset-y-3 left-2 w-1.5 rounded-full" :class="tinteEstado[reserva.estado]" aria-hidden="true"></span>
 
                                     <span class="shrink-0 whitespace-nowrap tabular-nums sm:w-36">
                                         <span class="block">
-                                            <span class="font-display text-2xl">{{ hora(reserva.hora_inicio) }}</span>
+                                            <span class="font-display text-2xl" :class="{ 'text-bruma': descartada(reserva) }">{{ hora(reserva.hora_inicio) }}</span>
                                             <span class="ml-1 text-sm text-niebla">a {{ hora(reserva.hora_fin) }}</span>
                                         </span>
                                         <span v-if="sinCerrar(reserva, ahora)" class="mt-0.5 flex items-center gap-1 text-xs text-miel">
@@ -524,15 +516,15 @@ function abrir(reserva) {
 
                                     <span class="order-3 block w-full min-w-0 sm:order-none sm:w-auto sm:flex-1">
                                         <span class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
-                                            <span class="min-w-0 max-w-full truncate font-medium" :title="nombreCliente(reserva)">{{ nombreCliente(reserva) }}</span>
+                                            <span class="min-w-0 max-w-full truncate font-medium" :class="{ 'text-bruma': descartada(reserva) }" :title="nombreCliente(reserva)">{{ nombreCliente(reserva) }}</span>
                                             <span
                                                 v-if="aDomicilio(reserva)"
-                                                class="inline-flex shrink-0 items-center gap-1 rounded-full bg-orquidea/12 px-2 py-0.5 text-xs text-orquidea-claro"
+                                                class="inline-flex min-w-0 items-center gap-1 overflow-hidden rounded-full bg-orquidea/12 px-2 py-0.5 text-xs text-orquidea-claro"
                                                 :title="textoTraslado(reserva) || undefined"
                                             >
-                                                <Icono name="casa" class="h-3.5 w-3.5" />
-                                                A domicilio
-                                                <span v-if="minutosTraslado(reserva)" class="hidden text-orquidea-claro/80 sm:inline">
+                                                <Icono name="casa" class="h-3.5 w-3.5 shrink-0" />
+                                                <span class="shrink-0">A domicilio</span>
+                                                <span v-if="minutosTraslado(reserva)" class="hidden truncate sm:inline">
                                                     · +{{ minutosTraslado(reserva) }} min de traslado
                                                 </span>
                                             </span>
@@ -545,19 +537,19 @@ function abrir(reserva) {
                                                 Fuera de horario
                                             </span>
                                         </span>
-                                        <span class="block truncate text-sm text-bruma">
+                                        <span class="block truncate text-sm" :class="descartada(reserva) ? 'text-niebla' : 'text-bruma'">
                                             {{ nombresServicios(reserva).join(', ') || 'Sin servicios' }}
                                         </span>
                                     </span>
 
-                                    <span class="hidden w-28 shrink-0 items-center gap-2 text-sm text-bruma lg:flex">
+                                    <span class="hidden w-28 shrink-0 items-center gap-2 text-sm lg:flex" :class="descartada(reserva) ? 'text-niebla' : 'text-bruma'">
                                         <span class="flex h-7 w-7 items-center justify-center rounded-full bg-raso font-display text-xs text-orquidea-claro" aria-hidden="true">
                                             {{ (reserva.personal?.nombre ?? '?')[0] }}{{ (reserva.personal?.apellido ?? '')[0] ?? '' }}
                                         </span>
                                         {{ reserva.personal?.nombre ?? 'Sin asignar' }}
                                     </span>
 
-                                    <span class="hidden w-28 shrink-0 text-right text-sm tabular-nums text-bruma md:block">
+                                    <span class="hidden w-28 shrink-0 text-right text-sm tabular-nums md:block" :class="descartada(reserva) ? 'text-niebla' : 'text-bruma'">
                                         {{ guaranies(montosReserva(reserva).total) }}
                                     </span>
 
