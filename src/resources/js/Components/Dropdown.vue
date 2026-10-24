@@ -1,7 +1,9 @@
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount, useId } from 'vue'
 import { normalizar } from '../formato'
+
+const idBusqueda = useId()
 
 const props = defineProps({
     modelValue: {
@@ -151,6 +153,7 @@ onBeforeUnmount(() => {
             >
                 <div v-if="buscable" class="border-b border-hilo p-1.5">
                     <input
+                        :id="idBusqueda"
                         ref="campoBusqueda"
                         v-model="busqueda"
                         type="text"

@@ -247,17 +247,27 @@ const estadoHoy = computed(() => {
             <div class="mx-auto flex max-w-5xl items-center justify-between gap-4 px-4 py-4 sm:px-6">
                 <div class="flex items-center gap-3">
                     <Monograma :size="32" />
-                    <span class="font-display text-lg">Menina Coiffure</span>
+                    <span class="whitespace-nowrap font-display text-lg">Menina Coiffure</span>
                 </div>
-                <a
-                    v-if="hayWhatsapp"
-                    :href="enlaceReservar"
-                    target="_blank"
-                    rel="noopener"
-                    class="rounded-full border border-hilo-fuerte px-4 py-1.5 text-sm text-perla transition-colors hover:bg-raso focus-visible:outline-2 focus-visible:outline-orquidea"
-                >
-                    Reservar
-                </a>
+                <div class="flex items-center gap-2">
+                    <a
+                        href="/login"
+                        aria-label="Acceso del equipo"
+                        class="whitespace-nowrap rounded-full px-3 py-1.5 text-sm text-bruma transition-colors hover:text-perla focus-visible:outline-2 focus-visible:outline-orquidea"
+                    >
+                        <span class="sm:hidden">Equipo</span>
+                        <span class="hidden sm:inline">Acceso del equipo</span>
+                    </a>
+                    <a
+                        v-if="hayWhatsapp"
+                        :href="enlaceReservar"
+                        target="_blank"
+                        rel="noopener"
+                        class="rounded-full border border-hilo-fuerte px-4 py-1.5 text-sm text-perla transition-colors hover:bg-raso focus-visible:outline-2 focus-visible:outline-orquidea"
+                    >
+                        Reservar
+                    </a>
+                </div>
             </div>
         </header>
 

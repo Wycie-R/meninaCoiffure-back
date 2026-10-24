@@ -926,6 +926,8 @@ const lugares = [
                                 >
                                     <input
                                         type="checkbox"
+                                        name="servicios"
+                                        :value="servicio.id"
                                         class="sr-only"
                                         :checked="form.servicios.includes(servicio.id)"
                                         @change="alternarServicio(servicio.id)"
