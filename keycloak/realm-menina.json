@@ -1,0 +1,72 @@
+{
+  "realm": "menina",
+  "displayName": "Menina Coiffure",
+  "enabled": true,
+  "sslRequired": "external",
+  "registrationAllowed": true,
+  "registrationEmailAsUsername": true,
+  "loginWithEmailAllowed": true,
+  "duplicateEmailsAllowed": false,
+  "resetPasswordAllowed": true,
+  "rememberMe": true,
+  "verifyEmail": false,
+  "editUsernameAllowed": false,
+  "bruteForceProtected": true,
+  "internationalizationEnabled": true,
+  "supportedLocales": ["es"],
+  "defaultLocale": "es",
+  "clients": [
+    {
+      "clientId": "menina-web",
+      "name": "Menina Coiffure (web)",
+      "description": "Sistema de gestión del salón. Delega el login en Keycloak con Authorization Code + PKCE.",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "clientAuthenticatorType": "client-secret",
+      "secret": "secreto-de-desarrollo",
+      "standardFlowEnabled": true,
+      "implicitFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "serviceAccountsEnabled": false,
+      "frontchannelLogout": true,
+      "rootUrl": "http://localhost:8000",
+      "baseUrl": "/salon",
+      "redirectUris": ["http://localhost:8000/auth/keycloak/callback"],
+      "webOrigins": ["http://localhost:8000"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:8000/*"
+      }
+    }
+  ],
+  "users": [
+    {
+      "username": "admin@meninacoiffure.com",
+      "email": "admin@meninacoiffure.com",
+      "emailVerified": true,
+      "firstName": "Mónica",
+      "lastName": "Propietaria",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "password123", "temporary": false }]
+    },
+    {
+      "username": "carla@meninacoiffure.com",
+      "email": "carla@meninacoiffure.com",
+      "emailVerified": true,
+      "firstName": "Carla",
+      "lastName": "Estilista",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "password123", "temporary": false }]
+    },
+    {
+      "username": "clienta@meninacoiffure.com",
+      "email": "clienta@meninacoiffure.com",
+      "emailVerified": true,
+      "firstName": "Clienta",
+      "lastName": "Demo",
+      "enabled": true,
+      "credentials": [{ "type": "password", "value": "password123", "temporary": false }]
+    }
+  ]
+}

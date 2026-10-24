@@ -51,6 +51,28 @@ services:
     networks:
       - menina_net
 
+  # Proveedor de identidad (login, registro y recuperación de contraseña). Usa su propio volumen
+  # y no toca la base del salón. El realm se importa desde keycloak/realm-menina.json al arrancar
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.0
+    container_name: menina_keycloak
+    restart: unless-stopped
+    command: start-dev --import-realm
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      # El navegador y Laravel ven a Keycloak con URLs distintas; los tokens siempre llevan la pública
+      KC_HOSTNAME: http://localhost:8080
+      KC_HOSTNAME_BACKCHANNEL_DYNAMIC: "true"
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./keycloak/realm-menina.json:/opt/keycloak/data/import/realm-menina.json:ro
+      - keycloak_data:/opt/keycloak/data
+    networks:
+      - menina_net
+
   portainer:
     image: portainer/portainer-ce:latest
     container_name: menina_portainer
@@ -71,4 +93,5 @@ networks:
 volumes:
   db_data:
   portainer_data:
+  keycloak_data:
   vendor:
