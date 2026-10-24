@@ -142,7 +142,6 @@ async function eliminar() {
                     type="button"
                     class="flex h-full w-full flex-col rounded-[24px] border border-hilo bg-velo p-5 text-left transition-colors hover:border-hilo-fuerte"
                     :class="claseEnfoque"
-                    :aria-label="`Editar la especialidad ${e.nombre}`"
                     @click="abrirEdicion(e)"
                 >
                     <span class="block text-xl font-display text-perla">{{ e.nombre }}</span>

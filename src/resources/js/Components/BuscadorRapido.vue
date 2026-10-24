@@ -97,8 +97,10 @@ const anuncio = computed(() => {
     return n ? `${n} ${n === 1 ? 'resultado' : 'resultados'}` : 'Sin resultados'
 })
 
-watch(consulta, () => {
+watch(consulta, async () => {
     activo.value = 0
+    await nextTick()
+    if (lista.value) lista.value.scrollTop = 0
 })
 
 watch(
@@ -136,12 +138,16 @@ function indiceDe(item) {
     return opciones.value.findIndex((o) => o.clave === item.clave)
 }
 
-async function mover(paso) {
+async function activar(indice) {
+    activo.value = indice
+    await nextTick()
+    document.getElementById(idOpcion(indice))?.scrollIntoView({ block: 'nearest' })
+}
+
+function mover(paso) {
     const total = opciones.value.length
     if (!total) return
-    activo.value = (activo.value + paso + total) % total
-    await nextTick()
-    document.getElementById(idOpcion(activo.value))?.scrollIntoView({ block: 'nearest' })
+    activar((activo.value + paso + total) % total)
 }
 
 function ir(href) {
@@ -168,10 +174,10 @@ function teclado(event) {
         mover(-1)
     } else if (event.key === 'Home' && opciones.value.length) {
         event.preventDefault()
-        activo.value = 0
+        activar(0)
     } else if (event.key === 'End' && opciones.value.length) {
         event.preventDefault()
-        activo.value = opciones.value.length - 1
+        activar(opciones.value.length - 1)
     } else if (event.key === 'Enter') {
         event.preventDefault()
         elegirActivo()

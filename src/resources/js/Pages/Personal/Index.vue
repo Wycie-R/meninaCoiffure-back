@@ -390,7 +390,6 @@ watch(aviso, (valor) => {
                                 p.id === destacado ? 'border-menta/40 bg-menta/8' : '',
                                 p.id === modo ? 'border-orquidea/50' : '',
                             ]"
-                            :aria-label="`${esAdmin ? 'Ver y editar' : 'Ver'} a ${p.nombreCompleto}`"
                             @click="abrirPersona(p)"
                         >
                             <span class="flex items-start gap-4">
