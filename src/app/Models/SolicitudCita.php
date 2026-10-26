@@ -16,9 +16,6 @@ class SolicitudCita extends Model
 
     public const FRANJAS = ['manana', 'tarde', 'indistinto'];
 
-    /** Tope de pedidos abiertos por clienta, para que la bandeja no se llene de duplicados. */
-    public const MAXIMO_PENDIENTES = 3;
-
     /** Servicios que se pueden pedir juntos en una misma cita. */
     public const MAXIMO_SERVICIOS = 8;
 

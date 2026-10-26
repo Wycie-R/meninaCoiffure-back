@@ -177,6 +177,89 @@ class AgendaAjustesTest extends TestCase
         $this->actingAs($carla)->postJson('/api/cierres-salon', ['fecha' => $this->dia('monday')])->assertStatus(403);
     }
 
+    public function test_la_duena_cierra_un_periodo_de_vacaciones(): void
+    {
+        $lunes = $this->dia('monday');
+        $miercoles = Carbon::parse($lunes)->addDays(2)->toDateString();
+        $viernes = Carbon::parse($lunes)->addDays(4)->toDateString();
+        $lunesSiguiente = Carbon::parse($lunes)->addWeek()->toDateString();
+        $this->postJson('/api/reservas', $this->reserva(['fecha' => $miercoles]))->assertStatus(201);
+
+        $this->postJson('/api/cierres-salon', ['fecha' => $lunes, 'fecha_hasta' => $viernes, 'motivo' => 'Vacaciones'])
+            ->assertStatus(201)
+            ->assertJsonPath('data.fecha', $lunes)
+            ->assertJsonPath('data.fecha_hasta', $viernes)
+            ->assertJsonPath('citas_afectadas', 1);
+
+        // Todos los días del período quedan cerrados, también el del medio
+        foreach ([$lunes, $miercoles, $viernes] as $fecha) {
+            $this->postJson('/api/reservas', $this->reserva(['fecha' => $fecha]))
+                ->assertStatus(422)->assertJsonValidationErrors('horario');
+            $this->getJson('/api/disponibilidad?' . http_build_query(['personal_id' => 1, 'fecha' => $fecha, 'duracion_minutos' => 60]))
+                ->assertStatus(200)->assertJsonCount(0, 'data.horarios');
+        }
+
+        // Al día siguiente de volver se atiende normal
+        $this->postJson('/api/reservas', $this->reserva(['fecha' => $lunesSiguiente]))->assertStatus(201);
+
+        $this->getJson('/api/cierres-salon')->assertStatus(200)->assertJsonPath('data.0.fecha_hasta', $viernes);
+    }
+
+    public function test_un_solo_dia_se_guarda_sin_fecha_hasta(): void
+    {
+        $lunes = $this->dia('monday');
+
+        $this->postJson('/api/cierres-salon', ['fecha' => $lunes, 'fecha_hasta' => $lunes])
+            ->assertStatus(201)
+            ->assertJsonPath('data.fecha_hasta', null);
+    }
+
+    public function test_el_periodo_no_va_al_reves_ni_se_cruza_con_otro_cierre(): void
+    {
+        $lunes = $this->dia('monday');
+        $jueves = Carbon::parse($lunes)->addDays(3)->toDateString();
+
+        // El último día antes del primero
+        $this->postJson('/api/cierres-salon', ['fecha' => $jueves, 'fecha_hasta' => $lunes])
+            ->assertStatus(422)->assertJsonValidationErrors('fecha_hasta');
+
+        // Un período demasiado largo (probablemente se eligió mal el año)
+        $this->postJson('/api/cierres-salon', ['fecha' => $lunes, 'fecha_hasta' => Carbon::parse($lunes)->addYear()->toDateString()])
+            ->assertStatus(422)->assertJsonValidationErrors('fecha_hasta');
+
+        CierreSalon::create(['fecha' => Carbon::parse($lunes)->addDays(2)->toDateString()]);
+
+        // Un período que incluye el miércoles ya cerrado no se guarda
+        $this->postJson('/api/cierres-salon', ['fecha' => $lunes, 'fecha_hasta' => $jueves])
+            ->assertStatus(422)->assertJsonValidationErrors('fecha');
+        $this->assertSame(1, CierreSalon::count());
+
+        // Un día suelto dentro de un período cargado tampoco
+        CierreSalon::query()->delete();
+        CierreSalon::create(['fecha' => $lunes, 'fecha_hasta' => $jueves]);
+        $this->postJson('/api/cierres-salon', ['fecha' => Carbon::parse($lunes)->addDay()->toDateString()])
+            ->assertStatus(422)->assertJsonValidationErrors('fecha');
+
+        // Justo después del período, sí
+        $this->postJson('/api/cierres-salon', ['fecha' => Carbon::parse($jueves)->addDay()->toDateString()])
+            ->assertStatus(201);
+    }
+
+    public function test_un_periodo_que_ya_empezo_sigue_listado_y_quitarlo_reabre_todos_sus_dias(): void
+    {
+        $ayer = now()->subDay()->toDateString();
+        $manana = now()->addDay()->toDateString();
+        $cierre = CierreSalon::create(['fecha' => $ayer, 'fecha_hasta' => now()->addDays(3)->toDateString(), 'motivo' => 'Accidente']);
+
+        $this->getJson('/api/cierres-salon')->assertStatus(200)->assertJsonPath('data.0.motivo', 'Accidente');
+        $this->assertNotNull(CierreSalon::delDia(now()->toDateString()));
+        $this->assertNotNull(CierreSalon::delDia($manana));
+
+        $this->deleteJson('/api/cierres-salon/' . $cierre->id)->assertStatus(200);
+
+        $this->assertNull(CierreSalon::delDia($manana));
+    }
+
     // ---------- Especialidad que pide cada servicio ----------
 
     public function test_los_servicios_llevan_la_especialidad_que_piden(): void

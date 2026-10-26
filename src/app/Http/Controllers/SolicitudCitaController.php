@@ -6,6 +6,7 @@ use App\Http\Requests\StoreReservaRequest;
 use App\Models\Personal;
 use App\Models\SolicitudCita;
 use App\Services\ReservaService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -51,8 +52,16 @@ class SolicitudCitaController extends Controller
         $solicitud->load(['cliente', 'servicios', 'reserva']);
 
         $datos = $solicitud->toArray();
+        // Con el horario de hoy del salón: si la dueña lo cambió después del pedido, la marca guardada quedó vieja
+        $fueraDeHorario = $this->quedaFueraDelHorario($solicitud);
+        $datos['fuera_de_horario'] = $fueraDeHorario;
         // Sugerencia para agendar: quiénes están libres hoy en el horario que pidió la clienta
-        $datos['profesionales_libres'] = $this->profesionalesLibres($solicitud);
+        $datos['profesionales_libres'] = $this->profesionalesLibres($solicitud, $fueraDeHorario);
+        // Traslado con el que se calculó la hora que vio la clienta: se precarga al aceptar
+        $datos['traslado_sugerido'] = 0;
+        if ($solicitud->a_domicilio) {
+            $datos['traslado_sugerido'] = ReservaService::TRASLADO_ESTIMADO;
+        }
 
         return response()->json(['data' => $datos]);
     }
@@ -109,22 +118,50 @@ class SolicitudCitaController extends Controller
         ]);
     }
 
-    private function profesionalesLibres(SolicitudCita $solicitud): array
+    /**
+     * Si la hora pedida queda fuera del horario actual del salón. Los pedidos viejos sin hora
+     * conservan lo que se guardó.
+     */
+    private function quedaFueraDelHorario(SolicitudCita $solicitud): bool
     {
-        if ($solicitud->estado !== 'pendiente' || $solicitud->hora_preferida === null) {
-            return [];
+        if ($solicitud->hora_preferida === null) {
+            return (bool) $solicitud->fuera_de_horario;
         }
 
+        $horaInicio = substr((string) $solicitud->hora_preferida, 0, 5);
+        $horaFin = Carbon::createFromFormat('H:i', $horaInicio)->addMinutes($this->duracionDe($solicitud))->format('H:i');
+
+        return $this->reservaService->quedaFueraDelHorario($solicitud->fecha_preferida->toDateString(), $horaInicio, $horaFin);
+    }
+
+    private function duracionDe(SolicitudCita $solicitud): int
+    {
         $duracion = 0;
         foreach ($solicitud->servicios as $servicio) {
             $duracion += (int) $servicio->duracion_minutos;
         }
 
+        return max($duracion, 5);
+    }
+
+    private function profesionalesLibres(SolicitudCita $solicitud, bool $fueraDeHorario): array
+    {
+        if ($solicitud->estado !== 'pendiente' || $solicitud->hora_preferida === null) {
+            return [];
+        }
+
+        $servicioIds = [];
+        foreach ($solicitud->servicios as $servicio) {
+            $servicioIds[] = (int) $servicio->id;
+        }
+
+        // El mismo cálculo que vio la clienta: especialidad y traslado estimado incluidos
         $resultado = $this->reservaService->horariosDelSalon(
             $solicitud->fecha_preferida->toDateString(),
-            max($duracion, 5),
-            (bool) $solicitud->fuera_de_horario,
+            $this->duracionDe($solicitud),
+            $fueraDeHorario,
             (bool) $solicitud->a_domicilio,
+            $servicioIds,
         );
 
         $horaPedida = substr((string) $solicitud->hora_preferida, 0, 5);

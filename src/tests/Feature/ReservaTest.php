@@ -796,6 +796,20 @@ class ReservaTest extends TestCase
         // Quitar la marca con la cita fuera del horario no se permite
         $this->putJson("/api/reservas/{$id}", ['fuera_de_horario' => false])
             ->assertStatus(422)->assertJsonValidationErrors(['horario']);
+
+        // Volverla a un horario en que el salón atiende le quita la marca sola
+        $this->putJson("/api/reservas/{$id}", ['hora_inicio' => '10:00', 'hora_fin' => '11:00'])
+            ->assertStatus(200)->assertJsonPath('data.fuera_de_horario', false);
+    }
+
+    /**
+     * La marca dice la verdad: una cita dentro del horario del salón no queda "fuera de horario"
+     * aunque se haya pedido así.
+     */
+    public function test_marcar_fuera_de_horario_una_cita_que_cae_dentro_no_deja_la_marca(): void
+    {
+        $this->postJson('/api/reservas', $this->payload(['fuera_de_horario' => true]))
+            ->assertStatus(201)->assertJsonPath('data.fuera_de_horario', false);
     }
 
     /**

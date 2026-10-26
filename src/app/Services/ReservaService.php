@@ -30,6 +30,12 @@ class ReservaService
     public const JORNADA_MAXIMA = ['06:00:00', '22:00:00'];
 
     /**
+     * Minutos de viaje que se reservan antes y después de una cita a domicilio que pide una clienta.
+     * Es el mismo valor que se precarga al aceptar el pedido, así la hora ofrecida sigue libre.
+     */
+    public const TRASLADO_ESTIMADO = 30;
+
+    /**
      * Transiciones de estado permitidas por PUT. Los estados finales no aparecen como origen.
      * La cancelación se delega en cancelarReserva para aplicar sus propias reglas.
      */
@@ -70,6 +76,9 @@ class ReservaService
 
             // Regla 2: dentro del horario del salón, salvo atención fuera de horario autorizada
             $this->validarHorarioSalon($fecha, $horaInicio, $horaFin, $fueraDeHorario);
+
+            // La marca dice la verdad: si la cita cabe en el horario del salón, no es "fuera de horario"
+            $fueraDeHorario = $fueraDeHorario && $this->quedaFueraDelHorario($fecha, $horaInicio, $horaFin);
 
             if (!empty($datos['descuento_id'])) {
                 $this->validarDescuentoVigente((int) $datos['descuento_id'], $fecha);
@@ -229,8 +238,11 @@ class ReservaService
                 // Revalidar Regla 1 excluyendo la reserva actual
                 $this->validarSolapamiento($personalId, $fecha, $horaInicio, $horaFin, $domicilio['minutos_traslado'], $reserva->id);
 
-                // Revalidar Regla 2
-                $this->validarHorarioSalon($fecha, $horaInicio, $horaFin, $fueraDeHorario);
+                // Revalidar Regla 2 solo si la cita se mueve: corregir una ausencia no cambia la hora,
+                // y el horario del salón pudo cambiar después de agendarla
+                if ($horarioCambiado) {
+                    $this->validarHorarioSalon($fecha, $horaInicio, $horaFin, $fueraDeHorario);
+                }
             }
 
             $camposActualizables = [
@@ -238,8 +250,9 @@ class ReservaService
             ];
 
             $datosActualizar = array_intersect_key($datos, array_flip($camposActualizables));
-            if (array_key_exists('fuera_de_horario', $datos)) {
-                $datosActualizar['fuera_de_horario'] = $fueraDeHorario;
+            // Al mover la cita o cambiar la marca, se guarda si de verdad queda fuera del horario
+            if (array_key_exists('fuera_de_horario', $datos) || $horarioCambiado) {
+                $datosActualizar['fuera_de_horario'] = $fueraDeHorario && $this->quedaFueraDelHorario($fecha, $horaInicio, $horaFin);
             }
             if (isset($datosActualizar['hora_inicio'])) {
                 $datosActualizar['hora_inicio'] = $horaInicio;
@@ -499,21 +512,27 @@ class ReservaService
 
     /**
      * Horarios para el pedido de una clienta: un horario está libre si al menos una profesional
-     * activa puede atenderlo. La clienta no elige profesional (la asigna la dueña), así que se
-     * unen las agendas de todas. Cada horario lleva qué profesionales están libres, para que la
-     * dueña tenga una sugerencia al aceptar; ese dato no se le muestra a la clienta.
+     * activa que hace esos servicios puede atenderlo. La clienta no elige profesional (la asigna
+     * la dueña), así que se unen las agendas de todas. Cada horario lleva qué profesionales están
+     * libres, para que la dueña tenga una sugerencia al aceptar; ese dato no se le muestra a la clienta.
+     * A domicilio se reserva el traslado estimado, el mismo que se precarga al aceptar.
      *
+     * @param array<int, int> $servicioIds
      * @return array{franjas: array<int, array{0: string, 1: string}>, horarios: array<int, array{hora: string, disponible: bool, profesionales: array<int, int>}>}
      */
-    public function horariosDelSalon(string $fecha, int $duracion, bool $fueraDeHorario = false, bool $aDomicilio = false): array
+    public function horariosDelSalon(string $fecha, int $duracion, bool $fueraDeHorario = false, bool $aDomicilio = false, array $servicioIds = []): array
     {
-        $profesionales = Personal::where('activo', true)->orderBy('id')->get();
+        $profesionales = $this->profesionalesQueAtienden($servicioIds);
+
+        $traslado = 0;
+        if ($aDomicilio) {
+            $traslado = self::TRASLADO_ESTIMADO;
+        }
 
         $franjas = [];
         $porHora = [];
         foreach ($profesionales as $profesional) {
-            // El traslado lo define la dueña al aceptar: acá se calcula sin traslado
-            $agenda = $this->horariosDisponibles($profesional->id, $fecha, $duracion, $fueraDeHorario, $aDomicilio);
+            $agenda = $this->horariosDisponibles($profesional->id, $fecha, $duracion, $fueraDeHorario, $aDomicilio, $traslado);
             $franjas = $agenda['franjas'];
 
             foreach ($agenda['horarios'] as $horario) {
@@ -535,6 +554,46 @@ class ReservaService
             'franjas' => $franjas,
             'horarios' => array_values($porHora),
         ];
+    }
+
+    /**
+     * Profesionales activas que tienen todas las especialidades que piden los servicios.
+     * Si ninguna las tiene todas (por ejemplo, maquillaje + peinado de evento), se usan todas
+     * las activas: la dueña igual puede agendar con quien quiera al aceptar.
+     *
+     * @param array<int, int> $servicioIds
+     * @return array<int, Personal>
+     */
+    protected function profesionalesQueAtienden(array $servicioIds): array
+    {
+        $activas = Personal::with('especialidades')->where('activo', true)->orderBy('id')->get()->all();
+
+        $requeridas = [];
+        foreach (Servicio::whereIn('id', $servicioIds)->whereNotNull('especialidad_id')->get() as $servicio) {
+            $requeridas[] = (int) $servicio->especialidad_id;
+        }
+
+        if (count($requeridas) === 0) {
+            return $activas;
+        }
+
+        $conTodas = [];
+        foreach ($activas as $profesional) {
+            $tiene = [];
+            foreach ($profesional->especialidades as $especialidad) {
+                $tiene[] = (int) $especialidad->id;
+            }
+
+            if (count(array_diff($requeridas, $tiene)) === 0) {
+                $conTodas[] = $profesional;
+            }
+        }
+
+        if (count($conTodas) === 0) {
+            return $activas;
+        }
+
+        return $conTodas;
     }
 
     /**
@@ -733,6 +792,20 @@ class ReservaService
             'direccion_domicilio' => $aDomicilio ? $direccion : null,
             'minutos_traslado' => $aDomicilio ? (int) ($datos['minutos_traslado'] ?? 0) : 0,
         ];
+    }
+
+    /**
+     * Si una cita de esa fecha y horas queda (aunque sea en parte) fuera del horario del salón.
+     * Un día en que el salón no abre cuenta como fuera de horario.
+     */
+    public function quedaFueraDelHorario(string $fecha, string $horaInicio, string $horaFin): bool
+    {
+        $franjas = $this->franjasLocal(substr($fecha, 0, 10));
+        if (count($franjas) === 0) {
+            return true;
+        }
+
+        return !$this->cabeEnFranjas($this->aMinutos($horaInicio), $this->aMinutos($horaFin), $franjas);
     }
 
     /**

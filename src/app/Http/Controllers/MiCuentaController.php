@@ -9,6 +9,7 @@ use App\Models\Servicio;
 use App\Models\SolicitudCita;
 use App\Services\AvisoTelegram;
 use App\Services\ReservaService;
+use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -72,7 +73,7 @@ class MiCuentaController extends Controller
         $duracion = $this->duracionDe($datos['servicios']);
         $fueraDeHorario = (bool) ($datos['fuera_de_horario'] ?? false);
         $aDomicilio = (bool) ($datos['a_domicilio'] ?? false);
-        $resultado = $this->reservaService->horariosDelSalon($fecha, $duracion, $fueraDeHorario, $aDomicilio);
+        $resultado = $this->reservaService->horariosDelSalon($fecha, $duracion, $fueraDeHorario, $aDomicilio, $datos['servicios']);
 
         $horarios = [];
         foreach ($resultado['horarios'] as $horario) {
@@ -203,13 +204,6 @@ class MiCuentaController extends Controller
             'telefono.max' => 'El teléfono no puede superar los 30 caracteres.',
         ]);
 
-        $pendientes = SolicitudCita::where('cliente_id', $ficha->id)->where('estado', 'pendiente')->count();
-        if ($pendientes >= SolicitudCita::MAXIMO_PENDIENTES) {
-            throw ValidationException::withMessages([
-                'servicios' => ['Ya tienes ' . SolicitudCita::MAXIMO_PENDIENTES . ' pedidos esperando respuesta. Espera a que el salón los responda.'],
-            ]);
-        }
-
         $aDomicilio = (bool) ($datos['a_domicilio'] ?? false);
         $direccionEscrita = trim((string) ($datos['direccion_domicilio'] ?? ''));
         $tieneUbicacion = isset($datos['latitud']) && isset($datos['longitud']);
@@ -233,6 +227,13 @@ class MiCuentaController extends Controller
         $hora = $datos['hora_preferida'];
         $fueraDeHorario = (bool) ($datos['fuera_de_horario'] ?? false);
         $this->exigirHorarioLibre($fecha, $hora, $datos['servicios'], $fueraDeHorario, $aDomicilio);
+
+        // La clienta pudo mirar los horarios "fuera de horario" y elegir uno que cae dentro del
+        // horario del salón: entonces el pedido no es fuera de horario
+        if ($fueraDeHorario) {
+            $horaFin = Carbon::createFromFormat('H:i', $hora)->addMinutes($this->duracionDe($datos['servicios']))->format('H:i');
+            $fueraDeHorario = $this->reservaService->quedaFueraDelHorario($fecha, $hora, $horaFin);
+        }
 
         $franja = 'tarde';
         if ($hora < '12:00') {
@@ -323,7 +324,7 @@ class MiCuentaController extends Controller
      */
     private function exigirHorarioLibre(string $fecha, string $hora, array $servicios, bool $fueraDeHorario, bool $aDomicilio): void
     {
-        $resultado = $this->reservaService->horariosDelSalon($fecha, $this->duracionDe($servicios), $fueraDeHorario, $aDomicilio);
+        $resultado = $this->reservaService->horariosDelSalon($fecha, $this->duracionDe($servicios), $fueraDeHorario, $aDomicilio, $servicios);
 
         foreach ($resultado['horarios'] as $horario) {
             if ($horario['hora'] === $hora && $horario['disponible']) {
