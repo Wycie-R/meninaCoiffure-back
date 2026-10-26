@@ -184,16 +184,6 @@ body {
     color: var(--bruma);
 }
 
-.mc-requeridos {
-    margin: 0.75rem 0 0;
-    font-size: 0.75rem;
-    color: var(--niebla);
-}
-
-.mc-requerido {
-    color: var(--orquidea);
-}
-
 .mc-usuario-intentado {
     display: flex;
     flex-wrap: wrap;

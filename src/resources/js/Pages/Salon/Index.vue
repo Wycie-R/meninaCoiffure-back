@@ -2,7 +2,7 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { api, mensajeError } from '../../api'
 import { guaranies, aFecha, plural } from '../../formato'
-import { DIAS, useHorarioSalon, semanaDesdeFranjas, textoDiasPromocion, useCierres, diaSemanaDe } from '../../horarios'
+import { DIAS, useHorarioSalon, semanaDesdeFranjas, textoDiasPromocion, useCierres, diaSemanaDe, finDelCierre } from '../../horarios'
 import { ilustracionDe, tonoDe } from '../../ui'
 import Monograma from '../../Components/Monograma.vue'
 import Ilustracion from '../../Components/Ilustracion.vue'
@@ -264,7 +264,8 @@ function fechaDeCierre(iso) {
     return `${nombre} ${dia}/${mes}`
 }
 
-// Próximos cierres de los próximos 14 días, sin contar hoy (hoy ya lo dice el estado)
+// Próximos cierres de los próximos 14 días, sin contar hoy (hoy ya lo dice el estado).
+// Un período se muestra entero: "del lunes 02/11 al viernes 13/11"
 const proximosCierres = computed(() => {
     const hoy = isoLocal(ahora.value)
     const limite = new Date(ahora.value)
@@ -273,8 +274,17 @@ const proximosCierres = computed(() => {
 
     const lista = []
     for (const cierre of cierres.value) {
-        const fecha = String(cierre.fecha).slice(0, 10)
-        if (fecha > hoy && fecha <= hasta) lista.push(fechaDeCierre(fecha))
+        const desde = String(cierre.fecha).slice(0, 10)
+        const fin = finDelCierre(cierre)
+
+        // Ya terminó (o termina hoy) o empieza después de las próximas dos semanas
+        if (fin <= hoy || desde > hasta) continue
+
+        if (desde === fin) {
+            lista.push(fechaDeCierre(desde))
+        } else {
+            lista.push(`del ${fechaDeCierre(desde)} al ${fechaDeCierre(fin)}`)
+        }
     }
     return lista
 })

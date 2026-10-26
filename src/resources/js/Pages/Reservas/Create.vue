@@ -416,6 +416,16 @@ const FRANJA_PREFERIDA = {
 const avisoSinLibres = ref('')
 // La hora que pidió la clienta, para volver a aplicarla si una respuesta vieja de la agenda la borró
 const horaDeLaSolicitud = ref('')
+// El pedido cae fuera del horario del salón: se marca "Atender fuera del horario" solo
+const fueraDeHorarioDeLaSolicitud = ref(false)
+
+function aplicarFueraDeHorarioDeLaSolicitud() {
+    if (!fueraDeHorarioDeLaSolicitud.value || !puedeFueraDeHorario.value) return
+    form.value.fuera_de_horario = true
+}
+
+// Los permisos de quien agenda llegan después que la página: cuando llegan, se aplica
+watch(puedeFueraDeHorario, aplicarFueraDeHorarioDeLaSolicitud)
 
 // "el martes 27/10 a las 10:00"; los pedidos viejos solo tienen la franja
 const cuandoLoPidio = computed(() => {
@@ -470,11 +480,15 @@ async function cargarSolicitud() {
     form.value.servicios = idsPedidos
     form.value.a_domicilio = Boolean(datos.a_domicilio)
     form.value.direccion_domicilio = datos.direccion_domicilio ?? ''
-
-    // Primero el "fuera de horario": así el día pedido no se descarta por estar cerrado
-    if (datos.fuera_de_horario && puedeFueraDeHorario.value) {
-        form.value.fuera_de_horario = true
+    // El mismo traslado con el que se le ofreció la hora a la clienta: así esa hora sigue libre
+    if (form.value.a_domicilio) {
+        form.value.minutos_traslado = Number(datos.traslado_sugerido) || 0
     }
+
+    // Primero el "fuera de horario": así el día y la hora pedidos no se descartan.
+    // El servidor ya lo calculó con el horario actual del salón
+    fueraDeHorarioDeLaSolicitud.value = Boolean(datos.fuera_de_horario)
+    aplicarFueraDeHorarioDeLaSolicitud()
 
     // La sugerencia de profesional: la primera que está libre a esa hora
     const libres = datos.profesionales_libres ?? []

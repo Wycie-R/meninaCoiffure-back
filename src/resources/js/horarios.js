@@ -314,7 +314,7 @@ export function textoDiasPromocion(dias = []) {
     return enumerar(lista.map((d) => ABREVIATURA_DIA[d]))
 }
 
-// ---------- Días puntuales sin atención ("este miércoles no abrimos") ----------
+// ---------- Días sin atención: uno puntual o un período (vacaciones) ----------
 
 const cierres = ref([])
 const cierresCargados = ref(false)
@@ -344,11 +344,23 @@ export function actualizarCierres(lista) {
     cierresCargados.value = true
 }
 
-// El cierre de ese día ({ id, fecha, motivo }) o null si el salón trabaja
+// Último día de un cierre: fecha_hasta, o el mismo día si es un cierre puntual
+export function finDelCierre(cierre) {
+    if (cierre.fecha_hasta) return String(cierre.fecha_hasta).slice(0, 10)
+    return String(cierre.fecha).slice(0, 10)
+}
+
+// El cierre que incluye ese día ({ id, fecha, fecha_hasta, motivo }) o null si el salón trabaja
 export function cierreDelDia(iso) {
     const fecha = String(iso ?? '').slice(0, 10)
     if (!fecha) return null
-    return cierres.value.find((c) => String(c.fecha).slice(0, 10) === fecha) ?? null
+
+    for (const cierre of cierres.value) {
+        const desde = String(cierre.fecha).slice(0, 10)
+        // Las fechas "AAAA-MM-DD" se pueden comparar como texto
+        if (desde <= fecha && fecha <= finDelCierre(cierre)) return cierre
+    }
+    return null
 }
 
 export function useCierres() {

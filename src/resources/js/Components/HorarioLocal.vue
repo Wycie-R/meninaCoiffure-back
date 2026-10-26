@@ -20,6 +20,7 @@ import {
     actualizarHorarioSalon,
     useCierres,
     actualizarCierres,
+    finDelCierre,
 } from '../horarios'
 
 const emit = defineEmits(['aviso'])
@@ -115,18 +116,46 @@ async function guardar() {
     emit('aviso', 'Horario del local actualizado.')
 }
 
-// ---------- Días sin atención ("este miércoles no abrimos") ----------
+// ---------- Días sin atención: uno puntual o un período (vacaciones, un accidente) ----------
 
 const { cierres, cierresCargados, cargarCierres } = useCierres()
-const nuevoCierre = ref({ fecha: '', motivo: '' })
+const nuevoCierre = ref({ fecha: '', fecha_hasta: '', motivo: '' })
 const erroresCierre = ref({})
 const avisoCierre = ref('')
 const guardandoCierre = ref(false)
 const cierrePorQuitar = ref(null)
 const quitandoCierre = ref(false)
 
-const listaCierres = computed(() =>
-    cierres.value.map((c) => ({ ...c, texto: fechaLarga(String(c.fecha).slice(0, 10), true) }))
+// "lunes 2 de noviembre de 2026" o "Del lunes 2 al viernes 13 de noviembre de 2026"
+function textoDelCierre(cierre) {
+    const desde = String(cierre.fecha).slice(0, 10)
+    const hasta = finDelCierre(cierre)
+    if (desde === hasta) return fechaLarga(desde, true)
+    return `Del ${fechaLarga(desde)} al ${fechaLarga(hasta, true)}`
+}
+
+const listaCierres = computed(() => {
+    const lista = []
+    for (const cierre of cierres.value) {
+        lista.push({ ...cierre, esPeriodo: Boolean(cierre.fecha_hasta), texto: textoDelCierre(cierre) })
+    }
+    return lista
+})
+
+const textoBotonCierre = computed(() => {
+    if (guardandoCierre.value) return 'Guardando…'
+    if (nuevoCierre.value.fecha_hasta) return 'Cerrar esos días'
+    return 'Cerrar ese día'
+})
+
+// Si cambia el primer día y el último quedó antes, el último se borra para no mandar un rango al revés
+watch(
+    () => nuevoCierre.value.fecha,
+    (desde) => {
+        if (nuevoCierre.value.fecha_hasta && desde && nuevoCierre.value.fecha_hasta < desde) {
+            nuevoCierre.value.fecha_hasta = ''
+        }
+    }
 )
 
 async function cerrarDia() {
@@ -138,10 +167,20 @@ async function cerrarDia() {
         return
     }
 
+    if (nuevoCierre.value.fecha_hasta && nuevoCierre.value.fecha_hasta < nuevoCierre.value.fecha) {
+        erroresCierre.value = { fecha_hasta: 'El último día no puede ser anterior al primero.' }
+        return
+    }
+
     guardandoCierre.value = true
     const respuesta = await api('/api/cierres-salon', {
         metodo: 'POST',
-        datos: { fecha: nuevoCierre.value.fecha, motivo: nuevoCierre.value.motivo.trim() || null },
+        datos: {
+            fecha: nuevoCierre.value.fecha,
+            // Vacío = un solo día
+            fecha_hasta: nuevoCierre.value.fecha_hasta || null,
+            motivo: nuevoCierre.value.motivo.trim() || null,
+        },
     })
     guardandoCierre.value = false
 
@@ -155,9 +194,9 @@ async function cerrarDia() {
     }
 
     actualizarCierres([...cierres.value, respuesta.cuerpo.data])
-    // El mensaje avisa si ese día ya había citas agendadas
+    // El mensaje avisa si esas fechas ya tenían citas agendadas
     avisoCierre.value = respuesta.cuerpo?.message ?? 'Listo.'
-    nuevoCierre.value = { fecha: '', motivo: '' }
+    nuevoCierre.value = { fecha: '', fecha_hasta: '', motivo: '' }
 }
 
 async function quitarCierre() {
@@ -173,7 +212,7 @@ async function quitarCierre() {
     }
 
     actualizarCierres(cierres.value.filter((c) => c.id !== cierre.id))
-    avisoCierre.value = respuesta.cuerpo?.message ?? 'Ese día vuelve a tener el horario de siempre.'
+    avisoCierre.value = respuesta.cuerpo?.message ?? 'El salón vuelve a tener el horario de siempre.'
 }
 </script>
 
@@ -232,12 +271,13 @@ async function quitarCierre() {
             </div>
         </div>
 
-        <!-- Días puntuales sin atención: no tocan el horario de la semana -->
+        <!-- Días sin atención (uno o varios seguidos): no tocan el horario de la semana -->
         <section class="mt-12 max-w-2xl" aria-labelledby="config-cierres">
             <h2 id="config-cierres" class="text-3xl">Días sin atención</h2>
             <p class="mt-2 text-sm leading-relaxed text-bruma">
-                Para un día puntual en que el salón no trabaja, por ejemplo "este miércoles no abrimos". El horario de la semana no
-                cambia: solo ese día queda sin citas, ni siquiera fuera de horario.
+                Para un día en que el salón no trabaja ("este miércoles no abrimos") o varios seguidos, como vacaciones o un
+                imprevisto: completa también el último día. El horario de la semana no cambia; solo esas fechas quedan sin citas,
+                ni siquiera fuera de horario.
             </p>
 
             <p v-if="avisoCierre" role="status" class="mt-4 rounded-xl border border-miel/40 bg-miel/10 px-4 py-3 text-sm text-miel">
@@ -247,23 +287,33 @@ async function quitarCierre() {
                 {{ erroresCierre.general }}
             </p>
 
-            <form class="mt-5 grid gap-4 rounded-[24px] border border-hilo bg-velo p-5 sm:grid-cols-[auto_1fr_auto] sm:items-end" novalidate @submit.prevent="cerrarDia">
-                <Campo etiqueta="Día" para="cierre-fecha" :error="erroresCierre.fecha">
+            <form class="mt-5 grid gap-4 rounded-[24px] border border-hilo bg-velo p-5 sm:grid-cols-2" novalidate @submit.prevent="cerrarDia">
+                <Campo etiqueta="Desde" para="cierre-fecha" :error="erroresCierre.fecha">
                     <input id="cierre-fecha" v-model="nuevoCierre.fecha" type="date" :min="hoyISO()" :class="claseEntrada(Boolean(erroresCierre.fecha))" />
                 </Campo>
-                <Campo etiqueta="Motivo (opcional)" para="cierre-motivo" :error="erroresCierre.motivo">
+                <Campo etiqueta="Hasta (opcional)" para="cierre-fecha-hasta" :error="erroresCierre.fecha_hasta">
+                    <input
+                        id="cierre-fecha-hasta"
+                        v-model="nuevoCierre.fecha_hasta"
+                        type="date"
+                        :min="nuevoCierre.fecha || hoyISO()"
+                        :class="claseEntrada(Boolean(erroresCierre.fecha_hasta))"
+                    />
+                </Campo>
+                <Campo class="sm:col-span-2" etiqueta="Motivo (opcional)" para="cierre-motivo" :error="erroresCierre.motivo">
                     <input
                         id="cierre-motivo"
                         v-model="nuevoCierre.motivo"
                         type="text"
                         maxlength="120"
-                        placeholder="Ej.: feriado, capacitación"
+                        placeholder="Ej.: feriado, vacaciones, capacitación"
                         :class="claseEntrada(Boolean(erroresCierre.motivo))"
                     />
                 </Campo>
-                <Button type="submit" :disabled="guardandoCierre">
-                    {{ guardandoCierre ? 'Guardando…' : 'Cerrar ese día' }}
-                </Button>
+                <div class="flex flex-col gap-3 sm:col-span-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p class="text-xs text-niebla">Deja "Hasta" vacío para cerrar un solo día.</p>
+                    <Button type="submit" :disabled="guardandoCierre">{{ textoBotonCierre }}</Button>
+                </div>
             </form>
 
             <p v-if="cierresCargados && !listaCierres.length" class="mt-4 text-sm text-niebla">No hay días sin atención programados.</p>
@@ -286,8 +336,11 @@ async function quitarCierre() {
 
         <Modal :show="cierrePorQuitar !== null" label="Confirmar quitar el cierre" max-width="sm" @close="cierrePorQuitar = null">
             <template v-if="cierrePorQuitar">
-                <h2 class="text-2xl">¿Volver a atender ese día?</h2>
-                <p class="mt-2 text-sm text-bruma first-letter:uppercase">{{ cierrePorQuitar.texto }} vuelve a tener el horario de siempre.</p>
+                <h2 class="text-2xl">{{ cierrePorQuitar.esPeriodo ? '¿Volver a atender esos días?' : '¿Volver a atender ese día?' }}</h2>
+                <p class="mt-2 text-sm text-bruma first-letter:uppercase">
+                    {{ cierrePorQuitar.texto }}
+                    {{ cierrePorQuitar.esPeriodo ? 'vuelven a tener el horario de siempre.' : 'vuelve a tener el horario de siempre.' }}
+                </p>
                 <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                     <Button label="Volver" variant="secondary" :disabled="quitandoCierre" @click="cierrePorQuitar = null" />
                     <Button :disabled="quitandoCierre" @click="quitarCierre">{{ quitandoCierre ? 'Quitando…' : 'Sí, atender' }}</Button>

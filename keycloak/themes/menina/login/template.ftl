@@ -9,6 +9,8 @@
     </svg>
 </#macro>
 <#-- Mismo layout que Login.vue: panel de marca a la izquierda (escritorio) y el formulario a la derecha -->
+<#-- displayRequiredFields no se usa, pero se conserva porque las páginas de "base" (registro) lo envían -->
+
 <#macro registrationLayout bodyClass="" displayInfo=false displayMessage=true displayRequiredFields=false>
 <!DOCTYPE html>
 <html class="${properties.kcHtmlClass!}" lang="${(locale.currentLanguageTag)!'es'}">
@@ -95,10 +97,6 @@
 
             <#-- Texto bajo el título: solo lo usan las páginas que definen la sección "subtitulo" -->
             <#nested "subtitulo">
-
-            <#if displayRequiredFields>
-                <p class="mc-requeridos"><span class="mc-requerido">*</span> ${msg("requiredFields")}</p>
-            </#if>
 
             <#-- Las acciones iniciadas por la app no muestran el aviso de "tienes que completar esto" -->
             <#if displayMessage && message?has_content && (message.type != 'warning' || !isAppInitiatedAction??)>

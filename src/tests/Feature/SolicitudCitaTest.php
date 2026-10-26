@@ -148,16 +148,18 @@ class SolicitudCitaTest extends TestCase
             ->assertJsonValidationErrors('servicios.1');
     }
 
-    public function test_hay_un_tope_de_pedidos_pendientes(): void
+    public function test_los_pedidos_pendientes_se_acumulan_sin_tope(): void
     {
-        for ($i = 0; $i < SolicitudCita::MAXIMO_PENDIENTES; $i++) {
+        // Antes había un tope de 3; ahora la clienta puede tener todos los pedidos abiertos que necesite
+        for ($i = 0; $i < 5; $i++) {
             $this->crearSolicitud($this->ficha);
         }
 
         $this->actingAs($this->clienta)
             ->postJson('/api/mi-cuenta/solicitudes', $this->pedido())
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('servicios');
+            ->assertStatus(201);
+
+        $this->assertSame(6, SolicitudCita::where('cliente_id', $this->ficha->id)->where('estado', 'pendiente')->count());
     }
 
     public function test_la_clienta_solo_ve_sus_citas_y_sus_pedidos(): void
@@ -384,6 +386,51 @@ class SolicitudCitaTest extends TestCase
         ]))->assertStatus(201)->assertJsonPath('data.fuera_de_horario', true);
     }
 
+    public function test_si_la_clienta_elige_fuera_de_horario_una_hora_que_cae_dentro_no_queda_marcado(): void
+    {
+        // El lunes el salón abre de 08:00 a 17:00: las 15:30 están dentro aunque las haya mirado en "fuera de horario"
+        $this->actingAs($this->clienta)
+            ->postJson('/api/mi-cuenta/solicitudes', $this->pedido(['hora_preferida' => '15:30', 'fuera_de_horario' => true]))
+            ->assertStatus(201)
+            ->assertJsonPath('data.fuera_de_horario', false);
+
+        // Si la cita termina después del cierre (16:30 + 45 min = 17:15), sí queda fuera de horario
+        $this->postJson('/api/mi-cuenta/solicitudes', $this->pedido(['hora_preferida' => '16:30', 'fuera_de_horario' => true]))
+            ->assertStatus(201)
+            ->assertJsonPath('data.fuera_de_horario', true);
+    }
+
+    public function test_la_duena_ve_el_pedido_con_el_horario_actual_del_salon(): void
+    {
+        // Pedido guardado como "dentro del horario" a las 07:00, por ejemplo antes de que cambiara el horario
+        $solicitud = $this->crearSolicitud($this->ficha);
+        $solicitud->hora_preferida = '07:00';
+        $solicitud->fuera_de_horario = false;
+        $solicitud->save();
+
+        // Y otro guardado como "fuera de horario" a las 15:30, que cae dentro
+        $otra = $this->crearSolicitud($this->ficha);
+        $otra->hora_preferida = '15:30';
+        $otra->fuera_de_horario = true;
+        $otra->save();
+
+        $this->actingAs($this->duena);
+        $this->getJson('/api/solicitudes-cita/' . $solicitud->id)
+            ->assertStatus(200)
+            ->assertJsonPath('data.fuera_de_horario', true)
+            ->assertJsonPath('data.profesionales_libres.0', 1);
+        $this->getJson('/api/solicitudes-cita/' . $otra->id)
+            ->assertStatus(200)
+            ->assertJsonPath('data.fuera_de_horario', false);
+
+        // Aceptarla marcada como fuera de horario a una hora que cae dentro: la reserva queda sin la marca
+        $this->postJson('/api/solicitudes-cita/' . $otra->id . '/aceptar', $this->datosDeReserva([
+            'hora_inicio' => '15:30',
+            'hora_fin' => '16:15',
+            'fuera_de_horario' => true,
+        ]))->assertStatus(201)->assertJsonPath('data.fuera_de_horario', false);
+    }
+
     public function test_telefono_direccion_y_ubicacion_quedan_guardados_para_el_proximo_pedido(): void
     {
         $this->actingAs($this->clienta)
@@ -430,6 +477,88 @@ class SolicitudCitaTest extends TestCase
 
         $this->assertNotContains(1, $libres);
         $this->assertNotEmpty($libres);
+    }
+
+    public function test_a_domicilio_la_clienta_no_ve_horas_pegadas_a_otra_cita_por_el_traslado(): void
+    {
+        $lunes = $this->proximoLunes();
+        // Las dos profesionales ocupadas de 10 a 11 en el salón
+        $this->actingAs($this->duena);
+        foreach ([1, 2] as $personalId) {
+            $this->postJson('/api/reservas', $this->datosDeReserva(['personal_id' => $personalId]))->assertStatus(201);
+        }
+
+        $this->actingAs($this->clienta);
+        $enElSalon = collect($this->getJson('/api/mi-cuenta/horarios?' . http_build_query(['fecha' => $lunes, 'servicios' => [1]]))
+            ->assertStatus(200)->json('data.horarios'))->keyBy('hora');
+        $aDomicilio = collect($this->getJson('/api/mi-cuenta/horarios?' . http_build_query(['fecha' => $lunes, 'servicios' => [1], 'a_domicilio' => 1]))
+            ->assertStatus(200)->json('data.horarios'))->keyBy('hora');
+
+        // En el salón, a las 11 ya se puede; a domicilio falta el viaje (30 min antes y después)
+        $this->assertTrue($enElSalon['11:00']['disponible']);
+        $this->assertFalse($aDomicilio['11:00']['disponible']);
+        $this->assertTrue($aDomicilio['11:30']['disponible']);
+
+        // Y la hora que se ofrece es la que la dueña puede aceptar con el traslado sugerido
+        $this->postJson('/api/mi-cuenta/solicitudes', $this->pedido([
+            'hora_preferida' => '11:00',
+            'a_domicilio' => true,
+            'direccion_domicilio' => 'Las Residentas 456',
+        ]))->assertStatus(422)->assertJsonValidationErrors('hora_preferida');
+
+        $solicitudId = $this->postJson('/api/mi-cuenta/solicitudes', $this->pedido([
+            'hora_preferida' => '11:30',
+            'a_domicilio' => true,
+            'direccion_domicilio' => 'Las Residentas 456',
+        ]))->assertStatus(201)->json('data.id');
+
+        $this->actingAs($this->duena);
+        $detalle = $this->getJson('/api/solicitudes-cita/' . $solicitudId)->assertStatus(200);
+        $this->assertSame(\App\Services\ReservaService::TRASLADO_ESTIMADO, $detalle->json('data.traslado_sugerido'));
+        $sugerida = $detalle->json('data.profesionales_libres.0');
+
+        $this->postJson('/api/solicitudes-cita/' . $solicitudId . '/aceptar', $this->datosDeReserva([
+            'personal_id' => $sugerida,
+            'hora_inicio' => '11:30',
+            'hora_fin' => '12:15',
+            'a_domicilio' => true,
+            'direccion_domicilio' => 'Las Residentas 456',
+            'minutos_traslado' => $detalle->json('data.traslado_sugerido'),
+        ]))->assertStatus(201);
+    }
+
+    public function test_la_hora_esta_libre_solo_si_esta_libre_quien_hace_el_servicio(): void
+    {
+        $lunes = $this->proximoLunes();
+        // Coloración (id 3) pide Colorimetría: solo la tiene Mónica (id 1). Mónica ocupada de 10 a 11
+        $this->actingAs($this->duena)->postJson('/api/reservas', $this->datosDeReserva())->assertStatus(201);
+
+        $this->actingAs($this->clienta);
+        $coloracion = collect($this->getJson('/api/mi-cuenta/horarios?' . http_build_query(['fecha' => $lunes, 'servicios' => [3]]))
+            ->assertStatus(200)->json('data.horarios'))->keyBy('hora');
+        $corte = collect($this->getJson('/api/mi-cuenta/horarios?' . http_build_query(['fecha' => $lunes, 'servicios' => [1]]))
+            ->assertStatus(200)->json('data.horarios'))->keyBy('hora');
+
+        // Carla está libre a las 10, pero no hace coloración; el corte sí lo hace
+        $this->assertFalse($coloracion['10:00']['disponible']);
+        $this->assertTrue($corte['10:00']['disponible']);
+
+        $this->postJson('/api/mi-cuenta/solicitudes', $this->pedido(['servicios' => [3], 'hora_preferida' => '10:00']))
+            ->assertStatus(422)->assertJsonValidationErrors('hora_preferida');
+    }
+
+    public function test_si_nadie_hace_todos_los_servicios_juntos_se_ofrecen_las_horas_de_todas(): void
+    {
+        // Coloración (Colorimetría, solo Mónica) + Peinado para eventos (solo Carla): nadie hace las dos
+        $peinado = \App\Models\Servicio::where('nombre', 'Peinado para eventos')->value('id');
+
+        $horarios = $this->actingAs($this->clienta)
+            ->getJson('/api/mi-cuenta/horarios?' . http_build_query(['fecha' => $this->proximoLunes(), 'servicios' => [3, $peinado]]))
+            ->assertStatus(200)
+            ->json('data.horarios');
+
+        // La dueña decide al aceptar; a la clienta no se le cierra el día
+        $this->assertTrue(collect($horarios)->contains('disponible', true));
     }
 
     public function test_a_domicilio_alcanza_con_la_direccion_o_con_la_ubicacion(): void
