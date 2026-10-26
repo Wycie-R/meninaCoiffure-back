@@ -107,7 +107,7 @@ async function cambiar(cuenta, clave, valor) {
                         </div>
                     </div>
 
-                    <div class="mt-5 grid gap-4 sm:grid-cols-2">
+                    <div class="mt-5 grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <Interruptor
                             v-for="permiso in catalogo"
                             :key="permiso.clave"

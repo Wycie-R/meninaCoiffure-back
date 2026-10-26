@@ -257,7 +257,7 @@ async function eliminar() {
             </Button>
         </div>
 
-        <div v-if="cargando" class="mt-6 grid gap-4 md:grid-cols-2" aria-busy="true" aria-label="Cargando las promociones">
+        <div v-if="cargando" class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2" aria-busy="true" aria-label="Cargando las promociones">
             <div v-for="n in 4" :key="n" class="h-40 animate-pulse rounded-[24px] bg-velo"></div>
         </div>
 
@@ -272,7 +272,7 @@ async function eliminar() {
 
         <template v-else>
             <p v-if="errorLista" role="alert" class="mt-4 text-sm text-borgona">{{ errorLista }}</p>
-            <ul class="mt-6 grid gap-4 md:grid-cols-2">
+            <ul class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
                 <li
                     v-for="d in lista"
                     :key="d.id"

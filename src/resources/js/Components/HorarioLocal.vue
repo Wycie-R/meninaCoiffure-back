@@ -287,7 +287,7 @@ async function quitarCierre() {
                 {{ erroresCierre.general }}
             </p>
 
-            <form class="mt-5 grid gap-4 rounded-[24px] border border-hilo bg-velo p-5 sm:grid-cols-2" novalidate @submit.prevent="cerrarDia">
+            <form class="mt-5 grid grid-cols-1 gap-4 rounded-[24px] border border-hilo bg-velo p-5 sm:grid-cols-2" novalidate @submit.prevent="cerrarDia">
                 <Campo etiqueta="Desde" para="cierre-fecha" :error="erroresCierre.fecha">
                     <input id="cierre-fecha" v-model="nuevoCierre.fecha" type="date" :min="hoyISO()" :class="claseEntrada(Boolean(erroresCierre.fecha))" />
                 </Campo>

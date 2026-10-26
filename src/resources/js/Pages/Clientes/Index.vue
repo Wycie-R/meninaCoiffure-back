@@ -268,7 +268,7 @@ watch(aviso, (valor) => {
                     {{ errores.general }}
                 </p>
 
-                <div class="grid gap-5 sm:grid-cols-2">
+                <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
                     <Campo etiqueta="Nombre" para="cliente-nombre" :error="errores.nombre">
                         <input id="cliente-nombre" v-model="form.nombre" type="text" maxlength="255" autocomplete="off" :class="claseEntrada(Boolean(errores.nombre))" @input="limpiarError('nombre')" />
                     </Campo>

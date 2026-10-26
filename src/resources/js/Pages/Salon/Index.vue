@@ -478,7 +478,7 @@ const estadoHoy = computed(() => {
                     {{ avisoPromociones || AVISO_SIN_PROMOCIONES }}
                 </p>
 
-                <ul v-else class="mt-6 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                <ul v-else class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
                     <li
                         v-for="promocion in promociones"
                         :key="promocion.id"
@@ -529,7 +529,7 @@ const estadoHoy = computed(() => {
                             </div>
                         </div>
 
-                        <ul class="mt-4 grid gap-4 md:grid-cols-2">
+                        <ul class="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                             <li v-for="servicio in grupo.servicios" :key="servicio.id">
                                 <TarjetaServicio :servicio="servicio" :ilustracion="grupo.ilustracion">
                                     <a

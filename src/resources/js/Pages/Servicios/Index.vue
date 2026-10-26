@@ -435,7 +435,7 @@ watch(aviso, (valor) => {
                             </div>
                         </div>
 
-                        <ul class="mt-3 grid gap-3 sm:mt-4 sm:gap-4 md:grid-cols-2">
+                        <ul class="mt-3 grid grid-cols-1 gap-3 sm:mt-4 sm:gap-4 md:grid-cols-2">
                             <li v-for="servicio in grupo.servicios" :key="servicio.id">
                                 <TarjetaServicio
                                     :servicio="servicio"
@@ -570,7 +570,7 @@ watch(aviso, (valor) => {
                             <input id="editar-nombre" v-model="form.nombre" type="text" maxlength="255" :class="claseEntrada(Boolean(erroresDatos.nombre))" />
                         </Campo>
 
-                        <div class="grid gap-5 sm:grid-cols-2">
+                        <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
                             <Campo etiqueta="Categoría" :error="erroresDatos.categoria_id">
                                 <Dropdown v-model="form.categoria_id" :options="opcionesCategoria" placeholder="Seleccionar" />
                             </Campo>

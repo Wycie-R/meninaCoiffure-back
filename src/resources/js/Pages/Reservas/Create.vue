@@ -1179,7 +1179,7 @@ const lugares = [
                 <Button href="/reservas" label="Ver tu agenda" variant="secondary" />
             </EstadoVacio>
 
-            <div v-else class="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+            <div v-else class="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
                 <form
                     id="formulario-reserva"
                     ref="formulario"
@@ -1193,7 +1193,7 @@ const lugares = [
                             Cliente y profesional
                         </h2>
 
-                        <div class="mt-5 grid gap-5 sm:grid-cols-2">
+                        <div class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
                             <div class="min-w-0">
                                 <p class="mb-1.5 text-sm font-medium text-perla">Cliente</p>
                                 <!-- Con un pedido de clienta, la reserva siempre es de quien la pidió -->
@@ -1305,7 +1305,7 @@ const lugares = [
                                 {{ erroresCliente.general }}
                             </p>
 
-                            <div class="mt-4 grid gap-4 sm:grid-cols-3">
+                            <div class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3">
                                 <Campo etiqueta="Nombre" para="cliente-nombre" :error="erroresCliente.nombre">
                                     <input
                                         id="cliente-nombre"
@@ -1353,7 +1353,7 @@ const lugares = [
                         <fieldset class="mt-6">
                             <legend class="mb-1.5 text-sm font-medium text-perla">Lugar de atención</legend>
 
-                            <div class="grid gap-3 sm:grid-cols-2">
+                            <div class="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                 <label
                                     v-for="lugar in lugares"
                                     :key="lugar.titulo"
@@ -1455,7 +1455,7 @@ const lugares = [
                         <fieldset class="mt-5">
                             <legend class="sr-only">Servicios de la reserva</legend>
 
-                            <div v-if="!catalogoCargado && !errorCatalogo" class="grid gap-3 sm:grid-cols-2" aria-busy="true" aria-label="Cargando servicios">
+                            <div v-if="!catalogoCargado && !errorCatalogo" class="grid grid-cols-1 gap-3 sm:grid-cols-2" aria-busy="true" aria-label="Cargando servicios">
                                 <div v-for="n in 4" :key="n" class="h-[4.25rem] animate-pulse rounded-lg bg-terciopelo"></div>
                             </div>
 

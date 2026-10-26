@@ -259,7 +259,7 @@ async function borrar() {
                     {{ errores.general }}
                 </p>
 
-                <div class="grid gap-5 sm:grid-cols-2">
+                <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
                     <Campo etiqueta="Nombre" para="ficha-nombre" :error="errores.nombre">
                         <input id="ficha-nombre" v-model="form.nombre" type="text" maxlength="255" autocomplete="off" :class="claseEntrada(Boolean(errores.nombre))" @input="limpiarError('nombre')" />
                     </Campo>
@@ -268,7 +268,7 @@ async function borrar() {
                     </Campo>
                 </div>
 
-                <div class="grid gap-5 sm:grid-cols-2">
+                <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
                     <Campo etiqueta="Teléfono" para="ficha-telefono" :error="errores.telefono" opcional>
                         <input id="ficha-telefono" v-model="form.telefono" type="tel" inputmode="tel" maxlength="50" autocomplete="off" :class="claseEntrada(Boolean(errores.telefono))" @input="limpiarError('telefono')" />
                     </Campo>

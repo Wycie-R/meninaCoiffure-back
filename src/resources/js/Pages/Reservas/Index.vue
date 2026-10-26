@@ -410,7 +410,7 @@ function abrir(reserva) {
                     </div>
                 </div>
 
-                <div v-show="filtrosAbiertos" id="filtros-adicionales" class="mt-4 grid gap-4 sm:grid-cols-3 sm:items-start">
+                <div v-show="filtrosAbiertos" id="filtros-adicionales" class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-3 sm:items-start">
                     <Campo v-if="!esProfesional" etiqueta="Profesional">
                         <Dropdown v-model="personalId" :options="opcionesPersonal" placeholder="Todo el equipo" />
                     </Campo>
@@ -475,7 +475,7 @@ function abrir(reserva) {
                     <section
                         v-for="grupo in dias"
                         :key="grupo.fecha"
-                        class="grid gap-3 md:grid-cols-[8rem_minmax(0,1fr)] md:gap-8"
+                        class="grid grid-cols-1 gap-3 md:grid-cols-[8rem_minmax(0,1fr)] md:gap-8"
                         :aria-label="`${grupo.semana} ${grupo.numero} de ${grupo.mes}`"
                     >
                         <div class="flex items-baseline gap-3 md:block">
@@ -537,7 +537,8 @@ function abrir(reserva) {
                                                 Fuera de horario
                                             </span>
                                         </span>
-                                        <span class="block truncate text-sm" :class="descartada(reserva) ? 'text-niebla' : 'text-bruma'">
+                                        <!-- En celular hasta dos líneas (se leen más servicios); desde sm, una línea con "…" -->
+                                        <span class="line-clamp-2 break-words text-sm sm:block sm:truncate" :class="descartada(reserva) ? 'text-niebla' : 'text-bruma'">
                                             {{ nombresServicios(reserva).join(', ') || 'Sin servicios' }}
                                         </span>
                                     </span>
