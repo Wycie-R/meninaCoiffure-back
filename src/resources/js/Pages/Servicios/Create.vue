@@ -150,7 +150,7 @@ async function guardar() {
                 <Button href="/servicios" label="Ver la carta" variant="secondary" />
             </EstadoVacio>
 
-            <div v-else class="mt-8 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+            <div v-else class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
                 <form class="min-w-0 rounded-[28px] border border-hilo bg-velo" novalidate @submit.prevent="guardar">
                     <div
                         v-if="errorGeneral || errorCatalogo"
@@ -167,7 +167,7 @@ async function guardar() {
                             Datos del servicio
                         </h2>
 
-                        <div class="mt-5 grid gap-5 sm:grid-cols-2">
+                        <div class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
                             <Campo etiqueta="Nombre" para="nombre" :error="error('nombre')">
                                 <input
                                     id="nombre"
@@ -221,7 +221,7 @@ async function guardar() {
                             Duración y precio
                         </h2>
 
-                        <div class="mt-5 grid gap-5 sm:grid-cols-2">
+                        <div class="mt-5 grid grid-cols-1 gap-5 sm:grid-cols-2">
                             <Campo etiqueta="Duración (minutos)" para="duracion" :error="error('duracion_minutos')" :ayuda="ayudaDuracion">
                                 <input
                                     id="duracion"

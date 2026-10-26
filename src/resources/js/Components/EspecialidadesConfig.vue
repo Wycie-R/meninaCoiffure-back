@@ -123,7 +123,7 @@ async function eliminar() {
             </Button>
         </div>
 
-        <div v-if="cargando" class="mt-6 grid gap-4 md:grid-cols-2" aria-busy="true" aria-label="Cargando las especialidades">
+        <div v-if="cargando" class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2" aria-busy="true" aria-label="Cargando las especialidades">
             <div v-for="n in 4" :key="n" class="h-32 animate-pulse rounded-[24px] bg-velo"></div>
         </div>
 
@@ -136,7 +136,7 @@ async function eliminar() {
             Todavía no hay especialidades. Crea la primera para describir lo que hace el equipo.
         </p>
 
-        <ul v-else class="mt-6 grid gap-4 md:grid-cols-2">
+        <ul v-else class="mt-6 grid grid-cols-1 gap-4 md:grid-cols-2">
             <li v-for="e in lista" :key="e.id">
                 <button
                     type="button"

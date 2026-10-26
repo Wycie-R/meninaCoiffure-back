@@ -353,7 +353,7 @@ function textoTiempoAtendido(persona) {
 
                 <form
                     v-if="periodo === 'personalizado'"
-                    class="mt-4 grid gap-4 sm:grid-cols-[repeat(2,minmax(0,12rem))_auto] sm:items-end"
+                    class="mt-4 grid grid-cols-1 gap-4 sm:grid-cols-[repeat(2,minmax(0,12rem))_auto] sm:items-end"
                     novalidate
                     @submit.prevent="aplicarPersonalizado"
                 >
@@ -412,7 +412,7 @@ function textoTiempoAtendido(persona) {
                     </div>
 
                     <div v-else class="space-y-4 transition-opacity" :class="{ 'opacity-60': cargando && resumen }" :aria-busy="cargando">
-                        <div class="grid overflow-hidden rounded-[28px] border border-orquidea/25 bg-orquidea-hondo/35 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">
+                        <div class="grid grid-cols-1 overflow-hidden rounded-[28px] border border-orquidea/25 bg-orquidea-hondo/35 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">
                             <div class="p-5 sm:p-6">
                                 <p class="text-sm text-orquidea-claro">Facturado</p>
                                 <span v-if="primeraCarga('resumen')" class="mt-3 block h-12 w-60 max-w-full animate-pulse rounded-full bg-orquidea-hondo/60"></span>
@@ -547,7 +547,7 @@ function textoTiempoAtendido(persona) {
                     </div>
                 </section>
 
-                <div class="grid gap-8 lg:grid-cols-2">
+                <div class="grid grid-cols-1 gap-8 lg:grid-cols-2">
                     <!-- Servicios -->
                     <section :class="claseTarjeta" aria-labelledby="titulo-servicios">
                         <h2 id="titulo-servicios" class="text-2xl">Servicios más pedidos</h2>

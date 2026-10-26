@@ -685,7 +685,7 @@ onMounted(async () => {
                     No tienes citas agendadas. Cuando el salón acepte un pedido, tu cita aparecerá acá.
                 </p>
 
-                <ul v-else class="mt-6 grid gap-4 sm:grid-cols-2">
+                <ul v-else class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <li
                         v-for="cita in proximas"
                         :key="cita.id"
@@ -863,7 +863,7 @@ onMounted(async () => {
                         </div>
                     </div>
 
-                    <form class="mt-6 grid gap-5 sm:grid-cols-2" novalidate @submit.prevent="pedirCita">
+                    <form class="mt-6 grid grid-cols-1 gap-5 sm:grid-cols-2" novalidate @submit.prevent="pedirCita">
                         <!-- Varios servicios en la misma cita: tarjetas que se marcan y desmarcan -->
                         <fieldset class="min-w-0 sm:col-span-2">
                             <legend class="mb-1.5 text-sm font-medium text-perla">¿Qué te quieres hacer?</legend>
@@ -881,7 +881,7 @@ onMounted(async () => {
                             <div class="space-y-4">
                                 <div v-for="grupo in serviciosPorCategoria" :key="grupo.nombre">
                                     <p class="mb-2 text-xs uppercase tracking-[0.16em] text-niebla">{{ grupo.nombre }}</p>
-                                    <div class="grid gap-2 sm:grid-cols-2">
+                                    <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
                                         <button
                                             v-for="servicio in grupo.servicios"
                                             :key="servicio.id"

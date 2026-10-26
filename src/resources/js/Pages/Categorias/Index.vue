@@ -151,7 +151,7 @@ async function eliminar() {
             </PageHeader>
 
             <div class="mt-10">
-                <div v-if="cargando && !categorias.length" class="grid gap-4 sm:grid-cols-2" aria-busy="true">
+                <div v-if="cargando && !categorias.length" class="grid grid-cols-1 gap-4 sm:grid-cols-2" aria-busy="true">
                     <div v-for="n in 4" :key="n" class="h-40 animate-pulse rounded-[28px] bg-velo"></div>
                 </div>
 
@@ -167,7 +167,7 @@ async function eliminar() {
                     <Button v-if="esAdmin" label="Nueva categoría" @click="abrirNueva" />
                 </EstadoVacio>
 
-                <ul v-else class="grid gap-4 sm:grid-cols-2">
+                <ul v-else class="grid grid-cols-1 gap-4 sm:grid-cols-2">
                     <li
                         v-for="categoria in lista"
                         :key="categoria.id"

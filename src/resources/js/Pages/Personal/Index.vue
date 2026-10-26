@@ -350,7 +350,7 @@ watch(aviso, (valor) => {
             </div>
 
             <div class="mt-10">
-                <div v-if="cargando && !personal.length" class="grid gap-5 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label="Cargando al equipo">
+                <div v-if="cargando && !personal.length" class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3" aria-busy="true" aria-label="Cargando al equipo">
                     <div v-for="n in 3" :key="n" class="animate-pulse rounded-[28px] border border-hilo bg-velo p-6">
                         <div class="flex items-center gap-4">
                             <span class="h-14 w-14 rounded-full bg-terciopelo"></span>
@@ -380,7 +380,7 @@ watch(aviso, (valor) => {
                     <Button label="Ver a todo el equipo" variant="secondary" @click="limpiarFiltros" />
                 </EstadoVacio>
 
-                <ul v-else class="grid gap-5 sm:grid-cols-2 xl:grid-cols-3">
+                <ul v-else class="grid grid-cols-1 gap-5 sm:grid-cols-2 xl:grid-cols-3">
                     <li v-for="p in lista" :key="p.id">
                         <button
                             type="button"
@@ -460,7 +460,7 @@ watch(aviso, (valor) => {
                                 {{ erroresDatos.general }}
                             </p>
 
-                            <div class="grid gap-5 sm:grid-cols-2">
+                            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
                                 <Campo etiqueta="Nombre" para="personal-nombre" :error="erroresDatos.nombre">
                                     <input id="personal-nombre" v-model="form.nombre" type="text" maxlength="255" autocomplete="off" :class="claseEntrada(Boolean(erroresDatos.nombre))" @input="limpiarError('nombre')" />
                                 </Campo>
@@ -470,7 +470,7 @@ watch(aviso, (valor) => {
                                 </Campo>
                             </div>
 
-                            <div class="grid gap-5 sm:grid-cols-2">
+                            <div class="grid grid-cols-1 gap-5 sm:grid-cols-2">
                                 <Campo etiqueta="Teléfono" para="personal-telefono" :error="erroresDatos.telefono" opcional>
                                     <input id="personal-telefono" v-model="form.telefono" type="tel" inputmode="tel" maxlength="50" autocomplete="off" :class="claseEntrada(Boolean(erroresDatos.telefono))" @input="limpiarError('telefono')" />
                                 </Campo>
