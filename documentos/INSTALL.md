@@ -70,14 +70,16 @@ menina_coiffure/
    docker compose up -d
    ```
 
-6. Verificá que los 3 contenedores estén corriendo:
+6. Verificá que los contenedores estén corriendo:
 
    ```bash
    docker compose ps
    ```
 
-   Deberían verse `menina_app`, `menina_nginx` y `menina_db` como
-   `running` (y `menina_db` como `healthy`).
+   Deberían verse `menina_haproxy`, `menina_nginx`, `menina_app` (nodo A),
+   `menina_nginx_b`, `menina_app_b` (nodo B) y `menina_db` como `running`
+   (y `menina_db` como `healthy`). El puerto 8000 lo atiende HAProxy, que
+   reparte entre los dos nodos.
 
 7. Generá la key de la app y corré las migraciones:
 
