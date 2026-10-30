@@ -18,6 +18,7 @@ use App\Http\Controllers\ReporteController;
 use App\Http\Controllers\ReservaController;
 use App\Http\Controllers\ServicioController;
 use App\Http\Controllers\SolicitudCitaController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 // HU-25 y T-02: Autenticación por rol y sesiones centralizadas
@@ -36,6 +37,29 @@ Route::get('horarios-atencion', [HorarioAtencionController::class, 'index']);
 // Días puntuales en que el salón no trabaja (de hoy en adelante)
 Route::get('cierres-salon', [CierreSalonController::class, 'index']);
 Route::get('promociones', [DescuentoController::class, 'promociones']);
+
+// Demostración del balanceo con HAProxy: responde qué nodo (contenedor PHP-FPM) atendió la petición.
+// Va sin sesión para no crear una fila en sessions por cada petición de la demo
+Route::get('balanceo/ping', function (Request $request) {
+    // "espera" simula una petición pesada para que se vea cómo leastconn reparte; tope de 1,5 s
+    $esperaMs = (int) $request->query('espera', 0);
+    if ($esperaMs < 0) {
+        $esperaMs = 0;
+    }
+    if ($esperaMs > 1500) {
+        $esperaMs = 1500;
+    }
+    if ($esperaMs > 0) {
+        usleep($esperaMs * 1000);
+    }
+
+    return response()->json([
+        'nodo' => gethostname(),
+        'pid' => getmypid(),
+        'espera_ms' => $esperaMs,
+        'hora' => now()->format('H:i:s.v'),
+    ]);
+});
 
 // Mis citas: la clienta con cuenta ve sus citas y pide nuevas. Todo se filtra por la ficha de su sesión
 Route::prefix('mi-cuenta')->middleware(['web', 'auth', 'rol:cliente'])->group(function () {

@@ -97,6 +97,11 @@ Route::middleware(['auth', 'rol:admin,profesional'])->group(function () {
     })->middleware('rol:admin');
 });
 
+// Panel en vivo del balanceo A/B con HAProxy (para la exposición); no usa Vite para no depender del build
+Route::get('/balanceo', function () {
+    return view('balanceo');
+});
+
 // Documentación interactiva de la API con Swagger UI
 Route::get('/docs', function () {
     return view('swagger');
