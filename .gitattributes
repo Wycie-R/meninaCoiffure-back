@@ -1,0 +1,3 @@
+# HAProxy y nginx leen estos archivos dentro de Linux: siempre con saltos de línea LF
+haproxy.cfg text eol=lf
+nginx.conf text eol=lf
