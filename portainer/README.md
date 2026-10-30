@@ -39,9 +39,10 @@ Al ingresar por primera vez a `https://localhost:9443`:
    - **Usuario:** `admin`
    - **Contraseña:** `meninacoiffure123`
 2. Seleccionar el entorno local (**Get Started / Local Docker Environment**).
-3. Podrás visualizar y administrar en tiempo real los 4 contenedores del proyecto:
-   - `menina_nginx` (Servidor web / Proxy inverso)
-   - `menina_app` (Backend Laravel PHP 8.4)
+3. Podrás visualizar y administrar en tiempo real los contenedores del proyecto:
+   - `menina_haproxy` (Balanceador de carga frontal, puertos 8000 y 8404)
+   - `menina_nginx` y `menina_app` (Nodo A: servidor web + backend Laravel PHP 8.4)
+   - `menina_nginx_b` y `menina_app_b` (Nodo B: servidor web + backend Laravel PHP 8.4)
    - `menina_db` (Base de datos relacional PostgreSQL 18)
    - `menina_portainer` (Consola de orquestación)
 

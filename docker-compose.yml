@@ -4,6 +4,8 @@ services:
       context: .
       dockerfile: Dockerfile
     container_name: menina_app
+    # Nombre que devuelve gethostname(): la página /balanceo lo usa para mostrar qué PHP atendió
+    hostname: nodo-a
     restart: unless-stopped
     volumes:
       - ./src:/var/www
@@ -16,17 +18,56 @@ services:
     networks:
       - menina_net
 
+  # Nodo A: nginx + app. Sin puerto publicado: todo el tráfico entra por HAProxy (8000)
   nginx:
     image: nginx:alpine
     container_name: menina_nginx
     restart: unless-stopped
-    ports:
-      - "8000:80"
+    expose:
+      - "80"
+    environment:
+      PHP_FPM_HOST: app
     volumes:
       - ./src:/var/www
-      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      # Se monta como plantilla: nginx reemplaza ${PHP_FPM_HOST} al arrancar
+      - ./nginx.conf:/etc/nginx/templates/default.conf.template:ro
     depends_on:
       - app
+    networks:
+      - menina_net
+
+  # Nodo B: misma app con su propio PHP-FPM, para que HAProxy reparta la carga de PHP entre los dos.
+  # Sesiones y caché están en PostgreSQL, así que da igual qué nodo atienda cada petición
+  app_b:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: menina_app_b
+    hostname: nodo-b
+    restart: unless-stopped
+    volumes:
+      - ./src:/var/www
+      - vendor:/var/www/vendor
+    working_dir: /var/www
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - menina_net
+
+  nginx_b:
+    image: nginx:alpine
+    container_name: menina_nginx_b
+    restart: unless-stopped
+    expose:
+      - "80"
+    environment:
+      PHP_FPM_HOST: app_b
+    volumes:
+      - ./src:/var/www
+      - ./nginx.conf:/etc/nginx/templates/default.conf.template:ro
+    depends_on:
+      - app_b
     networks:
       - menina_net
 
@@ -85,6 +126,22 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
+    networks:
+      - menina_net
+
+  # Balanceador frontal: reparte entre el nodo A (nginx) y el nodo B (nginx_b). Panel en :8404/stats
+  haproxy:
+    image: haproxy:3.0-alpine
+    container_name: menina_haproxy
+    restart: unless-stopped
+    ports:
+      - "8000:80"
+      - "8404:8404"
+    volumes:
+      - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    depends_on:
+      - nginx
+      - nginx_b
     networks:
       - menina_net
 

@@ -73,6 +73,25 @@ docker compose up -d keycloak
 
 
 
+## Balanceo de carga con HAProxy
+
+Todo el tráfico entra por HAProxy (puerto 8000), que lo reparte entre dos nodos con la misma aplicación. Cada nodo tiene su propio PHP-FPM; las sesiones y la caché viven en PostgreSQL, así que cualquier nodo atiende a cualquier usuaria.
+
+| Nodo | Servidor web | PHP-FPM | Nombre en HAProxy |
+|---|---|---|---|
+| A | `nginx` (`menina_nginx`) | `app` (`menina_app`) | `nodo_a` |
+| B | `nginx_b` (`menina_nginx_b`) | `app_b` (`menina_app_b`) | `nodo_b` |
+
+- **Algoritmo:** `leastconn` (cada petición va al nodo con menos trabajo en curso).
+- **Health check:** `GET /up` cada 1 s; un nodo que falla 2 veces sale del reparto y vuelve tras 2 respuestas correctas.
+- **Panel de estadísticas:** [http://localhost:8404/stats](http://localhost:8404/stats) (usuario `admin`, contraseña `admin`). Desde ahí se puede poner un nodo en mantenimiento.
+- **Página de demostración en vivo:** [http://localhost:8000/balanceo](http://localhost:8000/balanceo). Genera tráfico y muestra qué nodo atendió cada petición.
+- **Ver qué nodo respondió una petición:** cabecera `X-Servido-Por` en la respuesta, o `docker compose logs -f haproxy`.
+- **Probar el failover:** con el tráfico continuo encendido en `/balanceo`, ejecutar `docker compose stop nginx_b` (todo pasa al nodo A) y luego `docker compose start nginx_b` (vuelve a repartir).
+- **Validar la configuración** después de editar `haproxy.cfg`: `docker compose run --rm haproxy haproxy -c -f /usr/local/etc/haproxy/haproxy.cfg` y luego `docker compose restart haproxy`.
+
+
+
 ## Avisos por Telegram
 
 Cuando una clienta pide una cita, la dueña recibe un mensaje de Telegram con la clienta, los servicios, el día, la hora y, si es a domicilio, el enlace para llegar. Es opcional: sin configurar, el sistema funciona igual.
@@ -101,6 +120,6 @@ Cuando una clienta pide una cita, la dueña recibe un mensaje de Telegram con la
 - **Cargar solo la clienta de demo y sus pedidos** (en una base ya cargada): `docker compose exec app php artisan db:seed --class=ClientaDemoSeeder`
 - **Ejecutar las pruebas:** `docker compose exec app php artisan test`
 - **Limpiar la caché de rutas:** `docker compose exec app php artisan route:clear`
-- **Ver logs:** `docker compose logs -f app`
+- **Ver logs:** `docker compose logs -f app` (nodo B: `docker compose logs -f app_b`; balanceador: `docker compose logs -f haproxy`)
 - **Entrar al contenedor:** `docker compose exec app bash`
 - **Detener los servicios:** `docker compose down`
