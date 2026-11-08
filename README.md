@@ -1,6 +1,6 @@
 # Menina Coiffure
 
-Sistema web de gestión para Menina Coiffure, salón de estética y peluquería de Villa Elisa: agenda de reservas en el salón y a domicilio, clientes, servicios, personal, pagos, inventario de insumos y reportes. API en Laravel con PostgreSQL y frontend con Vue 3 e Inertia; todo corre con Docker. El código de Laravel está en `src/`.
+Sistema web de gestión para Menina Coiffure, salón de estética y peluquería de Villa Elisa: agenda de reservas en el salón y a domicilio, clientas, servicios, personal, pagos, promociones, reportes y cuentas para que las clientas pidan citas. La infraestructura reparte el tráfico entre dos nodos con HAProxy y permite iniciar sesión con Keycloak. API en Laravel con PostgreSQL y frontend con Vue 3 e Inertia; todo corre con Docker. El código de Laravel está en `src/`.
 
 
 
@@ -123,3 +123,16 @@ Cuando una clienta pide una cita, la dueña recibe un mensaje de Telegram con la
 - **Ver logs:** `docker compose logs -f app` (nodo B: `docker compose logs -f app_b`; balanceador: `docker compose logs -f haproxy`)
 - **Entrar al contenedor:** `docker compose exec app bash`
 - **Detener los servicios:** `docker compose down`
+
+
+
+## Documentación del proyecto
+
+Todo está en la carpeta `documentos/`:
+
+- **Entregas de avances:** `docAvance1.docx`, `Avance2_menina_coiffure.pdf`, `Avance3_Menina_Coiffure.pdf` y el Avance 4.
+- **Base de datos:** diccionario de datos (`diccionario_datos_menina_coiffure.pdf`) y diagrama entidad-relación (`der.html`, `menina_coiffure_db_img.png`).
+- **Metodología:** reporte de los Sprints 1 y 2 con el flujo Kanban acumulado. Los Sprints 3 a 5 están en los documentos de los Avances 3 y 4.
+- **Instalación paso a paso:** `INSTALL.md` (también en PDF: `InstallMeninaCoiffure.pdf`).
+- **API:** documentación interactiva en [http://localhost:8000/docs](http://localhost:8000/docs), generada desde `src/public/openapi.json`.
+
