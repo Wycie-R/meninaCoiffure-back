@@ -13,8 +13,8 @@ use Illuminate\Support\Facades\Hash;
 
 /**
  * Clienta con cuenta para la demo de "Mis citas": su ficha vinculada y dos pedidos pendientes
- * (de dos servicios cada uno) para la bandeja de la dueña. Es la misma persona que existe en el
- * realm de Keycloak (clienta@meninacoiffure.com); con login local entra con password123.
+ * (de dos servicios cada uno) para la bandeja de la dueña. Entra con clienta@meninacoiffure.com
+ * y password123.
  * Es idempotente: se puede correr sobre una base ya cargada.
  */
 class ClientaDemoSeeder extends Seeder

@@ -2,44 +2,71 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Cliente;
+use App\Models\Role;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Password;
+use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
+use Symfony\Component\Mailer\Exception\TransportExceptionInterface;
 
 class AuthController extends Controller
 {
+    // Protección contra fuerza bruta: intentos fallidos permitidos por correo e IP antes de esperar
+    private const INTENTOS_DE_LOGIN = 5;
+    private const SEGUNDOS_DE_ESPERA = 60;
+
     /**
      * HU-25: Inicio de sesión por rol
      */
     public function login(Request $request): JsonResponse
     {
-        // Con Keycloak como proveedor no se deja abierta una segunda puerta con contraseña local
-        if (config('services.keycloak.proveedor') === 'keycloak') {
-            abort(404);
-        }
-
         $credentials = $request->validate([
             'email' => ['required', 'string', 'email'],
             'password' => ['required', 'string'],
+            'recordar' => ['nullable', 'boolean'],
         ], [
             'email.required' => 'El correo electrónico es obligatorio.',
             'email.email' => 'El formato del correo electrónico es inválido.',
             'password.required' => 'La contraseña es obligatoria.',
         ]);
 
-        $user = User::with(['role', 'personal'])->where('email', $credentials['email'])->first();
+        $email = strtolower(trim($credentials['email']));
 
-        if (!$user || !Hash::check($credentials['password'], $user->password)) {
+        // La clave junta correo e IP: frena a quien prueba contraseñas sin bloquear a toda una red
+        $claveDeIntentos = 'login|' . $email . '|' . $request->ip();
+        if (RateLimiter::tooManyAttempts($claveDeIntentos, self::INTENTOS_DE_LOGIN)) {
+            $segundos = RateLimiter::availableIn($claveDeIntentos);
+            throw ValidationException::withMessages([
+                'email' => ['Demasiados intentos. Prueba de nuevo en ' . $segundos . ' segundos.'],
+            ])->status(429);
+        }
+
+        $user = User::with(['role', 'personal'])->whereRaw('LOWER(email) = ?', [$email])->first();
+
+        // Una cuenta sin contraseña local (creada antes con Keycloak) no entra hasta crear una
+        $contrasenaCorrecta = $user !== null
+            && $user->password !== null
+            && Hash::check($credentials['password'], $user->password);
+
+        if (!$contrasenaCorrecta) {
+            RateLimiter::hit($claveDeIntentos, self::SEGUNDOS_DE_ESPERA);
             throw ValidationException::withMessages([
                 'email' => ['Las credenciales proporcionadas no son válidas.'],
             ]);
         }
 
-        // Iniciar sesión del usuario
-        Auth::login($user);
+        RateLimiter::clear($claveDeIntentos);
+
+        // "Seguir conectado": la sesión sobrevive al cierre del navegador con la cookie remember_token
+        Auth::login($user, $request->boolean('recordar'));
         if ($request->hasSession()) {
             $request->session()->regenerate();
         }
@@ -58,8 +85,160 @@ class AuthController extends Controller
                     ] : null,
                     'permisos' => $user->permisos(),
                 ],
+                // El equipo va al panel y una clienta a sus citas
+                'pagina_inicial' => $user->paginaInicial(),
             ],
         ], 200);
+    }
+
+    /**
+     * Una clienta crea su cuenta desde la página del salón. Queda con su ficha para pedir citas.
+     */
+    public function registrar(Request $request): JsonResponse
+    {
+        $datos = $request->validate([
+            'nombre' => ['required', 'string', 'max:100'],
+            'apellido' => ['required', 'string', 'max:100'],
+            'email' => ['required', 'string', 'email', 'max:255'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ], [
+            'nombre.required' => 'Escribe tu nombre.',
+            'apellido.required' => 'Escribe tu apellido.',
+            'email.required' => 'Escribe tu correo.',
+            'email.email' => 'Ese correo no es válido.',
+            'password.required' => 'Escribe una contraseña.',
+            'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
+            'password.confirmed' => 'Las contraseñas no coinciden.',
+        ]);
+
+        $email = strtolower(trim($datos['email']));
+        $nombre = trim($datos['nombre']);
+        $apellido = trim($datos['apellido']);
+
+        $correoEnUso = User::whereRaw('LOWER(email) = ?', [$email])->exists();
+        if ($correoEnUso) {
+            throw ValidationException::withMessages([
+                'email' => ['Ya hay una cuenta con ese correo. Prueba iniciar sesión.'],
+            ]);
+        }
+
+        $rolCliente = Role::firstOrCreate(['nombre' => 'cliente']);
+
+        // Cuenta y ficha juntas: una cuenta sin ficha no podría pedir citas
+        $usuario = DB::transaction(function () use ($nombre, $apellido, $email, $datos, $rolCliente) {
+            $usuario = User::create([
+                'name' => trim($nombre . ' ' . $apellido),
+                'email' => $email,
+                // El cast 'hashed' del modelo la guarda hasheada
+                'password' => $datos['password'],
+                'rol_id' => $rolCliente->id,
+            ]);
+
+            // Siempre una ficha nueva: sin verificar el correo no se toma la ficha que cargó la
+            // dueña, porque alguien podría registrarse con el correo de otra clienta y ver sus citas
+            $ficha = new Cliente([
+                'nombre' => $nombre,
+                'apellido' => $apellido,
+                'email' => $email,
+                'fecha_registro' => now()->toDateString(),
+            ]);
+            $ficha->user_id = $usuario->id;
+            $ficha->save();
+
+            return $usuario;
+        });
+
+        Auth::login($usuario);
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
+        }
+
+        return response()->json([
+            'message' => 'Tu cuenta quedó creada.',
+            'data' => [
+                'pagina_inicial' => $usuario->paginaInicial(),
+            ],
+        ], 201);
+    }
+
+    /**
+     * "¿Olvidaste tu contraseña?": manda por correo un enlace de un solo uso.
+     */
+    public function enviarEnlaceDeRecuperacion(Request $request): JsonResponse
+    {
+        $datos = $request->validate([
+            'email' => ['required', 'string', 'email'],
+        ], [
+            'email.required' => 'Escribe tu correo.',
+            'email.email' => 'Ese correo no es válido.',
+        ]);
+
+        $email = strtolower(trim($datos['email']));
+
+        try {
+            Password::sendResetLink(['email' => $email]);
+        } catch (TransportExceptionInterface $excepcion) {
+            Log::warning('No se pudo enviar el correo de recuperación', ['error' => $excepcion->getMessage()]);
+            return response()->json([
+                'message' => 'No pudimos enviar el correo. Intenta de nuevo en unos minutos.',
+            ], 503);
+        }
+
+        // Misma respuesta exista o no la cuenta: así no se revela quién tiene cuenta en el salón
+        return response()->json([
+            'message' => 'Listo. Si hay una cuenta con ese correo, en unos minutos te llega un enlace para crear una contraseña nueva.',
+        ]);
+    }
+
+    /**
+     * Guarda la contraseña nueva con el enlace del correo y deja la sesión iniciada.
+     */
+    public function restablecerContrasena(Request $request): JsonResponse
+    {
+        $datos = $request->validate([
+            'token' => ['required', 'string'],
+            'email' => ['required', 'string', 'email'],
+            'password' => ['required', 'string', 'min:8', 'confirmed'],
+        ], [
+            'password.required' => 'Escribe la contraseña nueva.',
+            'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
+            'password.confirmed' => 'Las contraseñas no coinciden.',
+        ]);
+
+        $email = strtolower(trim($datos['email']));
+
+        $estado = Password::reset(
+            [
+                'email' => $email,
+                'password' => $datos['password'],
+                'token' => $datos['token'],
+            ],
+            function (User $usuario, string $contrasenaNueva) {
+                $usuario->password = $contrasenaNueva;
+                // Cierra el "seguir conectado" de otros dispositivos: la contraseña vieja ya no sirve
+                $usuario->setRememberToken(Str::random(60));
+                $usuario->save();
+            }
+        );
+
+        if ($estado !== Password::PASSWORD_RESET) {
+            throw ValidationException::withMessages([
+                'email' => ['El enlace venció o ya se usó. Pide uno nuevo.'],
+            ]);
+        }
+
+        $usuario = User::whereRaw('LOWER(email) = ?', [$email])->first();
+        Auth::login($usuario);
+        if ($request->hasSession()) {
+            $request->session()->regenerate();
+        }
+
+        return response()->json([
+            'message' => 'Listo, tu contraseña quedó actualizada.',
+            'data' => [
+                'pagina_inicial' => $usuario->paginaInicial(),
+            ],
+        ]);
     }
 
     /**
@@ -67,12 +246,6 @@ class AuthController extends Controller
      */
     public function logout(Request $request): JsonResponse
     {
-        // Se lee antes de invalidar la sesión: sirve para cerrar también la sesión de Keycloak
-        $idToken = null;
-        if ($request->hasSession()) {
-            $idToken = $request->session()->get('keycloak_id_token');
-        }
-
         Auth::guard('web')->logout();
 
         if ($request->hasSession()) {
@@ -82,8 +255,6 @@ class AuthController extends Controller
 
         return response()->json([
             'message' => 'Sesión cerrada correctamente.',
-            // Con login local queda en null y el frontend vuelve a /login como siempre
-            'url_cierre' => KeycloakController::urlCierreDeSesion($idToken),
         ]);
     }
 

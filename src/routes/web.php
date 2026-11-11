@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\KeycloakController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -24,8 +24,6 @@ Route::get('/salon', function () {
     return Inertia::render('Salon/Index', [
         'whatsapp' => config('app.salon_whatsapp'),
         'cuenta' => $cuenta,
-        // Con Keycloak, "Crear cuenta" abre directo el formulario de registro
-        'proveedor' => config('services.keycloak.proveedor'),
     ]);
 });
 
@@ -35,23 +33,26 @@ Route::get('/mi-cuenta', function () {
 })->middleware(['auth', 'rol:cliente']);
 
 Route::middleware('guest')->group(function () {
-    // Con AUTH_PROVEEDOR=keycloak se va directo al formulario de Keycloak (con el tema del salón):
-    // el paso intermedio con un solo botón sobraba. Solo se queda acá para mostrar un error del login
     Route::get('/login', function () {
-        $hayError = session()->has('error_login');
-        if (config('services.keycloak.proveedor') === 'keycloak' && !$hayError) {
-            return redirect('/auth/keycloak/redirigir');
-        }
-
-        return Inertia::render('Auth/Login', [
-            'proveedor' => config('services.keycloak.proveedor'),
-            'error' => session('error_login'),
-        ]);
+        return Inertia::render('Auth/Login');
     })->name('login');
 
-    // Login con Keycloak (Authorization Code + PKCE); responden 404 si el proveedor es local
-    Route::get('/auth/keycloak/redirigir', [KeycloakController::class, 'redirigir']);
-    Route::get('/auth/keycloak/callback', [KeycloakController::class, 'callback']);
+    // Una clienta crea su cuenta para pedir citas
+    Route::get('/registro', function () {
+        return Inertia::render('Auth/Registro');
+    });
+
+    Route::get('/recuperar-contrasena', function () {
+        return Inertia::render('Auth/RecuperarContrasena');
+    });
+
+    // Enlace del correo de recuperación: el token es de un solo uso y vence (config/auth.php)
+    Route::get('/restablecer-contrasena/{token}', function (Request $request, string $token) {
+        return Inertia::render('Auth/RestablecerContrasena', [
+            'token' => $token,
+            'email' => (string) $request->query('email', ''),
+        ]);
+    });
 });
 
 // Pantallas del equipo: una clienta con sesión no entra al panel

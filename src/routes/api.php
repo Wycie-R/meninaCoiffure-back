@@ -24,6 +24,10 @@ use Illuminate\Support\Facades\Route;
 // HU-25 y T-02: Autenticación por rol y sesiones centralizadas
 Route::prefix('auth')->middleware(['web'])->group(function () {
     Route::post('login', [AuthController::class, 'login']);
+    // Cuentas de clientas y recuperación de contraseña; throttle frena el abuso (y el spam de correos)
+    Route::post('registro', [AuthController::class, 'registrar'])->middleware('throttle:6,1');
+    Route::post('recuperar-contrasena', [AuthController::class, 'enviarEnlaceDeRecuperacion'])->middleware('throttle:6,1');
+    Route::post('restablecer-contrasena', [AuthController::class, 'restablecerContrasena'])->middleware('throttle:6,1');
     Route::post('logout', [AuthController::class, 'logout']);
     Route::get('me', [AuthController::class, 'me']);
 });

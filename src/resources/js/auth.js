@@ -55,25 +55,15 @@ export function establecerUsuario(datos) {
 }
 
 export async function cerrarSesion() {
-    let urlCierre = null
-
     try {
-        const respuesta = await fetch('/api/auth/logout', {
+        await fetch('/api/auth/logout', {
             method: 'POST',
             headers: { Accept: 'application/json' },
             credentials: 'same-origin',
         })
-        const datos = await respuesta.json().catch(() => null)
-        urlCierre = datos?.url_cierre ?? null
     } finally {
         usuario.value = null
-
-        // Con Keycloak también se cierra su sesión; si no, al volver a "Ingresar" entraría sin pedir contraseña
-        if (urlCierre) {
-            window.location.href = urlCierre
-        } else {
-            router.visit('/login', { replace: true })
-        }
+        router.visit('/login', { replace: true })
     }
 }
 
