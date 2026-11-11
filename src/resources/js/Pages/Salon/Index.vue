@@ -20,11 +20,6 @@ const props = defineProps({
         type: Object,
         default: null,
     },
-    // 'keycloak': las clientas entran o crean su cuenta en Keycloak; 'local': solo existe el login propio
-    proveedor: {
-        type: String,
-        default: 'local',
-    },
 })
 
 const AVISO_SIN_PROMOCIONES = 'No hay promociones vigentes por el momento.'
@@ -102,18 +97,8 @@ onUnmounted(() => {
 
 // ---------- Cuenta de la clienta ----------
 
-const conKeycloak = computed(() => props.proveedor === 'keycloak')
-
-// Con Keycloak se sale directo a su pantalla; con login local se pasa por /login
-const enlaceIngresar = computed(() => {
-    if (conKeycloak.value) {
-        return '/auth/keycloak/redirigir'
-    }
-    return '/login'
-})
-
-// El registro solo existe con Keycloak: abre directo el formulario de crear cuenta
-const enlaceCrearCuenta = '/auth/keycloak/redirigir?registro=1'
+const enlaceIngresar = '/login'
+const enlaceCrearCuenta = '/registro'
 
 // ---------- WhatsApp ----------
 
@@ -355,7 +340,7 @@ const estadoHoy = computed(() => {
                         </button>
                     </template>
 
-                    <!-- Visitante: enlace normal (no de Inertia) porque puede salir hacia Keycloak -->
+                    <!-- Visitante: enlaces a crear cuenta e iniciar sesión -->
                     <template v-else>
                         <a
                             v-if="hayWhatsapp"
@@ -368,7 +353,6 @@ const estadoHoy = computed(() => {
                         </a>
                         <!-- En celular no entra: queda en "Cómo pedir tu cita", al final de la página -->
                         <a
-                            v-if="conKeycloak"
                             :href="enlaceCrearCuenta"
                             class="hidden whitespace-nowrap text-sm text-bruma underline-offset-4 transition-colors sm:inline hover:text-perla hover:underline focus-visible:outline-2 focus-visible:outline-orquidea"
                         >
@@ -562,26 +546,17 @@ const estadoHoy = computed(() => {
                             Ves tus citas, eliges el día y la hora, y el salón te confirma. Sin esperar respuesta por mensaje.
                         </p>
                         <div class="mt-5 flex flex-wrap items-center gap-x-4 gap-y-2 text-sm">
-                            <template v-if="conKeycloak">
-                                <a
-                                    :href="enlaceCrearCuenta"
-                                    class="inline-flex min-h-11 items-center rounded-full bg-orquidea px-5 font-semibold text-noche transition-colors hover:bg-orquidea-claro focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orquidea"
-                                >
-                                    Crear cuenta
-                                </a>
-                                <a
-                                    :href="enlaceIngresar"
-                                    class="font-medium text-orquidea underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-orquidea"
-                                >
-                                    Ya tengo cuenta
-                                </a>
-                            </template>
                             <a
-                                v-else
-                                :href="enlaceIngresar"
-                                class="inline-flex min-h-11 items-center rounded-full border border-orquidea/60 px-5 font-medium text-orquidea transition-colors hover:bg-raso focus-visible:outline-2 focus-visible:outline-orquidea"
+                                :href="enlaceCrearCuenta"
+                                class="inline-flex min-h-11 items-center rounded-full bg-orquidea px-5 font-semibold text-noche transition-colors hover:bg-orquidea-claro focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orquidea"
                             >
-                                Ingresar
+                                Crear cuenta
+                            </a>
+                            <a
+                                :href="enlaceIngresar"
+                                class="font-medium text-orquidea underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-orquidea"
+                            >
+                                Ya tengo cuenta
                             </a>
                         </div>
                     </div>

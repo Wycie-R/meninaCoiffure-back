@@ -3,15 +3,17 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Mail\CorreoDelSalon;
 use Database\Factories\UserFactory;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Attributes\Hidden;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Mail;
 
 #[Fillable([
-    'name', 'email', 'keycloak_id', 'password', 'rol_id', 'personal_id',
+    'name', 'email', 'password', 'rol_id', 'personal_id',
     'puede_crear_reservas', 'puede_cambiar_estado', 'puede_reservar_fuera_de_horario',
     'puede_ver_clientes',
 ])]
@@ -97,6 +99,29 @@ class User extends Authenticatable
         }
 
         return '/dashboard';
+    }
+
+    /**
+     * Correo con el enlace para crear una contraseña nueva. Lo llama Password::sendResetLink;
+     * se reemplaza el aviso en inglés de Laravel por uno en español con el enlace a nuestra pantalla.
+     */
+    public function sendPasswordResetNotification($token): void
+    {
+        $enlace = url('/restablecer-contrasena/' . $token) . '?email=' . urlencode($this->email);
+        $minutosDeValidez = config('auth.passwords.users.expire');
+
+        $lineas = [
+            'Hola, ' . $this->name . '.',
+            '',
+            'Pediste crear una contraseña nueva para tu cuenta de Menina Coiffure.',
+            'Abre este enlace para elegirla (vence en ' . $minutosDeValidez . ' minutos):',
+            '',
+            $enlace,
+            '',
+            'Si no lo pediste, ignora este correo: tu contraseña no cambia.',
+        ];
+
+        Mail::to($this->email)->send(new CorreoDelSalon('Crea tu contraseña nueva - Menina Coiffure', implode("\n", $lineas)));
     }
 
     /**

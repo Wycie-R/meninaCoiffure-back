@@ -7,7 +7,7 @@ use App\Models\Cliente;
 use App\Models\Reserva;
 use App\Models\Servicio;
 use App\Models\SolicitudCita;
-use App\Services\AvisoTelegram;
+use App\Services\AvisoCorreo;
 use App\Services\ReservaService;
 use Carbon\Carbon;
 use Illuminate\Http\JsonResponse;
@@ -151,7 +151,7 @@ class MiCuentaController extends Controller
         $solicitudes = SolicitudCita::with(['servicios', 'reserva'])
             ->where('cliente_id', $ficha->id)
             ->orderByDesc('created_at')
-            ->limit(20)
+            ->limit(SolicitudCita::MAXIMO_EN_LISTA)
             ->get();
 
         $lista = [];
@@ -275,12 +275,12 @@ class MiCuentaController extends Controller
         });
         $solicitud->load(['servicios', 'reserva']);
 
-        // Se avisa después de responder: la clienta no espera a Telegram y, si falla, el pedido ya está guardado
+        // Se avisa después de responder: la clienta no espera al correo y, si falla, el pedido ya está guardado
         $solicitudId = $solicitud->id;
         dispatch(function () use ($solicitudId) {
             $pedido = SolicitudCita::find($solicitudId);
             if ($pedido !== null) {
-                app(AvisoTelegram::class)->avisarNuevaSolicitud($pedido);
+                app(AvisoCorreo::class)->avisarNuevaSolicitud($pedido);
             }
         })->afterResponse();
 

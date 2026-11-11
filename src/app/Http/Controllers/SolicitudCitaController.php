@@ -39,7 +39,7 @@ class SolicitudCitaController extends Controller
             $consulta->orderByDesc('updated_at');
         }
 
-        $solicitudes = $consulta->limit(50)->get();
+        $solicitudes = $consulta->limit(SolicitudCita::MAXIMO_EN_LISTA)->get();
 
         return response()->json([
             'data' => $solicitudes,

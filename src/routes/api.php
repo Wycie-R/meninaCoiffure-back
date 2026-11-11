@@ -24,6 +24,10 @@ use Illuminate\Support\Facades\Route;
 // HU-25 y T-02: Autenticación por rol y sesiones centralizadas
 Route::prefix('auth')->middleware(['web'])->group(function () {
     Route::post('login', [AuthController::class, 'login']);
+    // Cuentas de clientas y recuperación de contraseña; throttle frena el abuso (y el spam de correos)
+    Route::post('registro', [AuthController::class, 'registrar'])->middleware('throttle:6,1');
+    Route::post('recuperar-contrasena', [AuthController::class, 'enviarEnlaceDeRecuperacion'])->middleware('throttle:6,1');
+    Route::post('restablecer-contrasena', [AuthController::class, 'restablecerContrasena'])->middleware('throttle:6,1');
     Route::post('logout', [AuthController::class, 'logout']);
     Route::get('me', [AuthController::class, 'me']);
 });
@@ -41,6 +45,9 @@ Route::get('promociones', [DescuentoController::class, 'promociones']);
 // Demostración del balanceo con HAProxy: responde qué nodo (contenedor PHP-FPM) atendió la petición.
 // Va sin sesión para no crear una fila en sessions por cada petición de la demo
 Route::get('balanceo/ping', function (Request $request) {
+    // Solo con APP_DEMO=true: abierto en producción, alguien podría ocupar todos los procesos de PHP
+    abort_unless(config('app.demo'), 404);
+
     // "espera" simula una petición pesada para que se vea cómo leastconn reparte; tope de 1,5 s
     $esperaMs = (int) $request->query('espera', 0);
     if ($esperaMs < 0) {

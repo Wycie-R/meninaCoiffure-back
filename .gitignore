@@ -4,6 +4,10 @@ src/vendor/
 src/node_modules/
 src/storage/*.key
 
+# Producción: secretos y backups del servidor (se versiona solo deploy/.env.production.example)
+deploy/.env.production
+deploy/backups/
+
 # OS / Editor
 .DS_Store
 Thumbs.db

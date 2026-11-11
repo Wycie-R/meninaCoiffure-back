@@ -19,6 +19,9 @@ class SolicitudCita extends Model
     /** Servicios que se pueden pedir juntos en una misma cita. */
     public const MAXIMO_SERVICIOS = 8;
 
+    /** Cuántas solicitudes se listan como máximo: en la bandeja de la dueña y en "Mis pedidos". */
+    public const MAXIMO_EN_LISTA = 50;
+
     protected $table = 'solicitudes_cita';
 
     protected $fillable = [

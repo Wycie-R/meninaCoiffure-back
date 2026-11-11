@@ -6,24 +6,11 @@ import Monograma from '../../Components/Monograma.vue'
 import Icono from '../../Components/Icono.vue'
 import { establecerUsuario } from '../../auth'
 
-const props = defineProps({
-    // 'local': formulario con contraseña; 'keycloak': botón que lleva a la pantalla de Keycloak
-    proveedor: {
-        type: String,
-        default: 'local',
-    },
-    // Aviso que deja el callback de Keycloak cuando el login no se pudo completar
-    error: {
-        type: String,
-        default: null,
-    },
-})
-
-const conKeycloak = props.proveedor === 'keycloak'
-
 const form = ref({
     email: '',
     password: '',
+    // "Seguir conectado": la sesión sobrevive al cierre del navegador
+    recordar: false,
 })
 
 const errores = ref({})
@@ -57,13 +44,16 @@ async function ingresar() {
         if (respuesta.ok) {
             const datos = await respuesta.json().catch(() => null)
             establecerUsuario(datos?.data?.user ?? null)
-            router.visit('/dashboard', { replace: true })
+            // El equipo va al panel y una clienta a sus citas
+            const destino = datos?.data?.pagina_inicial ?? '/dashboard'
+            router.visit(destino, { replace: true })
             return
         }
 
         const datos = await respuesta.json().catch(() => ({}))
 
-        if (respuesta.status === 422 && datos.errors) {
+        // 422: datos incorrectos; 429: demasiados intentos (el mensaje dice cuánto esperar)
+        if ((respuesta.status === 422 || respuesta.status === 429) && datos.errors) {
             errores.value = Object.fromEntries(
                 Object.entries(datos.errors).map(([campo, mensajes]) => [campo, mensajes[0]])
             )
@@ -110,32 +100,9 @@ async function ingresar() {
 
                 <h1 class="mt-10 text-4xl lg:mt-0">Iniciar sesión</h1>
 
-                <!-- Login con Keycloak: la contraseña se escribe en la pantalla de Keycloak, no acá -->
-                <div v-if="conKeycloak">
-                    <p class="mt-2 text-sm text-bruma">
-                        Ingresa con tu cuenta de Menina Coiffure. Si todavía no tienes una, puedes crearla en el siguiente paso.
-                    </p>
+                <p class="mt-2 text-sm text-bruma">Ingresa con el correo y la contraseña de tu cuenta de Menina Coiffure.</p>
 
-                    <div
-                        v-if="error"
-                        role="alert"
-                        class="mt-8 rounded-xl border border-borgona/40 bg-borgona-hondo px-4 py-3 text-sm text-borgona"
-                    >
-                        {{ error }}
-                    </div>
-
-                    <!-- Enlace normal (no de Inertia): el navegador tiene que salir hacia Keycloak -->
-                    <a
-                        href="/auth/keycloak/redirigir"
-                        class="mt-8 inline-flex min-h-12 w-full items-center justify-center rounded-full bg-orquidea px-5 text-sm font-medium text-noche transition duration-150 hover:bg-orquidea-claro active:scale-[0.98] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-orquidea"
-                    >
-                        Ingresar con mi cuenta
-                    </a>
-                </div>
-
-                <p v-else class="mt-2 text-sm text-bruma">Usa el correo y la contraseña de tu cuenta del salón.</p>
-
-                <form v-if="!conKeycloak" class="mt-8" novalidate @submit.prevent="ingresar">
+                <form class="mt-8" novalidate @submit.prevent="ingresar">
                     <div
                         v-if="errorGeneral"
                         role="alert"
@@ -188,6 +155,24 @@ async function ingresar() {
                         </p>
                     </div>
 
+                    <div class="mt-5 flex flex-wrap items-center justify-between gap-3 text-sm">
+                        <label for="recordar" class="inline-flex min-h-10 cursor-pointer items-center gap-2 text-bruma">
+                            <input
+                                id="recordar"
+                                v-model="form.recordar"
+                                type="checkbox"
+                                class="h-4 w-4 accent-orquidea"
+                            />
+                            Seguir conectado
+                        </label>
+                        <a
+                            href="/recuperar-contrasena"
+                            class="font-medium text-orquidea underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-orquidea"
+                        >
+                            ¿Olvidaste tu contraseña?
+                        </a>
+                    </div>
+
                     <Button
                         :label="enviando ? 'Ingresando...' : 'Ingresar'"
                         type="submit"
@@ -195,6 +180,16 @@ async function ingresar() {
                         class="mt-8 w-full min-h-12"
                     />
                 </form>
+
+                <div class="mt-8 rounded-2xl border border-hilo bg-velo px-5 py-4 text-center text-sm">
+                    <span class="text-bruma">¿Todavía no tienes cuenta?</span>
+                    <a
+                        href="/registro"
+                        class="ml-1 font-medium text-orquidea underline-offset-4 hover:underline focus-visible:outline-2 focus-visible:outline-orquidea"
+                    >
+                        Crear cuenta
+                    </a>
+                </div>
 
                 <p class="mt-8 text-center text-sm">
                     <a

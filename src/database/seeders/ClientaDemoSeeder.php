@@ -10,17 +10,23 @@ use App\Models\User;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use RuntimeException;
 
 /**
  * Clienta con cuenta para la demo de "Mis citas": su ficha vinculada y dos pedidos pendientes
- * (de dos servicios cada uno) para la bandeja de la dueña. Es la misma persona que existe en el
- * realm de Keycloak (clienta@meninacoiffure.com); con login local entra con password123.
+ * (de dos servicios cada uno) para la bandeja de la dueña. Entra con clienta@meninacoiffure.com
+ * y password123.
  * Es idempotente: se puede correr sobre una base ya cargada.
  */
 class ClientaDemoSeeder extends Seeder
 {
     public function run(): void
     {
+        // Cuenta con password123: nunca en producción
+        if (app()->environment('production')) {
+            throw new RuntimeException('ClientaDemoSeeder es solo para desarrollo.');
+        }
+
         $rolCliente = Role::firstOrCreate(['nombre' => 'cliente']);
 
         $cuenta = User::updateOrCreate(
@@ -53,12 +59,13 @@ class ClientaDemoSeeder extends Seeder
             return;
         }
 
-        $corte = Servicio::where('nombre', 'Corte de dama')->where('activo', true)->first();
-        $nutricion = Servicio::where('nombre', 'Nutrición e hidratación capilar')->where('activo', true)->first();
-        $peinado = Servicio::where('nombre', 'Peinado para eventos')->where('activo', true)->first();
-        $maquillaje = Servicio::where('nombre', 'Maquillaje social')->where('activo', true)->first();
-        if (!$corte || !$nutricion || !$peinado || !$maquillaje) {
-            $this->command?->warn('ClientaDemoSeeder necesita el catálogo de AvanceDosSeeder.');
+        // Servicios de la lista de precios real (ProduccionSeeder)
+        $corte = Servicio::where('nombre', 'Corte')->where('activo', true)->first();
+        $tratamiento = Servicio::where('nombre', 'Botox capilar')->where('activo', true)->first();
+        $ondas = Servicio::where('nombre', 'Ondas pelo largo')->where('activo', true)->first();
+        $maquillaje = Servicio::where('nombre', 'Maquillaje glam')->where('activo', true)->first();
+        if (!$corte || !$tratamiento || !$ondas || !$maquillaje) {
+            $this->command?->warn('ClientaDemoSeeder necesita el catálogo de ProduccionSeeder.');
             return;
         }
 
@@ -71,7 +78,7 @@ class ClientaDemoSeeder extends Seeder
             'comentario' => 'Quisiera emparejar las puntas, nada muy corto.',
             'estado' => 'pendiente',
         ]);
-        $pedidoDeCorte->servicios()->attach([$corte->id, $nutricion->id]);
+        $pedidoDeCorte->servicios()->attach([$corte->id, $tratamiento->id]);
 
         $pedidoDeEvento = SolicitudCita::create([
             'cliente_id' => $ficha->id,
@@ -85,6 +92,6 @@ class ClientaDemoSeeder extends Seeder
             'comentario' => 'Es para un casamiento a las 19 h.',
             'estado' => 'pendiente',
         ]);
-        $pedidoDeEvento->servicios()->attach([$peinado->id, $maquillaje->id]);
+        $pedidoDeEvento->servicios()->attach([$ondas->id, $maquillaje->id]);
     }
 }

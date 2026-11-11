@@ -2,6 +2,7 @@
 
 namespace Tests\Feature;
 
+use App\Mail\CorreoDelSalon;
 use App\Models\Cliente;
 use App\Models\Reserva;
 use App\Models\Role;
@@ -10,7 +11,7 @@ use App\Models\User;
 use Carbon\Carbon;
 use Database\Seeders\AvanceDosSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Mail;
 use Tests\TestCase;
 
 /**
@@ -160,6 +161,33 @@ class SolicitudCitaTest extends TestCase
             ->assertStatus(201);
 
         $this->assertSame(6, SolicitudCita::where('cliente_id', $this->ficha->id)->where('estado', 'pendiente')->count());
+    }
+
+    public function test_la_bandeja_de_la_duena_lista_hasta_50_pedidos_y_cuenta_todos(): void
+    {
+        for ($i = 0; $i < 55; $i++) {
+            $this->crearSolicitud($this->ficha);
+        }
+
+        $respuesta = $this->actingAs($this->duena)->getJson('/api/solicitudes-cita?estado=pendiente');
+
+        $respuesta->assertOk();
+        $this->assertCount(SolicitudCita::MAXIMO_EN_LISTA, $respuesta->json('data'));
+        $this->assertSame(50, SolicitudCita::MAXIMO_EN_LISTA);
+        // El contador sigue mostrando el total real, para avisar cuántos quedan afuera
+        $this->assertSame(55, $respuesta->json('pendientes'));
+    }
+
+    public function test_la_clienta_ve_hasta_50_de_sus_pedidos(): void
+    {
+        for ($i = 0; $i < 55; $i++) {
+            $this->crearSolicitud($this->ficha);
+        }
+
+        $this->actingAs($this->clienta)
+            ->getJson('/api/mi-cuenta/solicitudes')
+            ->assertOk()
+            ->assertJsonCount(50, 'data');
     }
 
     public function test_la_clienta_solo_ve_sus_citas_y_sus_pedidos(): void
@@ -588,28 +616,33 @@ class SolicitudCitaTest extends TestCase
         ]))->assertStatus(201);
     }
 
-    public function test_al_pedir_una_cita_la_duena_recibe_un_aviso_por_telegram(): void
+    public function test_al_pedir_una_cita_la_duena_recibe_un_aviso_por_correo(): void
     {
-        config(['services.telegram.token' => 'token-de-prueba', 'services.telegram.chat_id' => '123456']);
-        Http::fake(['api.telegram.org/*' => Http::response(['ok' => true])]);
+        config(['services.avisos.correo_destino' => 'duena@meninacoiffure.com']);
+        Mail::fake();
 
         $this->actingAs($this->clienta)
             ->postJson('/api/mi-cuenta/solicitudes', $this->pedido(['servicios' => [1, 2], 'telefono' => '0981 555 123']))
             ->assertStatus(201);
 
-        Http::assertSent(function ($pedido) {
-            return $pedido->url() === 'https://api.telegram.org/bottoken-de-prueba/sendMessage'
-                && $pedido['chat_id'] === '123456'
-                && str_contains($pedido['text'], 'Nuevo pedido de cita')
-                && str_contains($pedido['text'], 'Lucía Prueba (0981 555 123)')
-                && str_contains($pedido['text'], 'a las 10:00');
+        Mail::assertSent(CorreoDelSalon::class, function (CorreoDelSalon $correo) {
+            return $correo->hasTo('duena@meninacoiffure.com')
+                && $correo->asunto === 'Nuevo pedido de cita'
+                && str_contains($correo->texto, 'Lucía Prueba (0981 555 123)')
+                && str_contains($correo->texto, 'a las 10:00');
         });
     }
 
-    public function test_si_telegram_falla_el_pedido_queda_guardado_igual(): void
+    public function test_si_el_correo_falla_el_pedido_queda_guardado_igual(): void
     {
-        config(['services.telegram.token' => 'token-de-prueba', 'services.telegram.chat_id' => '123456']);
-        Http::fake(['api.telegram.org/*' => Http::response(['ok' => false, 'description' => 'chat not found'], 400)]);
+        // Un servidor SMTP que no existe: la conexión se rechaza al enviar
+        config([
+            'services.avisos.correo_destino' => 'duena@meninacoiffure.com',
+            'mail.default' => 'smtp',
+            'mail.mailers.smtp.host' => '127.0.0.1',
+            'mail.mailers.smtp.port' => 1,
+            'mail.mailers.smtp.timeout' => 2,
+        ]);
 
         $this->actingAs($this->clienta)
             ->postJson('/api/mi-cuenta/solicitudes', $this->pedido())
@@ -618,13 +651,13 @@ class SolicitudCitaTest extends TestCase
         $this->assertSame(1, SolicitudCita::count());
     }
 
-    public function test_sin_telegram_configurado_no_se_llama_a_telegram(): void
+    public function test_sin_correo_de_destino_no_se_envia_ningun_aviso(): void
     {
-        config(['services.telegram.token' => null, 'services.telegram.chat_id' => null]);
-        Http::fake();
+        config(['services.avisos.correo_destino' => null]);
+        Mail::fake();
 
         $this->actingAs($this->clienta)->postJson('/api/mi-cuenta/solicitudes', $this->pedido())->assertStatus(201);
 
-        Http::assertNothingSent();
+        Mail::assertNothingSent();
     }
 }

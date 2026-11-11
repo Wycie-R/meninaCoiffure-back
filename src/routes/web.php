@@ -1,6 +1,6 @@
 <?php
 
-use App\Http\Controllers\KeycloakController;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -24,8 +24,6 @@ Route::get('/salon', function () {
     return Inertia::render('Salon/Index', [
         'whatsapp' => config('app.salon_whatsapp'),
         'cuenta' => $cuenta,
-        // Con Keycloak, "Crear cuenta" abre directo el formulario de registro
-        'proveedor' => config('services.keycloak.proveedor'),
     ]);
 });
 
@@ -35,23 +33,26 @@ Route::get('/mi-cuenta', function () {
 })->middleware(['auth', 'rol:cliente']);
 
 Route::middleware('guest')->group(function () {
-    // Con AUTH_PROVEEDOR=keycloak se va directo al formulario de Keycloak (con el tema del salón):
-    // el paso intermedio con un solo botón sobraba. Solo se queda acá para mostrar un error del login
     Route::get('/login', function () {
-        $hayError = session()->has('error_login');
-        if (config('services.keycloak.proveedor') === 'keycloak' && !$hayError) {
-            return redirect('/auth/keycloak/redirigir');
-        }
-
-        return Inertia::render('Auth/Login', [
-            'proveedor' => config('services.keycloak.proveedor'),
-            'error' => session('error_login'),
-        ]);
+        return Inertia::render('Auth/Login');
     })->name('login');
 
-    // Login con Keycloak (Authorization Code + PKCE); responden 404 si el proveedor es local
-    Route::get('/auth/keycloak/redirigir', [KeycloakController::class, 'redirigir']);
-    Route::get('/auth/keycloak/callback', [KeycloakController::class, 'callback']);
+    // Una clienta crea su cuenta para pedir citas
+    Route::get('/registro', function () {
+        return Inertia::render('Auth/Registro');
+    });
+
+    Route::get('/recuperar-contrasena', function () {
+        return Inertia::render('Auth/RecuperarContrasena');
+    });
+
+    // Enlace del correo de recuperación: el token es de un solo uso y vence (config/auth.php)
+    Route::get('/restablecer-contrasena/{token}', function (Request $request, string $token) {
+        return Inertia::render('Auth/RestablecerContrasena', [
+            'token' => $token,
+            'email' => (string) $request->query('email', ''),
+        ]);
+    });
 });
 
 // Pantallas del equipo: una clienta con sesión no entra al panel
@@ -97,19 +98,29 @@ Route::middleware(['auth', 'rol:admin,profesional'])->group(function () {
     })->middleware('rol:admin');
 });
 
-// Panel en vivo del balanceo A/B con HAProxy (para la exposición); no usa Vite para no depender del build
+// Panel en vivo del balanceo A/B con HAProxy (para la exposición); no usa Vite para no depender del build.
+// Solo existe con APP_DEMO=true (config/app.php)
 Route::get('/balanceo', function () {
+    abort_unless(config('app.demo'), 404);
+
     return view('balanceo');
 });
 
-// Documentación interactiva de la API con Swagger UI
-Route::get('/docs', function () {
-    return view('swagger');
-});
-Route::get('/api/docs', function () {
-    return view('swagger');
-});
-Route::get('/api/documentation', function () {
-    return view('swagger');
+// Documentación interactiva de la API con Swagger UI: solo la administración
+Route::middleware(['auth', 'rol:admin'])->group(function () {
+    Route::get('/docs', function () {
+        return view('swagger');
+    });
+    Route::get('/api/docs', function () {
+        return view('swagger');
+    });
+    Route::get('/api/documentation', function () {
+        return view('swagger');
+    });
+
+    // La especificación no vive en public/ porque nginx serviría el archivo sin pasar por este control
+    Route::get('/openapi.json', function () {
+        return response()->file(resource_path('openapi/openapi.json'), ['Content-Type' => 'application/json']);
+    });
 });
 

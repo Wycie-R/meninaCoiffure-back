@@ -3,7 +3,7 @@
   "info": {
     "title": "Menina Coiffure — API REST",
     "version": "2.0.0",
-    "description": "API REST de **Menina Coiffure**, centro familiar de **peluquería y estética** de Villa Elisa (Paraguay): peluquería\n(cortes, brushing, peinados), colorimetría (tintes, mechas, balayage), tratamientos capilares y estética (depilación,\nlimpieza facial, maquillaje social), en el salón y a domicilio. Laravel 13 + PostgreSQL 18 + Vue/Inertia.\n\nMontos en **guaraníes (PYG)**, sin decimales en la práctica (los campos decimales de la base se serializan como\ntexto, por ejemplo `\"70000.00\"`; los montos calculados, como número). Fechas `YYYY-MM-DD`, horas `HH:MM[:SS]`,\nzona horaria America/Asuncion.\n\n### Roles\n- **`admin`**: la propietaria, Sra. Mónica. Su usuario `admin@meninacoiffure.com` está vinculado a su ficha de\n  personal porque también atiende clientes. Acceso total.\n- **`profesional`**: por ejemplo Carla (`carla@meninacoiffure.com`). Solo ve y opera **su propia agenda**: el listado\n  de reservas le devuelve solo las suyas y sobre reservas ajenas recibe 403. No accede a rutas de administración.\n  Además, la dueña le habilita o quita **permisos** desde Configuración (`/api/configuracion/permisos`); por defecto\n  están todos habilitados. Sin el permiso necesario la API responde **403** \"La administración no te habilitó para\n  esta acción.\":\n  - `puede_crear_reservas`: `POST /api/reservas`, `POST /api/reservas/{id}/servicios`, `GET /api/disponibilidad` y\n    reprogramar en `PUT /api/reservas/{id}` (fecha, horas, cliente, domicilio, descuento o `fuera_de_horario`).\n  - `puede_cambiar_estado`: `PUT /api/reservas/{id}` con un `estado` distinto y `DELETE /api/reservas/{id}`.\n  - `puede_reservar_fuera_de_horario`: crear o marcar una reserva con `fuera_de_horario = true`.\n  - `puede_ver_clientes`: ficha, edición, preferencias e historial de clientes. El listado (`GET /api/clientes`) y el\n    alta (`POST /api/clientes`) se permiten con este permiso **o** con `puede_crear_reservas`.\n- **`cliente`**: una clienta con cuenta (entra con Keycloak o, con login local, con contraseña). Solo accede a\n  `/api/mi-cuenta/*`: ve sus citas y sus pedidos y pide citas nuevas. Cualquier otra ruta protegida responde 403.\n\nUsuarios de prueba (contraseña `password123`): `admin@meninacoiffure.com`, `carla@meninacoiffure.com` y la clienta `clienta@meninacoiffure.com`.\n\n### Proveedor de login (`AUTH_PROVEEDOR`)\n- **`local`** (por defecto): `POST /api/auth/login` con correo y contraseña.\n- **`keycloak`**: el login se delega en Keycloak (OpenID Connect, Authorization Code + PKCE S256) por\n  `GET /auth/keycloak/redirigir` y `GET /auth/keycloak/callback`; `POST /api/auth/login` responde **404**.\n  La dueña y el equipo se vinculan por correo verificado y conservan rol y permisos; una persona nueva\n  entra con rol `cliente`. `POST /api/auth/logout` devuelve `url_cierre` para cerrar también la sesión de Keycloak y volver a `/login`.\n\n### Autenticación y \"Try it out\"\nLa API usa la **sesión de Laravel** (cookie `laravel_session`, sesión guardada en PostgreSQL), no tokens.\nPúblicas: `POST /api/auth/login`, `POST /api/auth/logout`, `GET /api/auth/me`, la consulta del catálogo\n(`GET /api/servicios`, `GET /api/servicios/{servicio}`, `GET /api/categorias-servicio`,\n`GET /api/categorias-servicio/{categorias_servicio}`) y lo que usa la página pública del salón (`/salon`):\n`GET /api/horarios-atencion` y `GET /api/promociones`. Todo lo demás exige sesión (**401** sin ella) y un rol del\nsalón (**403** si el rol no corresponde; varias rutas son solo `admin`).\n\n> Antes de usar **\"Try it out\"** en rutas protegidas, inicia sesión en [/login](/login) **en el mismo navegador**\n> (o ejecuta aquí `POST /api/auth/login`, que está en el mismo origen) y vuelve a esta página: el navegador envía la\n> cookie `laravel_session` solo. El esquema `cookieAuth` de \"Authorize\" es informativo; Swagger UI no puede fijar\n> cookies por sí mismo.\n\n**CSRF:** las rutas `api/*` están excluidas de la verificación CSRF (`bootstrap/app.php`), así que los métodos de\nescritura (POST/PUT/DELETE) **no** necesitan la cabecera `X-XSRF-TOKEN`; basta la cookie de sesión.\n\nErrores con formato JSON estándar de Laravel: `{\"message\": \"...\"}` (401/403/404) y\n`{\"message\": \"...\", \"errors\": {\"campo\": [\"...\"]}}` (422)."
+    "description": "API REST de **Menina Coiffure**, centro familiar de **peluquería y estética** de Villa Elisa (Paraguay): peluquería\n(cortes, brushing, peinados), colorimetría (tintes, mechas, balayage), tratamientos capilares y estética (depilación,\nlimpieza facial, maquillaje social), en el salón y a domicilio. Laravel 13 + PostgreSQL 18 + Vue/Inertia.\n\nMontos en **guaraníes (PYG)**, sin decimales en la práctica (los campos decimales de la base se serializan como\ntexto, por ejemplo `\"70000.00\"`; los montos calculados, como número). Fechas `YYYY-MM-DD`, horas `HH:MM[:SS]`,\nzona horaria America/Asuncion.\n\n### Roles\n- **`admin`**: la propietaria, Sra. Mónica. Su usuario `admin@meninacoiffure.com` está vinculado a su ficha de\n  personal porque también atiende clientes. Acceso total.\n- **`profesional`**: por ejemplo Carla (`carla@meninacoiffure.com`). Solo ve y opera **su propia agenda**: el listado\n  de reservas le devuelve solo las suyas y sobre reservas ajenas recibe 403. No accede a rutas de administración.\n  Además, la dueña le habilita o quita **permisos** desde Configuración (`/api/configuracion/permisos`); por defecto\n  están todos habilitados. Sin el permiso necesario la API responde **403** \"La administración no te habilitó para\n  esta acción.\":\n  - `puede_crear_reservas`: `POST /api/reservas`, `POST /api/reservas/{id}/servicios`, `GET /api/disponibilidad` y\n    reprogramar en `PUT /api/reservas/{id}` (fecha, horas, cliente, domicilio, descuento o `fuera_de_horario`).\n  - `puede_cambiar_estado`: `PUT /api/reservas/{id}` con un `estado` distinto y `DELETE /api/reservas/{id}`.\n  - `puede_reservar_fuera_de_horario`: crear o marcar una reserva con `fuera_de_horario = true`.\n  - `puede_ver_clientes`: ficha, edición, preferencias e historial de clientes. El listado (`GET /api/clientes`) y el\n    alta (`POST /api/clientes`) se permiten con este permiso **o** con `puede_crear_reservas`.\n- **`cliente`**: una clienta con cuenta (la crea ella misma con `POST /api/auth/registro`). Solo accede a\n  `/api/mi-cuenta/*`: ve sus citas y sus pedidos y pide citas nuevas. Cualquier otra ruta protegida responde 403.\n\nUsuarios de prueba (contraseña `password123`): `admin@meninacoiffure.com`, `carla@meninacoiffure.com` y la clienta `clienta@meninacoiffure.com`.\n\n### Cuentas\nLas cuentas viven en la tabla `users`; Laravel guarda la contraseña hasheada (bcrypt). Login con correo y\ncontraseña (`POST /api/auth/login`, con \"Seguir conectado\" opcional y espera de 60 s tras 5 intentos fallidos),\nregistro de clientas (`POST /api/auth/registro`) y recuperación de contraseña por correo\n(`POST /api/auth/recuperar-contrasena` y `POST /api/auth/restablecer-contrasena`).\n\n### Autenticación y \"Try it out\"\nLa API usa la **sesión de Laravel** (cookie `laravel_session`, sesión guardada en PostgreSQL), no tokens.\nPúblicas: `POST /api/auth/login`, `POST /api/auth/registro`, `POST /api/auth/recuperar-contrasena`,\n`POST /api/auth/restablecer-contrasena`, `POST /api/auth/logout`, `GET /api/auth/me`, la consulta del catálogo\n(`GET /api/servicios`, `GET /api/servicios/{servicio}`, `GET /api/categorias-servicio`,\n`GET /api/categorias-servicio/{categorias_servicio}`) y lo que usa la página pública del salón (`/salon`):\n`GET /api/horarios-atencion` y `GET /api/promociones`. Todo lo demás exige sesión (**401** sin ella) y un rol del\nsalón (**403** si el rol no corresponde; varias rutas son solo `admin`).\n\n> Esta página y `/openapi.json` solo se abren con una sesión de **administración**.\n>\n> Antes de usar **\"Try it out\"** en rutas protegidas, inicia sesión en [/login](/login) **en el mismo navegador**\n> (o ejecuta aquí `POST /api/auth/login`, que está en el mismo origen) y vuelve a esta página: el navegador envía la\n> cookie `laravel_session` solo. El esquema `cookieAuth` de \"Authorize\" es informativo; Swagger UI no puede fijar\n> cookies por sí mismo.\n\n**CSRF:** las rutas `api/*` están excluidas de la verificación CSRF (`bootstrap/app.php`), así que los métodos de\nescritura (POST/PUT/DELETE) **no** necesitan la cabecera `X-XSRF-TOKEN`; basta la cookie de sesión.\n\nErrores con formato JSON estándar de Laravel: `{\"message\": \"...\"}` (401/403/404) y\n`{\"message\": \"...\", \"errors\": {\"campo\": [\"...\"]}}` (422)."
   },
   "servers": [
     {
@@ -89,7 +89,7 @@
           "Autenticación"
         ],
         "summary": "Iniciar sesión",
-        "description": "HU-25. Valida las credenciales, inicia la sesión y regenera el identificador de sesión. La respuesta incluye\nla cookie `laravel_session` (y `XSRF-TOKEN`). Si se invoca desde esta misma página (mismo origen) el navegador\nguarda la cookie y las siguientes llamadas de \"Try it out\" quedan autenticadas.\n\nCredenciales incorrectas responden **422** en `email` (no 401).\n\n**Acceso:** público (no requiere sesión).\n\nCon `AUTH_PROVEEDOR=keycloak` responde **404**: el login se hace por `GET /auth/keycloak/redirigir`.",
+        "description": "HU-25. Valida las credenciales, inicia la sesión y regenera el identificador de sesión. La respuesta incluye\nla cookie `laravel_session` (y `XSRF-TOKEN`). Si se invoca desde esta misma página (mismo origen) el navegador\nguarda la cookie y las siguientes llamadas de \"Try it out\" quedan autenticadas.\n\nCredenciales incorrectas responden **422** en `email` (no 401). El correo no distingue mayúsculas.\nCon `recordar: true` (\"Seguir conectado\") la sesión sobrevive al cierre del navegador.\n\nProtección contra fuerza bruta: tras **5 intentos fallidos** con el mismo correo desde la misma IP responde\n**429** durante 60 s, incluso con la contraseña correcta.\n\n`data.pagina_inicial` indica adónde ir: `/dashboard` (equipo) o `/mi-cuenta` (clienta).\n\n**Acceso:** público (no requiere sesión).",
         "requestBody": {
           "required": true,
           "content": {
@@ -107,6 +107,11 @@
                     "type": "string",
                     "format": "password",
                     "example": "password123"
+                  },
+                  "recordar": {
+                    "type": "boolean",
+                    "description": "\"Seguir conectado\": guarda la cookie remember_web.",
+                    "example": false
                   }
                 },
                 "required": [
@@ -116,7 +121,8 @@
               },
               "example": {
                 "email": "admin@meninacoiffure.com",
-                "password": "password123"
+                "password": "password123",
+                "recordar": false
               }
             }
           }
@@ -182,6 +188,14 @@
                               "$ref": "#/components/schemas/Permisos"
                             }
                           }
+                        },
+                        "pagina_inicial": {
+                          "type": "string",
+                          "enum": [
+                            "/dashboard",
+                            "/mi-cuenta"
+                          ],
+                          "example": "/dashboard"
                         }
                       }
                     }
@@ -209,7 +223,8 @@
                         "puede_reservar_fuera_de_horario": true,
                         "puede_ver_clientes": true
                       }
-                    }
+                    },
+                    "pagina_inicial": "/dashboard"
                   }
                 }
               }
@@ -233,8 +248,23 @@
               }
             }
           },
-          "404": {
-            "description": "El proveedor de login es Keycloak (no hay login con contraseña local)"
+          "429": {
+            "description": "Demasiados intentos fallidos: hay que esperar",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                },
+                "example": {
+                  "message": "Demasiados intentos. Prueba de nuevo en 60 segundos.",
+                  "errors": {
+                    "email": [
+                      "Demasiados intentos. Prueba de nuevo en 60 segundos."
+                    ]
+                  }
+                }
+              }
+            }
           }
         }
       }
@@ -245,7 +275,7 @@
           "Autenticación"
         ],
         "summary": "Cerrar sesión",
-        "description": "HU-25. Cierra la sesión activa, invalida la sesión y regenera el token CSRF. Responde 200 aunque no haya sesión.\n\nSi la sesión se inició con Keycloak, `url_cierre` trae la dirección del `end_session_endpoint` (con\n`id_token_hint` y `post_logout_redirect_uri=/login`) a la que el frontend redirige para cerrar también la sesión\nde Keycloak. Con login local es `null`.\n\n**Acceso:** público (no requiere sesión).",
+        "description": "HU-25. Cierra la sesión activa, invalida la sesión y regenera el token CSRF. Responde 200 aunque no haya sesión.\n\n**Acceso:** público (no requiere sesión).",
         "security": [],
         "responses": {
           "200": {
@@ -258,12 +288,6 @@
                     "message": {
                       "type": "string",
                       "example": "Sesión cerrada correctamente."
-                    },
-                    "url_cierre": {
-                      "type": "string",
-                      "format": "uri",
-                      "nullable": true,
-                      "example": "http://localhost:8080/realms/menina/protocol/openid-connect/logout?id_token_hint=eyJ...&post_logout_redirect_uri=http%3A%2F%2Flocalhost%3A8000%2Flogin"
                     }
                   },
                   "required": [
@@ -376,69 +400,243 @@
         }
       }
     },
-    "/auth/keycloak/redirigir": {
-      "get": {
+    "/api/auth/registro": {
+      "post": {
         "tags": [
           "Autenticación"
         ],
-        "summary": "Ir al login de Keycloak",
-        "description": "Genera `state` y `code_verifier`, los guarda en la sesión y redirige a la pantalla de login de Keycloak\ncon `code_challenge = BASE64URL(SHA256(code_verifier))` y `code_challenge_method=S256`.\n\nEs una ruta del navegador (redirección), no un endpoint JSON: ábrela en otra pestaña en lugar de\nusar \"Try it out\".\n\n**Acceso:** sin sesión. Solo existe con `AUTH_PROVEEDOR=keycloak` (si no, 404).",
+        "summary": "Crear cuenta de clienta",
+        "description": "Crea la cuenta con rol `cliente`, su ficha en `clientes` y deja la sesión iniciada. La ficha siempre es nueva:\nsin verificar el correo no se toma la ficha que cargó la dueña (alguien podría registrarse con el correo de otra\nclienta y ver sus citas). El correo se guarda en minúsculas y no puede repetirse.\n\nMáximo 6 pedidos por minuto (**429**).\n\n**Acceso:** público (no requiere sesión).",
         "security": [],
-        "responses": {
-          "302": {
-            "description": "Redirección a `http://localhost:8080/realms/menina/protocol/openid-connect/auth?...`"
-          },
-          "404": {
-            "description": "El proveedor de login es local"
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "nombre": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "apellido": {
+                    "type": "string",
+                    "maxLength": 100
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email",
+                    "maxLength": 255
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "minLength": 8
+                  },
+                  "password_confirmation": {
+                    "type": "string",
+                    "format": "password"
+                  }
+                },
+                "required": [
+                  "nombre",
+                  "apellido",
+                  "email",
+                  "password",
+                  "password_confirmation"
+                ]
+              },
+              "example": {
+                "nombre": "Lucía",
+                "apellido": "Benítez",
+                "email": "lucia@gmail.com",
+                "password": "clave-segura",
+                "password_confirmation": "clave-segura"
+              }
+            }
           }
         },
-        "parameters": [
-          {
-            "name": "registro",
-            "in": "query",
-            "required": false,
-            "schema": {
-              "type": "boolean"
-            },
-            "description": "Con `1` abre directo el formulario de crear cuenta (`/protocol/openid-connect/registrations`)."
+        "responses": {
+          "201": {
+            "description": "Cuenta creada y sesión iniciada",
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Tu cuenta quedó creada.",
+                  "data": {
+                    "pagina_inicial": "/mi-cuenta"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Error de validación (por ejemplo, correo ya registrado o contraseñas distintas)",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                },
+                "example": {
+                  "message": "Ya hay una cuenta con ese correo. Prueba iniciar sesión.",
+                  "errors": {
+                    "email": [
+                      "Ya hay una cuenta con ese correo. Prueba iniciar sesión."
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Demasiados pedidos seguidos"
           }
-        ]
+        }
       }
     },
-    "/auth/keycloak/callback": {
-      "get": {
+    "/api/auth/recuperar-contrasena": {
+      "post": {
         "tags": [
           "Autenticación"
         ],
-        "summary": "Vuelta desde Keycloak",
-        "description": "Keycloak redirige acá con `code` y `state`. Laravel compara el `state` con el de la sesión (protección\nCSRF), canjea el código servidor a servidor (`code_verifier` + `client_secret`), pide `userinfo` y busca\no crea la cuenta:\n\n| Situación | Resultado |\n|---|---|\n| Cuenta ya vinculada (`keycloak_id = sub`) | Inicia sesión con esa cuenta |\n| Mismo correo, verificado en Keycloak | Guarda el `sub` y conserva rol y permisos |\n| Mismo correo **sin verificar** | Rechaza (evita apropiarse de una cuenta del equipo) |\n| Persona nueva | Crea la cuenta con rol `cliente`, sin contraseña local, y su ficha en `clientes` (reutiliza la que cargó la dueña si el correo coincide y está verificado) |\n\nRedirige a `/dashboard` (equipo) o `/mi-cuenta` (clienta). Ante cualquier error vuelve a `/login` con un aviso.\n\n**Acceso:** sin sesión. Solo existe con `AUTH_PROVEEDOR=keycloak` (si no, 404).",
+        "summary": "Pedir enlace para crear una contraseña nueva",
+        "description": "Envía por correo un enlace de un solo uso a `/restablecer-contrasena/{token}?email=...` que vence en 60 minutos.\nResponde **lo mismo** exista o no la cuenta, para no revelar quién tiene cuenta en el salón. Si el servidor de\ncorreo no responde, **503**.\n\nMáximo 6 pedidos por minuto (**429**).\n\n**Acceso:** público (no requiere sesión).",
         "security": [],
-        "parameters": [
-          {
-            "name": "code",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Código de autorización de un solo uso"
-          },
-          {
-            "name": "state",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string"
-            },
-            "description": "Debe coincidir con el guardado en la sesión"
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  }
+                },
+                "required": [
+                  "email"
+                ]
+              },
+              "example": {
+                "email": "lucia@gmail.com"
+              }
+            }
           }
-        ],
+        },
         "responses": {
-          "302": {
-            "description": "Sesión iniciada (`/dashboard` o `/mi-cuenta`) o error (`/login`)"
+          "200": {
+            "description": "Pedido recibido",
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Listo. Si hay una cuenta con ese correo, en unos minutos te llega un enlace para crear una contraseña nueva."
+                }
+              }
+            }
           },
-          "404": {
-            "description": "El proveedor de login es local"
+          "422": {
+            "description": "Error de validación",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Demasiados pedidos seguidos"
+          },
+          "503": {
+            "description": "No se pudo enviar el correo",
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "No pudimos enviar el correo. Intenta de nuevo en unos minutos."
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth/restablecer-contrasena": {
+      "post": {
+        "tags": [
+          "Autenticación"
+        ],
+        "summary": "Guardar la contraseña nueva",
+        "description": "Con el `token` del enlace del correo guarda la contraseña nueva, invalida el token (sirve una sola vez), cierra\nel \"Seguir conectado\" de otros dispositivos y deja la sesión iniciada. También sirve para que una cuenta sin\ncontraseña local cree la primera.\n\nMáximo 6 pedidos por minuto (**429**).\n\n**Acceso:** público (no requiere sesión).",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string"
+                  },
+                  "email": {
+                    "type": "string",
+                    "format": "email"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password",
+                    "minLength": 8
+                  },
+                  "password_confirmation": {
+                    "type": "string",
+                    "format": "password"
+                  }
+                },
+                "required": [
+                  "token",
+                  "email",
+                  "password",
+                  "password_confirmation"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Contraseña actualizada y sesión iniciada",
+            "content": {
+              "application/json": {
+                "example": {
+                  "message": "Listo, tu contraseña quedó actualizada.",
+                  "data": {
+                    "pagina_inicial": "/mi-cuenta"
+                  }
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Enlace vencido, ya usado o inválido, o contraseña que no cumple",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ValidationError"
+                },
+                "example": {
+                  "message": "El enlace venció o ya se usó. Pide uno nuevo.",
+                  "errors": {
+                    "email": [
+                      "El enlace venció o ya se usó. Pide uno nuevo."
+                    ]
+                  }
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Demasiados pedidos seguidos"
           }
         }
       }
@@ -6011,7 +6209,7 @@
           "Mi cuenta"
         ],
         "summary": "Mis pedidos de cita",
-        "description": "Los últimos 20 pedidos con su estado, el motivo si fue rechazado y la cita asignada si fue aceptado.\n\n**Acceso:** `cliente` (siempre sobre la ficha vinculada a la sesión; el equipo recibe 403).",
+        "description": "Los últimos 50 pedidos con su estado, el motivo si fue rechazado y la cita asignada si fue aceptado.\n\n**Acceso:** `cliente` (siempre sobre la ficha vinculada a la sesión; el equipo recibe 403).",
         "responses": {
           "200": {
             "description": "Pedidos",
@@ -6072,7 +6270,7 @@
           "Mi cuenta"
         ],
         "summary": "Pedir una cita (uno o varios servicios)",
-        "description": "Crea un pedido `pendiente` con día y **hora** elegidos por la clienta. No ocupa la agenda: la dueña asigna la profesional al aceptarlo. Si al enviar ese horario ya no lo puede atender nadie responde 422 en `hora_preferida`. Teléfono, dirección (si es a domicilio) y ubicación quedan guardados en la ficha para el próximo pedido. A domicilio alcanza con la dirección escrita **o** la ubicación del celular; sin ninguna de las dos responde 422 en `direccion_domicilio`. Al crearse el pedido se avisa a la dueña por Telegram (si está configurado; un fallo de Telegram no afecta al pedido). Como máximo 3 pedidos pendientes por clienta (422 en `servicios`).\n\n**Acceso:** `cliente` (siempre sobre la ficha vinculada a la sesión; el equipo recibe 403).",
+        "description": "Crea un pedido `pendiente` con día y **hora** elegidos por la clienta. No ocupa la agenda: la dueña asigna la profesional al aceptarlo. Si al enviar ese horario ya no lo puede atender nadie responde 422 en `hora_preferida`. Teléfono, dirección (si es a domicilio) y ubicación quedan guardados en la ficha para el próximo pedido. A domicilio alcanza con la dirección escrita **o** la ubicación del celular; sin ninguna de las dos responde 422 en `direccion_domicilio`. Al crearse el pedido se avisa a la dueña por correo a `AVISOS_CORREO_DESTINO` (si está configurado; un fallo del correo no afecta al pedido). No hay tope de pedidos pendientes por clienta.\n\n**Acceso:** `cliente` (siempre sobre la ficha vinculada a la sesión; el equipo recibe 403).",
         "requestBody": {
           "required": true,
           "content": {
