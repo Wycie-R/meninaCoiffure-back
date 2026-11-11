@@ -1,3 +1,8 @@
-# HAProxy y nginx leen estos archivos dentro de Linux: siempre con saltos de línea LF
+# HAProxy, nginx y los scripts leen estos archivos dentro de Linux: siempre con saltos de línea LF
+# (un script con CRLF falla con "/bin/sh^M: not found")
 haproxy.cfg text eol=lf
 nginx.conf text eol=lf
+Dockerfile text eol=lf
+Dockerfile.prod text eol=lf
+*.sh text eol=lf
+deploy/** text eol=lf

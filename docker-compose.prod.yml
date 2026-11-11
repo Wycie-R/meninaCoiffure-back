@@ -1,0 +1,164 @@
+# Producción en el VPS (ver deploy/README.md). Siempre se usa así:
+#   docker compose -f docker-compose.prod.yml --env-file deploy/.env.production <comando>
+# El entorno de desarrollo sigue siendo docker-compose.yml.
+
+# Otro nombre de proyecto que el de desarrollo: contenedores, redes y volúmenes no se pisan
+# (sin esto, un 'up --remove-orphans' de producción en tu PC borraría los contenedores de desarrollo)
+name: menina_prod
+
+# Logs con tope de tamaño en todos los servicios, para no llenar el disco del servidor
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  db:
+    image: postgres:18
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    # Sin ports: solo los contenedores de la red interna llegan a la base
+    volumes:
+      - db_data:/var/lib/postgresql
+    healthcheck:
+      # $$ para que la variable la lea el contenedor y no Compose
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 40s
+    networks:
+      - menina_net
+    logging: *logging
+
+  # Nodo A: PHP-FPM con el código, vendor y el build dentro de la imagen
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      target: app
+    image: menina/app:latest
+    # gethostname() lo devuelve: /balanceo lo muestra (solo con APP_DEMO=true)
+    hostname: nodo-a
+    restart: unless-stopped
+    env_file: deploy/.env.production
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - menina_net
+    logging: *logging
+
+  # Nodo B: la misma imagen que app, no se vuelve a construir
+  app_b:
+    image: menina/app:latest
+    pull_policy: never
+    hostname: nodo-b
+    restart: unless-stopped
+    env_file: deploy/.env.production
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - menina_net
+    logging: *logging
+
+  nginx:
+    build:
+      context: .
+      dockerfile: Dockerfile.prod
+      target: web
+    image: menina/web:latest
+    restart: unless-stopped
+    environment:
+      PHP_FPM_HOST: app
+    expose:
+      - "80"
+    depends_on:
+      - app
+    networks:
+      - menina_net
+    logging: *logging
+
+  nginx_b:
+    image: menina/web:latest
+    pull_policy: never
+    restart: unless-stopped
+    environment:
+      PHP_FPM_HOST: app_b
+    expose:
+      - "80"
+    depends_on:
+      - app_b
+    networks:
+      - menina_net
+    logging: *logging
+
+  # Balanceo entre A y B. No publica el 80: solo Caddy le habla
+  haproxy:
+    image: haproxy:3.0-alpine
+    restart: unless-stopped
+    environment:
+      HAPROXY_STATS_PASSWORD: ${HAPROXY_STATS_PASSWORD}
+      APP_DEMO: ${APP_DEMO:-false}
+    volumes:
+      - ./deploy/haproxy/haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
+    ports:
+      # Panel de estadísticas solo en el servidor: se entra por túnel SSH
+      - "127.0.0.1:8404:8404"
+    depends_on:
+      - nginx
+      - nginx_b
+    networks:
+      - menina_net
+    logging: *logging
+
+  # Única entrada desde internet: HTTPS con Let's Encrypt
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      DOMINIO: ${DOMINIO}
+      ACME_EMAIL: ${ACME_EMAIL}
+    ports:
+      - "80:80"
+      - "443:443"
+      # HTTP/3
+      - "443:443/udp"
+    volumes:
+      - ./deploy/caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      # Certificados: si se pierden, Caddy los vuelve a pedir (Let's Encrypt limita cuántos por semana)
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - haproxy
+    networks:
+      - menina_net
+    logging: *logging
+
+  # Administración de contenedores. Tiene acceso a Docker (equivale a root): solo en 127.0.0.1
+  portainer:
+    image: portainer/portainer-ce:2.45.1
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:9443:9443"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - portainer_data:/data
+    networks:
+      - menina_net
+    logging: *logging
+
+networks:
+  menina_net:
+    driver: bridge
+
+volumes:
+  db_data:
+  caddy_data:
+  caddy_config:
+  portainer_data:

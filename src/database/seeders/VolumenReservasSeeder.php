@@ -8,6 +8,7 @@ use App\Models\Servicio;
 use Carbon\Carbon;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\DB;
+use RuntimeException;
 
 /**
  * Datos de volumen para el benchmark del Avance 4 (RPS y latencia, Arquitectura A vs B).
@@ -23,6 +24,11 @@ class VolumenReservasSeeder extends Seeder
 
     public function run(): void
     {
+        // 5.000 reservas de clientas ficticias: nunca en producción
+        if (app()->environment('production')) {
+            throw new RuntimeException('VolumenReservasSeeder es solo para el benchmark en desarrollo.');
+        }
+
         $profesionales = Personal::where('activo', true)->get();
         $servicios = Servicio::where('activo', true)->get();
         $horarioDelSalon = HorarioAtencion::orderBy('hora_apertura')->get();

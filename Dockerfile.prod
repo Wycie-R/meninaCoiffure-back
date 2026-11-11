@@ -1,0 +1,84 @@
+# Imágenes de producción de Menina Coiffure (ver deploy/README.md).
+# El Dockerfile de desarrollo sigue siendo "Dockerfile"; este no se usa en tu PC salvo para probar.
+#
+# Etapas: base (PHP + extensiones) -> vendor (Composer) -> assets (Vite) -> app (PHP-FPM) y web (nginx).
+# El código, las dependencias y el build quedan dentro de las imágenes: nada se monta desde el host.
+
+# ---------- base: PHP 8.4 con las extensiones del sistema ----------
+FROM php:8.4-fpm AS base
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        libpq-dev \
+        libzip-dev \
+        libpng-dev \
+        libonig-dev \
+        libxml2-dev \
+    && docker-php-ext-install pdo pdo_pgsql pgsql zip mbstring exif pcntl bcmath gd opcache \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /var/www
+
+
+# ---------- vendor: dependencias de PHP sin las de desarrollo ----------
+# Parte de la misma base que la imagen final: Composer valida las extensiones contra el PHP real
+FROM base AS vendor
+
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+
+# Primero solo los archivos de dependencias: si no cambian, Docker reutiliza esta capa y el build es rápido
+COPY src/composer.json src/composer.lock ./
+RUN composer install --no-dev --no-scripts --no-autoloader --prefer-dist --no-interaction
+
+COPY src/ ./
+
+# .dockerignore deja afuera el contenido de storage/: se recrean las carpetas que Laravel necesita.
+# dump-autoload corre package:discover, que genera bootstrap/cache/packages.php
+RUN mkdir -p storage/logs storage/framework/cache/data storage/framework/sessions storage/framework/views bootstrap/cache \
+    && composer dump-autoload --optimize --no-dev --no-interaction
+
+
+# ---------- assets: build del frontend con Vite ----------
+FROM node:22-alpine AS assets
+
+WORKDIR /var/www
+
+COPY src/package.json src/package-lock.json ./
+RUN npm ci
+
+COPY src/ ./
+# app.css le indica a Tailwind que lea las vistas de paginación que están en vendor/
+COPY --from=vendor /var/www/vendor ./vendor
+
+RUN npm run build
+
+
+# ---------- app: PHP-FPM con el código, vendor y el build (sin Node, git ni Composer) ----------
+FROM base AS app
+
+RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini"
+COPY deploy/docker/php.ini "$PHP_INI_DIR/conf.d/zz-produccion.ini"
+COPY deploy/docker/php-fpm.conf /usr/local/etc/php-fpm.d/zz-produccion.conf
+
+COPY --from=vendor /var/www /var/www
+# Laravel lee public/build/manifest.json para escribir las etiquetas de @vite
+COPY --from=assets /var/www/public/build /var/www/public/build
+
+# Los workers de PHP-FPM corren como www-data y escriben cachés y vistas compiladas
+RUN chown -R www-data:www-data storage bootstrap/cache
+
+COPY deploy/docker/app-entrypoint.sh /usr/local/bin/app-entrypoint
+RUN chmod +x /usr/local/bin/app-entrypoint
+
+ENTRYPOINT ["app-entrypoint"]
+CMD ["php-fpm"]
+
+
+# ---------- web: nginx con public/ y los assets compilados ----------
+FROM nginx:alpine AS web
+
+COPY src/public /var/www/public
+COPY --from=assets /var/www/public/build /var/www/public/build
+
+# nginx reemplaza ${PHP_FPM_HOST} al arrancar: la misma imagen sirve al nodo A y al B
+COPY deploy/nginx/default.conf.template /etc/nginx/templates/default.conf.template

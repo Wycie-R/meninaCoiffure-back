@@ -1,0 +1,38 @@
+# Lo que no entra en las imágenes de producción (Dockerfile.prod). Docker no entiende {a,b}: una línea por ruta
+
+# Repositorio y documentos del proyecto
+.git
+.gitignore
+.gitattributes
+documentos/
+info_proyecto/
+portainer/
+**/CLAUDE.md
+**/.claude
+
+# Secretos y backups del servidor
+deploy/.env.production
+deploy/backups/
+
+# Se generan dentro de la imagen
+src/vendor
+src/node_modules
+src/public/build
+src/public/hot
+
+# Configuración local (en producción las variables llegan por env_file)
+src/.env
+src/.env.*
+
+# Archivos temporales de Laravel
+src/storage/logs/*
+src/storage/framework/cache/*
+src/storage/framework/sessions/*
+src/storage/framework/views/*
+src/storage/api-docs
+src/bootstrap/cache/*.php
+
+# Pruebas: no se ejecutan en producción
+src/tests
+src/.phpunit.cache
+src/.phpunit.result.cache

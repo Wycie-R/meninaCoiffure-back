@@ -13,6 +13,12 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Detrás de Caddy y HAProxy: se confía en X-Forwarded-* para saber que la petición llegó por
+        // HTTPS (si no, los assets y los enlaces de los correos salen con http://) y cuál es la IP real
+        // de la clienta (el límite de intentos del login va por IP). Es seguro porque nginx solo es
+        // alcanzable desde la red interna de Docker, y Caddy descarta los X-Forwarded-* que manda el cliente
+        $middleware->trustProxies(at: '*');
+
         $middleware->validateCsrfTokens(except: [
             'api/*',
         ]);

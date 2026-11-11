@@ -12,12 +12,12 @@ use App\Models\Personal;
 use App\Models\PrecioServicio;
 use App\Models\Servicio;
 use Illuminate\Database\Seeder;
+use RuntimeException;
 
 /**
- * Datos base del salón, alineados con el relevamiento del proyecto de Liderazgo
- * (AvanceLiderazgo_Menina_Coiffure): peluquería y estética, lunes a viernes de 8 a 17 h,
- * atención en el local y a domicilio. Los precios son referenciales hasta confirmarlos
- * con la propietaria.
+ * Datos fijos de las pruebas automáticas: el catálogo del Avance 2 (con los ids, duraciones y
+ * precios que usan los tests), personal y clientas ficticias. No es el catálogo real del salón:
+ * la lista de precios 2025 está en ProduccionSeeder. Cambiar estos datos rompe las pruebas.
  *
  * Cada registro se busca antes de crearlo, así que el seeder se puede repetir sin duplicar
  * nada (antes una guarda global sobre las categorías dejaba al personal triplicado).
@@ -26,6 +26,11 @@ class AvanceDosSeeder extends Seeder
 {
     public function run(): void
     {
+        // Clientas y personal ficticios: nunca en producción
+        if (app()->environment('production')) {
+            throw new RuntimeException('AvanceDosSeeder es solo para las pruebas y el desarrollo.');
+        }
+
         $this->clientes();
         $personal = $this->personal();
         $this->horarioDelLocal();

@@ -1,0 +1,19 @@
+# Caddy: única entrada desde internet. Pide y renueva el certificado de Let's Encrypt solo,
+# redirige http a https y le pasa todo a HAProxy. Las variables vienen de deploy/.env.production
+{
+	# Let's Encrypt avisa a este correo si un certificado no se puede renovar
+	email {$ACME_EMAIL}
+}
+
+{$DOMINIO} {
+	encode zstd gzip
+
+	# El navegador recuerda por un año que este sitio va siempre por https
+	header Strict-Transport-Security "max-age=31536000"
+
+	reverse_proxy haproxy:80
+}
+
+www.{$DOMINIO} {
+	redir https://{$DOMINIO}{uri} permanent
+}

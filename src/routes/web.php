@@ -98,19 +98,29 @@ Route::middleware(['auth', 'rol:admin,profesional'])->group(function () {
     })->middleware('rol:admin');
 });
 
-// Panel en vivo del balanceo A/B con HAProxy (para la exposición); no usa Vite para no depender del build
+// Panel en vivo del balanceo A/B con HAProxy (para la exposición); no usa Vite para no depender del build.
+// Solo existe con APP_DEMO=true (config/app.php)
 Route::get('/balanceo', function () {
+    abort_unless(config('app.demo'), 404);
+
     return view('balanceo');
 });
 
-// Documentación interactiva de la API con Swagger UI
-Route::get('/docs', function () {
-    return view('swagger');
-});
-Route::get('/api/docs', function () {
-    return view('swagger');
-});
-Route::get('/api/documentation', function () {
-    return view('swagger');
+// Documentación interactiva de la API con Swagger UI: solo la administración
+Route::middleware(['auth', 'rol:admin'])->group(function () {
+    Route::get('/docs', function () {
+        return view('swagger');
+    });
+    Route::get('/api/docs', function () {
+        return view('swagger');
+    });
+    Route::get('/api/documentation', function () {
+        return view('swagger');
+    });
+
+    // La especificación no vive en public/ porque nginx serviría el archivo sin pasar por este control
+    Route::get('/openapi.json', function () {
+        return response()->file(resource_path('openapi/openapi.json'), ['Content-Type' => 'application/json']);
+    });
 });
 

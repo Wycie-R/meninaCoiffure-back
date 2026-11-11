@@ -45,6 +45,9 @@ Route::get('promociones', [DescuentoController::class, 'promociones']);
 // Demostración del balanceo con HAProxy: responde qué nodo (contenedor PHP-FPM) atendió la petición.
 // Va sin sesión para no crear una fila en sessions por cada petición de la demo
 Route::get('balanceo/ping', function (Request $request) {
+    // Solo con APP_DEMO=true: abierto en producción, alguien podría ocupar todos los procesos de PHP
+    abort_unless(config('app.demo'), 404);
+
     // "espera" simula una petición pesada para que se vea cómo leastconn reparte; tope de 1,5 s
     $esperaMs = (int) $request->query('espera', 0);
     if ($esperaMs < 0) {

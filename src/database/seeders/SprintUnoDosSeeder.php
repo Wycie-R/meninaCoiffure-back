@@ -7,11 +7,22 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use RuntimeException;
 
+/**
+ * Datos fijos de las pruebas automáticas (junto con AvanceDosSeeder): roles, cuentas con
+ * password123 y el catálogo histórico de los Sprints 1 y 2, con los ids y precios que usan los
+ * tests. No es el catálogo real del salón: ese está en ProduccionSeeder.
+ */
 class SprintUnoDosSeeder extends Seeder
 {
     public function run(): void
     {
+        // Cuentas con password123: nunca en producción
+        if (app()->environment('production')) {
+            throw new RuntimeException('SprintUnoDosSeeder es solo para las pruebas y el desarrollo.');
+        }
+
         // 1. Roles del sistema. El salón no tiene recepcionista: la propietaria (admin) agenda las citas.
         // El rol cliente queda reservado: la clientela todavía no usa el sistema.
         $rolAdmin = Role::firstOrCreate(['nombre' => 'admin']);

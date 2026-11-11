@@ -35,9 +35,19 @@ Requisitos: [Docker](https://docs.docker.com/engine/install/) con Docker Compose
    docker compose exec app npm run build
    ```
 
-El sistema queda en [http://localhost:8000](http://localhost:8000) y la documentación de la API en [http://localhost:8000/docs](http://localhost:8000/docs).
+El sistema queda en [http://localhost:8000](http://localhost:8000) y la documentación de la API en [http://localhost:8000/docs](http://localhost:8000/docs) (con la sesión de la administración iniciada).
 
 Usuarios de prueba (contraseña `password123`): `admin@meninacoiffure.com` (administración), `carla@meninacoiffure.com` (profesional) y `clienta@meninacoiffure.com` (clienta con cuenta: ve sus citas y pide nuevas en /mi-cuenta).
+
+Los datos de prueba usan el catálogo real del salón (lista de precios 2025, en `ProduccionSeeder`) con un equipo, clientas y reservas de ejemplo. Los tests automáticos usan su propio catálogo fijo (`SprintUnoDosSeeder` y `AvanceDosSeeder`).
+
+
+
+## Producción
+
+El sistema se publica en un VPS (Contabo Cloud VPS 4) con Docker Compose: Caddy pone el HTTPS con Let's Encrypt, HAProxy reparte entre los dos nodos y PostgreSQL queda sin puertos abiertos. El código, las dependencias y el frontend compilado van dentro de las imágenes (`Dockerfile.prod`).
+
+Todo el procedimiento (preparar el servidor, DNS, primer despliegue, cuentas del equipo, actualizaciones, backups y restauración) está en **[deploy/README.md](deploy/README.md)**.
 
 
 
@@ -67,6 +77,12 @@ Las cuentas viven en la tabla `users` de la base del salón. Laravel guarda las 
 - **Iniciar sesión:** [http://localhost:8000/login](http://localhost:8000/login). "Seguir conectado" mantiene la sesión aunque se cierre el navegador. Después de 5 intentos fallidos con el mismo correo hay que esperar un minuto.
 - **Crear cuenta (clientas):** [http://localhost:8000/registro](http://localhost:8000/registro). La cuenta queda con su ficha de clienta y entra directo a `/mi-cuenta`.
 - **¿Olvidaste tu contraseña?:** [http://localhost:8000/recuperar-contrasena](http://localhost:8000/recuperar-contrasena). Llega un correo con un enlace de un solo uso que vence en 60 minutos. Necesita el correo configurado (ver abajo).
+- **Cuentas del equipo** (administración y profesionales): no se crean desde ninguna pantalla, solo por terminal:
+  ```bash
+  docker compose exec app php artisan salon:crear-cuenta --rol=admin
+  docker compose exec app php artisan salon:crear-cuenta --rol=profesional --personal-email=correo-de-su-ficha@gmail.com
+  docker compose exec app php artisan salon:vincular-ficha correo-de-la-cuenta correo-de-la-ficha
+  ```
 
 
 
@@ -82,7 +98,7 @@ Todo el tráfico entra por HAProxy (puerto 8000), que lo reparte entre dos nodos
 - **Algoritmo:** `leastconn` (cada petición va al nodo con menos trabajo en curso).
 - **Health check:** `GET /up` cada 1 s; un nodo que falla 2 veces sale del reparto y vuelve tras 2 respuestas correctas.
 - **Panel de estadísticas:** [http://localhost:8404/stats](http://localhost:8404/stats) (usuario `admin`, contraseña `admin`). Desde ahí se puede poner un nodo en mantenimiento.
-- **Página de demostración en vivo:** [http://localhost:8000/balanceo](http://localhost:8000/balanceo). Genera tráfico y muestra qué nodo atendió cada petición.
+- **Página de demostración en vivo:** [http://localhost:8000/balanceo](http://localhost:8000/balanceo). Genera tráfico y muestra qué nodo atendió cada petición. Funciona en modo demostración (`APP_DEMO`): en desarrollo está activo salvo que `src/.env` diga `APP_DEMO=false`; en producción responde 404.
 - **Ver qué nodo respondió una petición:** cabecera `X-Servido-Por` en la respuesta, o `docker compose logs -f haproxy`.
 - **Probar el failover:** con el tráfico continuo encendido en `/balanceo`, ejecutar `docker compose stop nginx_b` (todo pasa al nodo A) y luego `docker compose start nginx_b` (vuelve a repartir).
 - **Validar la configuración** después de editar `haproxy.cfg`: `docker compose run --rm haproxy haproxy -c -f /usr/local/etc/haproxy/haproxy.cfg` y luego `docker compose restart haproxy`.
@@ -118,7 +134,7 @@ Cuando una clienta pide una cita, la dueña recibe un correo con la clienta, los
 
 - **Compilar el frontend:** `docker compose exec app npm run build`
 - **Aplicar migraciones:** `docker compose exec app php artisan migrate`
-- **Reiniciar la base con datos de prueba** (borra todo): `docker compose exec app php artisan migrate:fresh --seed`
+- **Reiniciar la base con datos de prueba** (borra todo; carga el catálogo real del salón): `docker compose exec app php artisan migrate:fresh --seed`
 - **Cargar datos de volumen para el benchmark:** `docker compose exec app php artisan db:seed --class=VolumenReservasSeeder`
 - **Cargar solo la clienta de demo y sus pedidos** (en una base ya cargada): `docker compose exec app php artisan db:seed --class=ClientaDemoSeeder`
 - **Ejecutar las pruebas:** `docker compose exec app php artisan test`
@@ -137,5 +153,6 @@ Todo está en la carpeta `documentos/`:
 - **Base de datos:** diccionario de datos (`der_diccionario_datos_menina_coiffure.pdf`) y diagrama entidad-relación (`der.html`, `menina_coiffure_db_img.png`).
 - **Metodología:** reporte de los Sprints 1 y 2 con el flujo Kanban acumulado. Los Sprints 3 a 5 están en los documentos de los Avances 3 y 4.
 - **Instalación paso a paso:** las secciones [Instalación](#instalación) y [Actualización](#actualización) de este README.
-- **API:** documentación interactiva en [http://localhost:8000/docs](http://localhost:8000/docs), generada desde `src/public/openapi.json`.
+- **API:** documentación interactiva en [http://localhost:8000/docs](http://localhost:8000/docs), solo para la administración. La especificación está en `src/resources/openapi/openapi.json` (fuera de `public/` para que no sea pública) y se sirve en `/openapi.json` con la misma protección.
+- **Producción:** [deploy/README.md](deploy/README.md).
 

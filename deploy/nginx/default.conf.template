@@ -1,0 +1,56 @@
+server {
+    listen 80;
+    # Detrás de HAProxy y Caddy: el dominio lo resuelve Caddy, acá se acepta cualquiera
+    server_name _;
+    root /var/www/public;
+
+    index index.php index.html;
+
+    # Ocultar versión de nginx por seguridad
+    server_tokens off;
+
+    # No hay subida de archivos
+    client_max_body_size 5M;
+
+    # IP real de la clienta: HAProxy y Caddy (red interna de Docker) la pasan en X-Forwarded-For
+    set_real_ip_from  172.16.0.0/12;
+    real_ip_header    X-Forwarded-For;
+    real_ip_recursive on;
+
+    # Cabeceras de seguridad
+    add_header X-Frame-Options "SAMEORIGIN" always;
+    add_header X-Content-Type-Options "nosniff" always;
+    add_header X-XSS-Protection "1; mode=block" always;
+    add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+
+    # Assets de Vite: el nombre lleva un hash del contenido, así que se pueden guardar un año
+    location /build/ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+        # Un add_header dentro del location anula los de arriba: se repiten
+        add_header X-Content-Type-Options "nosniff" always;
+        try_files $uri =404;
+    }
+
+    location / {
+        try_files $uri $uri/ /index.php?$query_string;
+        gzip_static on;
+    }
+
+    location ~ \.php$ {
+        try_files $uri =404;
+        fastcgi_split_path_info ^(.+\.php)(/.+)$;
+        # Cada nginx le pasa el PHP a su propio PHP-FPM (PHP_FPM_HOST en docker-compose.prod.yml)
+        fastcgi_pass ${PHP_FPM_HOST}:9000;
+        fastcgi_index index.php;
+        include fastcgi_params;
+        fastcgi_param SCRIPT_FILENAME $document_root$fastcgi_script_name;
+        fastcgi_param PATH_INFO $fastcgi_path_info;
+    }
+
+    # Archivos ocultos (.htaccess y similares): nunca se sirven. Los desafíos de Let's Encrypt los
+    # responde Caddy, así que no hace falta abrir .well-known acá
+    location ~ /\. {
+        deny all;
+    }
+}

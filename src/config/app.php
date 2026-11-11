@@ -19,6 +19,11 @@ return [
     // Vacío: la página no muestra el botón de contacto.
     'salon_whatsapp' => env('SALON_WHATSAPP', ''),
 
+    // Modo demostración (APP_DEMO=true): habilita /balanceo y su ping para mostrar el reparto entre
+    // nodos. En producción va en false: el ping deja un proceso de PHP ocupado hasta 1,5 s por petición.
+    // Si APP_DEMO no está en el .env: activo en desarrollo, apagado en producción
+    'demo' => (bool) env('APP_DEMO', env('APP_ENV', 'production') !== 'production'),
+
     /*
     |--------------------------------------------------------------------------
     | Application Environment
