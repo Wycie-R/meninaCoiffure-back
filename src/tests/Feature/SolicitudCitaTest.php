@@ -163,6 +163,33 @@ class SolicitudCitaTest extends TestCase
         $this->assertSame(6, SolicitudCita::where('cliente_id', $this->ficha->id)->where('estado', 'pendiente')->count());
     }
 
+    public function test_la_bandeja_de_la_duena_lista_hasta_50_pedidos_y_cuenta_todos(): void
+    {
+        for ($i = 0; $i < 55; $i++) {
+            $this->crearSolicitud($this->ficha);
+        }
+
+        $respuesta = $this->actingAs($this->duena)->getJson('/api/solicitudes-cita?estado=pendiente');
+
+        $respuesta->assertOk();
+        $this->assertCount(SolicitudCita::MAXIMO_EN_LISTA, $respuesta->json('data'));
+        $this->assertSame(50, SolicitudCita::MAXIMO_EN_LISTA);
+        // El contador sigue mostrando el total real, para avisar cuántos quedan afuera
+        $this->assertSame(55, $respuesta->json('pendientes'));
+    }
+
+    public function test_la_clienta_ve_hasta_50_de_sus_pedidos(): void
+    {
+        for ($i = 0; $i < 55; $i++) {
+            $this->crearSolicitud($this->ficha);
+        }
+
+        $this->actingAs($this->clienta)
+            ->getJson('/api/mi-cuenta/solicitudes')
+            ->assertOk()
+            ->assertJsonCount(50, 'data');
+    }
+
     public function test_la_clienta_solo_ve_sus_citas_y_sus_pedidos(): void
     {
         [, $otraFicha] = $this->crearClienta('Otra', 'otra@gmail.com');

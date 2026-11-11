@@ -218,20 +218,6 @@ const resumenEstados = computed(() => [
     { estado: 'no_asistio', titulo: 'No asistieron', valor: contar('no_asistio') },
 ])
 
-const resumen = computed(() => {
-    if (!cargado.value) return error.value ? '' : propia.value ? 'Cargando tu agenda de hoy…' : 'Cargando la agenda de hoy…'
-
-    const total = reservasVigentes.value.length
-    if (!total) return propia.value ? 'Hoy no tienes citas en tu agenda.' : 'Hoy no hay citas en agenda.'
-
-    const pendientes = contar('pendiente')
-    const citas = total === 1 ? 'Una cita' : `${total} citas`
-    const enAgenda = propia.value ? 'en tu agenda de hoy' : 'en agenda'
-    if (!pendientes) return `${citas} ${enAgenda}, todas confirmadas o atendidas.`
-
-    return `${citas} ${enAgenda}, ${pendientes === 1 ? 'una espera' : `${pendientes} esperan`} confirmación.`
-})
-
 // ---------- Período de la caja y de "Lo más pedido" ----------
 // La línea de tiempo, "Por atender" y la bandeja son siempre de hoy; la caja y lo más pedido
 // se pueden ver también del mes o de los últimos tres meses
@@ -467,7 +453,8 @@ function etiquetaHora(minuto) {
     return `${String(Math.floor(minuto / 60)).padStart(2, '0')}:00`
 }
 
-// En el celular la bandeja muestra solo los primeros pedidos; el resto, a pedido
+// La bandeja muestra 3 pedidos para no empujar la agenda hacia abajo; "Ver los otros" despliega el
+// resto, hasta 50 (lo que trae la API: SolicitudCita::MAXIMO_EN_LISTA)
 const LIMITE_SOLICITUDES = 3
 const verTodasLasSolicitudes = ref(false)
 
@@ -479,6 +466,13 @@ const solicitudesVisibles = computed(() => {
 })
 
 const solicitudesOcultas = computed(() => solicitudes.value.length - solicitudesVisibles.value.length)
+
+// Pendientes que no entraron en la lista porque hay más de 50 (el contador del menú tiene el total real)
+const solicitudesFueraDeLaLista = computed(() => {
+    const quedanAfuera = pendientesSolicitudes.value - solicitudes.value.length
+    if (quedanAfuera < 0) return 0
+    return quedanAfuera
+})
 
 // Lista del celular: las citas de cada profesional en orden de hora (la línea de tiempo no entra)
 function citasEnOrden(fila) {
@@ -503,7 +497,7 @@ function tituloBloque(reserva) {
 <template>
     <AppLayout>
         <div class="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-10">
-            <PageHeader :titulo="fechaLarga" :descripcion="resumen" class="[&_h1]:first-letter:uppercase">
+            <PageHeader :titulo="fechaLarga" class="[&_h1]:first-letter:uppercase">
                 <Button href="/reservas" variant="secondary">{{ propia ? 'Ver tu agenda' : 'Ver todas las reservas' }}</Button>
                 <Button v-if="puedeCrearReservas" href="/reservas/crear" variant="primary">
                     <Icono name="agregar" class="h-4 w-4" />
@@ -608,6 +602,13 @@ function tituloBloque(reserva) {
                     <template v-if="solicitudesOcultas > 0">Ver {{ solicitudesOcultas === 1 ? 'el otro pedido' : `los otros ${solicitudesOcultas} pedidos` }}</template>
                     <template v-else>Mostrar menos</template>
                 </button>
+
+                <p
+                    v-if="verTodasLasSolicitudes && solicitudesFueraDeLaLista > 0"
+                    class="mt-2 text-center text-xs text-bruma sm:text-sm"
+                >
+                    Mostrando {{ solicitudes.length }} de {{ pendientesSolicitudes }} pedidos. Al responder estos aparecen los siguientes.
+                </p>
             </section>
 
             <Modal :show="solicitudARechazar !== null" label="Rechazar solicitud de cita" @close="cerrarRechazo">

@@ -6209,7 +6209,7 @@
           "Mi cuenta"
         ],
         "summary": "Mis pedidos de cita",
-        "description": "Los últimos 20 pedidos con su estado, el motivo si fue rechazado y la cita asignada si fue aceptado.\n\n**Acceso:** `cliente` (siempre sobre la ficha vinculada a la sesión; el equipo recibe 403).",
+        "description": "Los últimos 50 pedidos con su estado, el motivo si fue rechazado y la cita asignada si fue aceptado.\n\n**Acceso:** `cliente` (siempre sobre la ficha vinculada a la sesión; el equipo recibe 403).",
         "responses": {
           "200": {
             "description": "Pedidos",
@@ -6270,7 +6270,7 @@
           "Mi cuenta"
         ],
         "summary": "Pedir una cita (uno o varios servicios)",
-        "description": "Crea un pedido `pendiente` con día y **hora** elegidos por la clienta. No ocupa la agenda: la dueña asigna la profesional al aceptarlo. Si al enviar ese horario ya no lo puede atender nadie responde 422 en `hora_preferida`. Teléfono, dirección (si es a domicilio) y ubicación quedan guardados en la ficha para el próximo pedido. A domicilio alcanza con la dirección escrita **o** la ubicación del celular; sin ninguna de las dos responde 422 en `direccion_domicilio`. Al crearse el pedido se avisa a la dueña por correo a `AVISOS_CORREO_DESTINO` (si está configurado; un fallo del correo no afecta al pedido). Como máximo 3 pedidos pendientes por clienta (422 en `servicios`).\n\n**Acceso:** `cliente` (siempre sobre la ficha vinculada a la sesión; el equipo recibe 403).",
+        "description": "Crea un pedido `pendiente` con día y **hora** elegidos por la clienta. No ocupa la agenda: la dueña asigna la profesional al aceptarlo. Si al enviar ese horario ya no lo puede atender nadie responde 422 en `hora_preferida`. Teléfono, dirección (si es a domicilio) y ubicación quedan guardados en la ficha para el próximo pedido. A domicilio alcanza con la dirección escrita **o** la ubicación del celular; sin ninguna de las dos responde 422 en `direccion_domicilio`. Al crearse el pedido se avisa a la dueña por correo a `AVISOS_CORREO_DESTINO` (si está configurado; un fallo del correo no afecta al pedido). No hay tope de pedidos pendientes por clienta.\n\n**Acceso:** `cliente` (siempre sobre la ficha vinculada a la sesión; el equipo recibe 403).",
         "requestBody": {
           "required": true,
           "content": {

@@ -151,7 +151,7 @@ class MiCuentaController extends Controller
         $solicitudes = SolicitudCita::with(['servicios', 'reserva'])
             ->where('cliente_id', $ficha->id)
             ->orderByDesc('created_at')
-            ->limit(20)
+            ->limit(SolicitudCita::MAXIMO_EN_LISTA)
             ->get();
 
         $lista = [];
