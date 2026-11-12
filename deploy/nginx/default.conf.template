@@ -12,16 +12,26 @@ server {
     # No hay subida de archivos
     client_max_body_size 5M;
 
-    # IP real de la clienta: HAProxy y Caddy (red interna de Docker) la pasan en X-Forwarded-For
+    # IP real de la clienta: HAProxy y Caddy (redes internas de Docker) la pasan en X-Forwarded-For.
+    # Los tres rangos privados: Docker reparte subredes 172.x, pero si se le acaban usa 192.168.x,
+    # y si una red interna quedara afuera, Laravel vería la IP de Caddy para todas las clientas
     set_real_ip_from  172.16.0.0/12;
+    set_real_ip_from  192.168.0.0/16;
+    set_real_ip_from  10.0.0.0/8;
     real_ip_header    X-Forwarded-For;
     real_ip_recursive on;
 
     # Cabeceras de seguridad
     add_header X-Frame-Options "SAMEORIGIN" always;
     add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
+    # La vieja protección XSS de los navegadores está retirada y podía abrir fugas: se apaga
+    add_header X-XSS-Protection "0" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    # El sitio no usa cámara, micrófono ni pagos. La ubicación sí ("Estoy en casa"), solo desde el propio sitio
+    add_header Permissions-Policy "camera=(), microphone=(), payment=(), usb=(), geolocation=(self)" always;
+    # CSP mínima que no rompe nada: nadie embebe el sitio, no hay <object> y no se puede cambiar
+    # la base de los enlaces ni mandar formularios a otro dominio
+    add_header Content-Security-Policy "frame-ancestors 'self'; object-src 'none'; base-uri 'self'; form-action 'self'" always;
 
     # Assets de Vite: el nombre lleva un hash del contenido, así que se pueden guardar un año
     location /build/ {

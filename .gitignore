@@ -1,12 +1,21 @@
 # Laravel
 src/.env
+# Copias y variantes del .env (.env.local, .env.backup...): solo se versiona la plantilla
+src/.env.*
+!src/.env.example
 src/vendor/
 src/node_modules/
 src/storage/*.key
 
 # Producción: secretos y backups del servidor (se versiona solo deploy/.env.production.example)
 deploy/.env.production
+deploy/.env.production.*
+!deploy/.env.production.example
 deploy/backups/
+# Un .env en la raíz lo lee Docker Compose solo: suele tener contraseñas
+/.env
+# Copias de la base sueltas (backup.sh las guarda en deploy/backups/, que ya está ignorada)
+*.dump
 
 # OS / Editor
 .DS_Store

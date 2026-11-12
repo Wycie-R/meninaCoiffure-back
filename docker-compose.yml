@@ -81,8 +81,12 @@ services:
       POSTGRES_DB: menina_coiffure
       POSTGRES_USER: menina
       POSTGRES_PASSWORD: menina123
+    # Todos los puertos de desarrollo en 127.0.0.1: solo se abren desde tu PC. Con "5432:5432"
+    # cualquiera en el mismo Wi-Fi llegaba a la base, y la contraseña está en el repo (público).
+    # Desde DBeaver o pgAdmin: localhost:5433. Se usa 5433 porque el 5432 suele estar tomado por un
+    # PostgreSQL instalado en Windows. La app no cambia: adentro de Docker sigue usando db:5432
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5433:5432"
     volumes:
       - db_data:/var/lib/postgresql
     healthcheck:
@@ -98,9 +102,9 @@ services:
     image: portainer/portainer-ce:latest
     container_name: menina_portainer
     restart: unless-stopped
+    # Solo HTTPS (9443): el 9000 era la misma consola sin cifrar
     ports:
-      - "9443:9443"
-      - "9001:9000"
+      - "127.0.0.1:9443:9443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
@@ -112,9 +116,11 @@ services:
     image: haproxy:3.0-alpine
     container_name: menina_haproxy
     restart: unless-stopped
+    # Para probar desde el celular en la misma red, cambiar temporalmente a "8000:80" (con
+    # APP_DEBUG=true, una página de error muestra el .env a quien la abra)
     ports:
-      - "8000:80"
-      - "8404:8404"
+      - "127.0.0.1:8000:80"
+      - "127.0.0.1:8404:8404"
     volumes:
       - ./haproxy.cfg:/usr/local/etc/haproxy/haproxy.cfg:ro
     depends_on:

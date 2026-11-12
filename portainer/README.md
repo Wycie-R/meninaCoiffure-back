@@ -25,9 +25,9 @@ Docker Compose se encargará de:
 
 ## 🌐 Puntos de Acceso a Portainer
 
-- **HTTPS (Seguro - Recomendado):** [https://localhost:9443](https://localhost:9443)
+- **HTTPS:** [https://localhost:9443](https://localhost:9443)
   _(Aceptar la advertencia de certificado autofirmado local)._
-- **HTTP:** [http://localhost:9001](http://localhost:9001)
+  Solo se abre desde la misma PC (`127.0.0.1`). Ya no se publica el acceso HTTP sin cifrar (9001).
 
 ---
 
@@ -37,7 +37,7 @@ Al ingresar por primera vez a `https://localhost:9443`:
 
 1. **Crear usuario administrador:**
    - **Usuario:** `admin`
-   - **Contraseña:** `meninacoiffure123`
+   - **Contraseña:** una propia de al menos 12 caracteres. No la escribas en este repositorio: es público.
 2. Seleccionar el entorno local (**Get Started / Local Docker Environment**).
 3. Podrás visualizar y administrar en tiempo real los contenedores del proyecto:
    - `menina_haproxy` (Balanceador de carga frontal, puertos 8000 y 8404)
@@ -58,8 +58,7 @@ docker volume create portainer_data
 
 # 2. Ejecutar el contenedor
 docker run -d \
-  -p 9001:9000 \
-  -p 9443:9443 \
+  -p 127.0.0.1:9443:9443 \
   --name menina_portainer \
   --restart=always \
   -v /var/run/docker.sock:/var/run/docker.sock \

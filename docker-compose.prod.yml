@@ -13,6 +13,18 @@ x-logging: &logging
     max-size: "10m"
     max-file: "3"
 
+# Ningún proceso de los contenedores puede ganar privilegios nuevos (por ejemplo con un binario setuid):
+# si alguien llegara a ejecutar algo dentro de uno, se queda con los permisos que tenía
+x-seguridad: &seguridad
+  - no-new-privileges:true
+
+# Redes separadas: cada contenedor solo ve a los que necesita (en orden de entrada).
+#   entrada: Caddy -> HAProxy
+#   web:     HAProxy -> nginx de cada nodo
+#   php:     nginx -> PHP-FPM (y salida a internet de PHP, para mandar correos)
+#   datos:   PHP -> PostgreSQL, sin salida a internet
+# Así, por ejemplo, Caddy o HAProxy no pueden hablar con la base aunque alguien los controlara.
+
 services:
   db:
     image: postgres:18
@@ -31,8 +43,9 @@ services:
       timeout: 5s
       retries: 20
       start_period: 40s
+    security_opt: *seguridad
     networks:
-      - menina_net
+      - datos
     logging: *logging
 
   # Nodo A: PHP-FPM con el código, vendor y el build dentro de la imagen
@@ -49,8 +62,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    security_opt: *seguridad
     networks:
-      - menina_net
+      - php
+      - datos
     logging: *logging
 
   # Nodo B: la misma imagen que app, no se vuelve a construir
@@ -63,8 +78,10 @@ services:
     depends_on:
       db:
         condition: service_healthy
+    security_opt: *seguridad
     networks:
-      - menina_net
+      - php
+      - datos
     logging: *logging
 
   nginx:
@@ -80,8 +97,10 @@ services:
       - "80"
     depends_on:
       - app
+    security_opt: *seguridad
     networks:
-      - menina_net
+      - web
+      - php
     logging: *logging
 
   nginx_b:
@@ -94,8 +113,10 @@ services:
       - "80"
     depends_on:
       - app_b
+    security_opt: *seguridad
     networks:
-      - menina_net
+      - web
+      - php
     logging: *logging
 
   # Balanceo entre A y B. No publica el 80: solo Caddy le habla
@@ -113,8 +134,10 @@ services:
     depends_on:
       - nginx
       - nginx_b
+    security_opt: *seguridad
     networks:
-      - menina_net
+      - entrada
+      - web
     logging: *logging
 
   # Única entrada desde internet: HTTPS con Let's Encrypt
@@ -136,26 +159,37 @@ services:
       - caddy_config:/config
     depends_on:
       - haproxy
+    security_opt: *seguridad
     networks:
-      - menina_net
+      - entrada
     logging: *logging
 
-  # Administración de contenedores. Tiene acceso a Docker (equivale a root): solo en 127.0.0.1
+  # Administración de contenedores. Tiene acceso a Docker (equivale a root del servidor), así que:
+  # - no arranca con el resto: se levanta solo cuando se usa (ver deploy/README.md, sección Portainer)
+  # - va en su propia red: aunque alguien tomara la app, no puede llegar a Portainer
+  # - solo escucha en 127.0.0.1: se entra por túnel SSH
   portainer:
     image: portainer/portainer-ce:2.45.1
+    profiles: ["admin"]
     restart: unless-stopped
     ports:
       - "127.0.0.1:9443:9443"
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       - portainer_data:/data
+    security_opt: *seguridad
     networks:
-      - menina_net
+      - admin
     logging: *logging
 
 networks:
-  menina_net:
-    driver: bridge
+  entrada:
+  web:
+  php:
+  # internal: la base no tiene salida a internet
+  datos:
+    internal: true
+  admin:
 
 volumes:
   db_data:
