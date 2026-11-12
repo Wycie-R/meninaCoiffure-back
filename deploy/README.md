@@ -136,6 +136,19 @@ Comprobar antes de seguir: `ping meninacoiffure.com` tiene que responder con la 
 
 Si el dominio está en **Cloudflare**, dejar el proxy **desactivado (nube gris)**. Con la nube naranja, Caddy vería las IPs de Cloudflare y el límite de 5 intentos de login por IP bloquearía a todas las clientas a la vez.
 
+### 2.1 Todavía sin dominio: sslip.io
+
+[sslip.io](https://sslip.io) es un servicio gratis que responde con la IP que va en el nombre: `85.10.20.30.sslip.io` apunta a `85.10.20.30`. No hay que configurar DNS y Caddy saca igual el certificado HTTPS. En `deploy/.env.production`:
+
+```
+DOMINIO=85.10.20.30.sslip.io
+APP_URL=https://85.10.20.30.sslip.io
+```
+
+(con la IP real del VPS). Sirve para la demo y para empezar; si un día Let's Encrypt no da el certificado (`dc logs caddy` dice *rateLimited*), es porque mucha gente usó sslip.io esa semana: esperar o pasar a un dominio propio.
+
+**Al comprar el dominio:** registros `A` de arriba, cambiar `DOMINIO` y `APP_URL`, `bash deploy/deploy.sh` y en Brevo verificar el dominio (sección 9). Las sesiones abiertas se pierden (la cookie era del otro nombre): todas vuelven a iniciar sesión una vez.
+
 ---
 
 ## 3. Primer despliegue
@@ -157,7 +170,7 @@ openssl rand -hex 32            # tres veces: usuario de la app, superusuario de
 nano deploy/.env.production
 ```
 
-- `DOMINIO`, `APP_URL` (`https://` + dominio) y `ACME_EMAIL`.
+- `DOMINIO`, `APP_URL` (`https://` + dominio) y `ACME_EMAIL`. Sin dominio todavía: `IP-DEL-VPS.sslip.io` (sección 2.1).
 - `DB_PASSWORD`: la del usuario de la app (`DB_USERNAME=menina_app`, sin superusuario).
 - `POSTGRES_PASSWORD`: la del superusuario (`menina`), **distinta** de la anterior. Solo la usan los backups y la restauración; la app no la recibe.
 - `HAPROXY_STATS_PASSWORD`: otra distinta.
@@ -276,7 +289,7 @@ Crear un monitor HTTP gratuito en [UptimeRobot](https://uptimerobot.com) apuntan
 
 ## 9. Correo
 
-Los correos salen por **Brevo** (gratis hasta 300 por día). En Brevo: el Gmail del salón confirmado en **Senders**, y en **SMTP y API → SMTP** el *Login* y una *SMTP key*:
+Los correos salen por **Brevo** (gratis hasta 300 por día). En Brevo: el Gmail del salón confirmado en **Senders**, y en **SMTP y API → SMTP** el *Login* y una *SMTP key*. Para el servidor conviene **generar una SMTP key nueva** (por ejemplo `menina-produccion`), distinta de la que usás en tu PC: si alguna se filtra, se borra esa sola sin cortar la otra.
 
 ```
 MAIL_MAILER=smtp
@@ -297,6 +310,8 @@ Probar (después de `bash deploy/deploy.sh` para que tome los valores):
 ```bash
 dc run --rm app php artisan correo:probar
 ```
+
+Si en tu PC andaba y en el servidor falla con un error de autenticación, lo más probable es que Brevo haya **bloqueado la IP nueva** del VPS: llega un correo de Brevo avisando, y en **Configuración → Seguridad → IPs autorizadas** (*Authorized IPs*) se agrega la IP del VPS.
 
 Cuando el salón tenga dominio propio, conviene verificarlo en Brevo (**Senders, Domains → Domains**) y enviar desde una dirección del dominio: los correos dejan de caer en spam.
 
@@ -368,6 +383,6 @@ bash deploy/deploy.sh
 | Error 503 de HAProxy | Los dos nodos caídos | `dc ps` y `dc logs --tail=100 app app_b` |
 | Error 500 en todas las páginas | `APP_KEY` vacía o base sin migrar | Revisar `.env.production` y `dc run --rm app php artisan migrate:status` |
 | Los cambios del `.env.production` no se aplican | La configuración se cachea al arrancar | `bash deploy/deploy.sh` |
-| No llegan los correos | Login o SMTP key de Brevo, o remitente sin confirmar | `dc run --rm app php artisan correo:probar` y `dc logs app`; en Brevo, **Transactional → Logs** |
+| No llegan los correos | Login o SMTP key de Brevo, remitente sin confirmar, o Brevo bloqueó la IP del VPS (sección 9) | `dc run --rm app php artisan correo:probar` y `dc logs app`; en Brevo, **Transactional → Logs** |
 | Portainer dice "timed out" | No se creó el admin en 5 minutos | `dc --profile admin restart portainer` y crearlo enseguida |
 | `deploy.sh` dice que una contraseña tiene el valor de ejemplo | Quedó `cambiar-por-una-larga` o vacía en `.env.production` | Generar una con `openssl rand -hex 32` |
