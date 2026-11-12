@@ -4,7 +4,9 @@ namespace Tests\Feature;
 
 use App\Models\Descuento;
 use App\Models\Role;
+use App\Models\Servicio;
 use App\Models\User;
+use Database\Seeders\AvanceDosSeeder;
 use Database\Seeders\SprintUnoDosSeeder;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -43,6 +45,39 @@ class SalonPublicoTest extends TestCase
         $this->getJson('/api/servicios')->assertStatus(200);
         $this->getJson('/api/categorias-servicio')->assertStatus(200);
         $this->getJson('/api/horarios-atencion')->assertStatus(200)->assertJsonCount(5, 'data');
+    }
+
+    public function test_el_publico_no_ve_servicios_desactivados_ni_el_historial_de_precios(): void
+    {
+        $this->seed(AvanceDosSeeder::class);
+        $inactivo = Servicio::where('activo', false)->firstOrFail();
+        $activo = Servicio::where('activo', true)->firstOrFail();
+
+        // Sin sesión: ?solo_activos=0 no cambia nada, el detalle del inactivo no existe y no hay historial
+        $ids = array_column($this->getJson('/api/servicios?solo_activos=0')->assertOk()->json('data'), 'id');
+        $this->assertNotContains($inactivo->id, $ids);
+        $this->getJson("/api/servicios/{$inactivo->id}")->assertNotFound();
+        $this->getJson("/api/servicios/{$activo->id}")->assertOk()->assertJsonPath('data.historial_precios', []);
+        $deLaCategoria = array_column($this->getJson("/api/categorias-servicio/{$inactivo->categoria_id}")->json('data.servicios'), 'id');
+        $this->assertNotContains($inactivo->id, $deLaCategoria);
+
+        // El equipo sí los ve: el panel los necesita para editar el catálogo
+        $admin = User::factory()->create(['rol_id' => Role::firstOrCreate(['nombre' => 'admin'])->id]);
+        $this->actingAs($admin);
+        $ids = array_column($this->getJson('/api/servicios?solo_activos=0')->assertOk()->json('data'), 'id');
+        $this->assertContains($inactivo->id, $ids);
+        $this->getJson("/api/servicios/{$inactivo->id}")->assertOk();
+        $this->assertNotEmpty($this->getJson("/api/servicios/{$activo->id}")->json('data.historial_precios'));
+    }
+
+    public function test_parametros_raros_en_el_catalogo_dan_422_y_no_500(): void
+    {
+        $this->seed(AvanceDosSeeder::class);
+
+        $this->getJson('/api/servicios?buscar[]=x')->assertStatus(422);
+        $this->getJson('/api/servicios?fecha[]=x')->assertStatus(422);
+        $this->getJson('/api/servicios?fecha=tomorrow')->assertStatus(422);
+        $this->getJson('/api/servicios?categoria_id=abc')->assertStatus(422);
     }
 
     public function test_cambiar_el_horario_o_ver_los_descuentos_sigue_pidiendo_sesion(): void

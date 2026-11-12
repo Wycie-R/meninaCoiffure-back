@@ -12,7 +12,12 @@ portainer/
 
 # Secretos y backups del servidor
 deploy/.env.production
+deploy/.env.production.*
 deploy/backups/
+.env
+**/*.dump
+src/storage/*.key
+src/auth.json
 
 # Se generan dentro de la imagen
 src/vendor

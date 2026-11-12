@@ -24,11 +24,15 @@ class StoreReservaRequest extends FormRequest
         return [
             'cliente_id' => ['required', 'integer', 'exists:clientes,id'],
             'personal_id' => ['required', 'integer', 'exists:personal,id'],
-            'fecha' => ['required', 'date', 'after_or_equal:today'],
+            // Y-m-d exacto: con 'date' pasaban textos como "tomorrow" o "2026-12-01 05:00", que al
+            // juntarse con la hora daban error 500
+            'fecha' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
             'hora_inicio' => ['required', 'date_format:H:i,H:i:s'],
             'hora_fin' => ['required', 'date_format:H:i,H:i:s', 'after:hora_inicio'],
-            'servicios' => ['required', 'array', 'min:1'],
-            'servicios.*' => ['required'],
+            'servicios' => ['required', 'array', 'min:1', 'max:20'],
+            // Solo ids, como al modificar: antes se aceptaba {servicio_id, cantidad} con cualquier
+            // cantidad, y con 0 o un negativo la reserva quedaba gratis o con total negativo
+            'servicios.*' => ['required', 'integer', 'distinct'],
             'descuento_id' => ['nullable', 'integer', 'exists:descuentos,id'],
             // Una reserva nace pendiente o confirmada; los demás estados se alcanzan después
             'estado' => ['nullable', 'string', 'in:pendiente,confirmada'],
@@ -52,7 +56,7 @@ class StoreReservaRequest extends FormRequest
             'personal_id.required' => 'El personal es obligatorio.',
             'personal_id.exists' => 'El personal seleccionado no existe.',
             'fecha.required' => 'La fecha es obligatoria.',
-            'fecha.date' => 'La fecha debe tener un formato válido.',
+            'fecha.date_format' => 'La fecha debe tener el formato AAAA-MM-DD.',
             'fecha.after_or_equal' => 'La fecha de la reserva no puede ser anterior al día de hoy.',
             'hora_inicio.required' => 'La hora de inicio es obligatoria.',
             'hora_inicio.date_format' => 'La hora de inicio debe tener el formato HH:MM o HH:MM:SS.',
@@ -62,6 +66,9 @@ class StoreReservaRequest extends FormRequest
             'servicios.required' => 'Debe incluir al menos un servicio.',
             'servicios.array' => 'Los servicios deben proporcionarse en una lista.',
             'servicios.min' => 'Debe incluir al menos un servicio.',
+            'servicios.max' => 'Una reserva puede tener como máximo 20 servicios.',
+            'servicios.*.integer' => 'Cada servicio debe indicarse con su número.',
+            'servicios.*.distinct' => 'La lista de servicios tiene elementos repetidos.',
             'estado.in' => 'Una reserva nueva solo puede quedar pendiente o confirmada.',
             'a_domicilio.boolean' => 'Indica si la reserva es a domicilio con verdadero o falso.',
             'direccion_domicilio.required_if_accepted' => 'La dirección es obligatoria para una reserva a domicilio.',

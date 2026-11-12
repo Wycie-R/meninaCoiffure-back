@@ -75,7 +75,9 @@ CMD ["php-fpm"]
 
 
 # ---------- web: nginx con public/ y los assets compilados ----------
-FROM nginx:alpine AS web
+# stable y no alpine a secas: 'alpine' sigue la rama mainline (con cambios nuevos), 'stable' solo
+# recibe arreglos. deploy.sh la vuelve a bajar en cada despliegue, así llegan los parches de seguridad
+FROM nginx:stable-alpine AS web
 
 COPY src/public /var/www/public
 COPY --from=assets /var/www/public/build /var/www/public/build

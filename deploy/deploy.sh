@@ -28,6 +28,31 @@ if [ -z "$(leer_variable APP_KEY)" ]; then
     exit 1
 fi
 
+# Contraseñas sin completar: con el valor de ejemplo quedarían públicas (la plantilla está en GitHub)
+for variable in DB_PASSWORD POSTGRES_PASSWORD HAPROXY_STATS_PASSWORD MAIL_PASSWORD; do
+    valor="$(leer_variable "$variable")"
+    if [ -z "$valor" ] || [ "$valor" = "cambiar-por-una-larga" ] || [ "$valor" = "cambiar-por-otra-larga" ] || [ "$valor" = "clave-smtp-de-brevo" ]; then
+        echo "$variable está vacía o con el valor de ejemplo en $ARCHIVO_ENV. Complétala antes de desplegar." >&2
+        exit 1
+    fi
+done
+
+# La app usa su propio usuario sin superusuario (deploy/postgres/): si fuera el mismo, no sirve de nada
+if [ "$(leer_variable DB_USERNAME)" = "$(leer_variable POSTGRES_USER)" ]; then
+    echo "DB_USERNAME y POSTGRES_USER son iguales: la app se conectaría como superusuario." >&2
+    echo "Usa DB_USERNAME=menina_app (ver deploy/.env.production.example)." >&2
+    exit 1
+fi
+if [ "$(leer_variable DB_PASSWORD)" = "$(leer_variable POSTGRES_PASSWORD)" ]; then
+    echo "DB_PASSWORD y POSTGRES_PASSWORD son iguales: genera otra para cada una con 'openssl rand -hex 32'." >&2
+    exit 1
+fi
+
+if [ "$(leer_variable APP_DEBUG)" != "false" ]; then
+    echo "APP_DEBUG tiene que ser false en producción: con true, un error muestra las contraseñas del .env." >&2
+    exit 1
+fi
+
 DOMINIO="$(leer_variable DOMINIO)"
 
 # 2. Código nuevo (solo avanza si no hay conflictos; nunca hace merge)
@@ -35,8 +60,11 @@ if [ "${1:-}" != "--sin-pull" ]; then
     git pull --ff-only
 fi
 
-# 3. Imágenes con el código, las dependencias y el build del frontend
-$COMPOSE build
+# 3. Imágenes con el código, las dependencias y el build del frontend. --pull baja la última versión
+#    de las imágenes base (PHP, Node, nginx) y pull la de las que se usan tal cual: sin esto, los
+#    contenedores se quedarían para siempre con los fallos de seguridad del día del primer despliegue
+$COMPOSE pull db haproxy caddy
+$COMPOSE build --pull
 
 # 4. La base tiene que estar sana antes de migrar
 $COMPOSE up -d --wait db

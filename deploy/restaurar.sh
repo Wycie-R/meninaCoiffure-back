@@ -27,8 +27,10 @@ fi
 # de HAProxy durante unos segundos)
 $COMPOSE stop nginx nginx_b app app_b
 
-# --clean --if-exists borra cada tabla antes de recrearla; sirve también sobre una base vacía
-if ! $COMPOSE exec -T db sh -c 'pg_restore --clean --if-exists --no-owner -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$ARCHIVO"; then
+# --clean --if-exists borra cada tabla antes de recrearla; sirve también sobre una base vacía.
+# --role: las tablas restauradas quedan a nombre del usuario de la app (APP_DB_USER). Sin esto
+# quedarían del superusuario y la app no podría ni leerlas
+if ! $COMPOSE exec -T db sh -c 'pg_restore --clean --if-exists --no-owner --role="$APP_DB_USER" -U "$POSTGRES_USER" -d "$POSTGRES_DB"' < "$ARCHIVO"; then
     echo "pg_restore terminó con errores. Revisa el mensaje de arriba antes de seguir." >&2
     $COMPOSE start app app_b nginx nginx_b
     exit 1

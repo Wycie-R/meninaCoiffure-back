@@ -4,6 +4,7 @@ import { router } from '@inertiajs/vue3'
 import Button from '../../Components/Button.vue'
 import Monograma from '../../Components/Monograma.vue'
 import Icono from '../../Components/Icono.vue'
+import { tokenCsrf, PAGINA_VENCIDA } from '../../api'
 
 const form = ref({
     nombre: '',
@@ -36,6 +37,7 @@ async function crearCuenta() {
             headers: {
                 'Content-Type': 'application/json',
                 Accept: 'application/json',
+                'X-XSRF-TOKEN': tokenCsrf(),
             },
             credentials: 'same-origin',
             body: JSON.stringify(form.value),
@@ -50,7 +52,9 @@ async function crearCuenta() {
             return
         }
 
-        if (respuesta.status === 422 && datos.errors) {
+        if (respuesta.status === 419) {
+            errorGeneral.value = PAGINA_VENCIDA
+        } else if (respuesta.status === 422 && datos.errors) {
             // Solo el primer mensaje de cada campo
             const primerosMensajes = {}
             for (const campo in datos.errors) {

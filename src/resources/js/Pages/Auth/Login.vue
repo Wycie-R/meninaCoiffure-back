@@ -5,6 +5,7 @@ import Button from '../../Components/Button.vue'
 import Monograma from '../../Components/Monograma.vue'
 import Icono from '../../Components/Icono.vue'
 import { establecerUsuario } from '../../auth'
+import { tokenCsrf, PAGINA_VENCIDA } from '../../api'
 
 const form = ref({
     email: '',
@@ -36,6 +37,7 @@ async function ingresar() {
             headers: {
                 'Content-Type': 'application/json',
                 Accept: 'application/json',
+                'X-XSRF-TOKEN': tokenCsrf(),
             },
             credentials: 'same-origin',
             body: JSON.stringify(form.value),
@@ -52,8 +54,10 @@ async function ingresar() {
 
         const datos = await respuesta.json().catch(() => ({}))
 
-        // 422: datos incorrectos; 429: demasiados intentos (el mensaje dice cuánto esperar)
-        if ((respuesta.status === 422 || respuesta.status === 429) && datos.errors) {
+        // 419: el token CSRF venció; 422: datos incorrectos; 429: demasiados intentos (el mensaje dice cuánto esperar)
+        if (respuesta.status === 419) {
+            errorGeneral.value = PAGINA_VENCIDA
+        } else if ((respuesta.status === 422 || respuesta.status === 429) && datos.errors) {
             errores.value = Object.fromEntries(
                 Object.entries(datos.errors).map(([campo, mensajes]) => [campo, mensajes[0]])
             )

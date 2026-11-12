@@ -6,8 +6,10 @@ use App\Mail\CorreoDelSalon;
 use App\Models\Cliente;
 use App\Models\Role;
 use App\Models\User;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Tests\TestCase;
@@ -222,6 +224,41 @@ class AutenticacionTest extends TestCase
         });
     }
 
+    public function test_el_enlace_sale_de_app_url_aunque_manden_cabeceras_de_proxy(): void
+    {
+        config(['app.url' => 'https://meninacoiffure.com']);
+        Mail::fake();
+        $usuario = $this->crearUsuario('cliente', 'lucia@gmail.com');
+        // El nombre lo elige quien se registra: no tiene que aparecer en el correo
+        $usuario->name = 'Gana un premio en http://malo.example';
+        $usuario->save();
+
+        // Con X-Forwarded-Prefix el enlace salía como https://meninacoiffure.com.atacante.example/...
+        $this->withHeaders([
+            'X-Forwarded-Prefix' => '.atacante.example',
+            'X-Forwarded-Port' => '8443',
+        ])->postJson('/api/auth/recuperar-contrasena', ['email' => 'lucia@gmail.com'])->assertOk();
+
+        Mail::assertSent(CorreoDelSalon::class, function (CorreoDelSalon $correo) {
+            return str_contains($correo->texto, "\nhttps://meninacoiffure.com/restablecer-contrasena/")
+                && !str_contains($correo->texto, 'atacante')
+                && !str_contains($correo->texto, '8443')
+                && !str_contains($correo->texto, 'malo.example');
+        });
+    }
+
+    public function test_la_app_no_confia_en_x_forwarded_prefix_ni_port(): void
+    {
+        // Solo For, Host y Proto: son las que Caddy reescribe antes de que lleguen a la app
+        $this->withHeaders([
+            'X-Forwarded-Prefix' => '.atacante.example',
+            'X-Forwarded-Port' => '8443',
+        ])->get('/up');
+
+        $this->assertSame('', request()->getBaseUrl());
+        $this->assertStringNotContainsString('8443', url('/dashboard'));
+    }
+
     public function test_un_correo_sin_cuenta_recibe_la_misma_respuesta_y_no_se_envia_nada(): void
     {
         Mail::fake();
@@ -266,6 +303,136 @@ class AutenticacionTest extends TestCase
         Auth::logout();
         $this->postJson('/api/auth/login', ['email' => 'lucia@gmail.com', 'password' => 'password123'])->assertStatus(422);
         $this->postJson('/api/auth/login', ['email' => 'lucia@gmail.com', 'password' => 'clave-nueva-1'])->assertOk();
+    }
+
+    public function test_restablecer_la_contrasena_cierra_las_sesiones_abiertas_de_esa_cuenta(): void
+    {
+        $usuario = $this->crearUsuario('admin', 'duena@gmail.com');
+        $otra = $this->crearUsuario('cliente', 'lucia@gmail.com');
+        // Una sesión abierta en otro dispositivo (quizás robada) y la de otra persona
+        foreach ([['robada', $usuario->id], ['de-lucia', $otra->id]] as [$id, $userId]) {
+            DB::table('sessions')->insert([
+                'id' => $id,
+                'user_id' => $userId,
+                'ip_address' => '203.0.113.5',
+                'user_agent' => 'Prueba',
+                'payload' => '',
+                'last_activity' => now()->timestamp,
+            ]);
+        }
+
+        $this->postJson('/api/auth/restablecer-contrasena', [
+            'token' => Password::createToken($usuario),
+            'email' => 'duena@gmail.com',
+            'password' => 'clave-nueva-1',
+            'password_confirmation' => 'clave-nueva-1',
+        ])->assertOk();
+
+        $this->assertDatabaseMissing('sessions', ['id' => 'robada']);
+        $this->assertDatabaseHas('sessions', ['id' => 'de-lucia']);
+        $this->assertAuthenticatedAs($usuario);
+    }
+
+    public function test_las_cuentas_del_equipo_necesitan_12_caracteres_al_restablecer(): void
+    {
+        $duena = $this->crearUsuario('admin', 'duena@gmail.com');
+        $token = Password::createToken($duena);
+
+        // 9 caracteres: alcanza para una clienta, no para el equipo
+        $this->postJson('/api/auth/restablecer-contrasena', [
+            'token' => $token,
+            'email' => 'duena@gmail.com',
+            'password' => 'corta-123',
+            'password_confirmation' => 'corta-123',
+        ])->assertStatus(422)
+            ->assertJsonPath('errors.password.0', 'Las cuentas del equipo necesitan una contraseña de al menos 12 caracteres.');
+        $this->assertGuest();
+
+        // El enlace sigue sirviendo para probar con una más larga
+        $this->postJson('/api/auth/restablecer-contrasena', [
+            'token' => $token,
+            'email' => 'duena@gmail.com',
+            'password' => 'una-clave-bien-larga',
+            'password_confirmation' => 'una-clave-bien-larga',
+        ])->assertOk();
+        $this->assertAuthenticatedAs($duena);
+    }
+
+    public function test_una_clienta_puede_restablecer_con_8_caracteres_pero_no_con_mas_de_72(): void
+    {
+        $lucia = $this->crearUsuario('cliente', 'lucia@gmail.com');
+        $token = Password::createToken($lucia);
+        $larguisima = str_repeat('a', 73);
+
+        $this->postJson('/api/auth/restablecer-contrasena', [
+            'token' => $token,
+            'email' => 'lucia@gmail.com',
+            'password' => $larguisima,
+            'password_confirmation' => $larguisima,
+        ])->assertStatus(422)->assertJsonValidationErrors('password');
+
+        $this->postJson('/api/auth/restablecer-contrasena', [
+            'token' => $token,
+            'email' => 'lucia@gmail.com',
+            'password' => 'clave123',
+            'password_confirmation' => 'clave123',
+        ])->assertOk();
+    }
+
+    // ---------- CSRF ----------
+
+    /**
+     * En los tests Laravel no revisa CSRF: se cambia por una versión que sí lo hace.
+     */
+    private function activarCsrf(): void
+    {
+        $this->app->instance(PreventRequestForgery::class, new class($this->app, $this->app['encrypter']) extends PreventRequestForgery {
+            protected function runningUnitTests()
+            {
+                return false;
+            }
+        });
+    }
+
+    public function test_la_api_rechaza_peticiones_de_otro_sitio_sin_token(): void
+    {
+        $this->activarCsrf();
+        $this->crearUsuario('cliente', 'lucia@gmail.com');
+        $credenciales = ['email' => 'lucia@gmail.com', 'password' => 'password123'];
+
+        // Un formulario de otro sitio que intenta iniciar sesión (o cualquier POST) a nombre de la víctima
+        $this->withHeaders(['Sec-Fetch-Site' => 'cross-site'])
+            ->postJson('/api/auth/login', $credenciales)
+            ->assertStatus(419);
+        $this->flushHeaders();
+
+        // Un navegador viejo que no manda Sec-Fetch-Site, sin token
+        $this->postJson('/api/auth/login', $credenciales)->assertStatus(419);
+        $this->assertGuest();
+
+        // Desde el propio sitio sí
+        $this->withHeaders(['Sec-Fetch-Site' => 'same-origin'])
+            ->postJson('/api/auth/login', $credenciales)
+            ->assertOk();
+    }
+
+    public function test_sin_sec_fetch_site_alcanza_con_el_token(): void
+    {
+        $this->activarCsrf();
+        $this->crearUsuario('cliente', 'lucia@gmail.com');
+
+        // Lo que hace api.js en un navegador que no manda Sec-Fetch-Site: el token de la sesión en la cabecera
+        $this->withSession(['_token' => 'token-de-la-sesion'])
+            ->withHeaders(['X-CSRF-TOKEN' => 'token-de-la-sesion'])
+            ->postJson('/api/auth/login', ['email' => 'lucia@gmail.com', 'password' => 'password123'])
+            ->assertOk();
+    }
+
+    public function test_las_consultas_get_no_piden_token(): void
+    {
+        $this->activarCsrf();
+
+        $this->withHeaders(['Sec-Fetch-Site' => 'cross-site'])->getJson('/api/servicios')->assertOk();
     }
 
     public function test_una_cuenta_sin_contrasena_puede_crear_una_con_el_enlace(): void

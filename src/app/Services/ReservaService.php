@@ -95,8 +95,10 @@ class ReservaService
             // Pre-validar Reglas 3 y 4 para todos los servicios antes de crear cabecera
             $detallesParaCrear = [];
             foreach ($servicios as $item) {
-                $servicioId = is_array($item) ? ($item['servicio_id'] ?? $item['id'] ?? null) : $item;
-                $cantidad = is_array($item) ? ($item['cantidad'] ?? 1) : 1;
+                // StoreReservaRequest solo deja pasar ids: cada servicio va una vez (para repetir
+                // uno se usa "agregar servicio", que valida la cantidad)
+                $servicioId = (int) $item;
+                $cantidad = 1;
 
                 if (!$servicioId) {
                     throw ValidationException::withMessages([
@@ -168,6 +170,12 @@ class ReservaService
         }
 
         return DB::transaction(function () use ($reserva, $datos, $nuevoEstado) {
+            // Se bloquea la fila de la reserva, como al registrar un pago: un pago y un cambio de
+            // servicios o de promoción al mismo tiempo podían dejar lo pagado por encima del total.
+            // refresh(): se trabaja con lo que quedó guardado, por si el pago entró justo antes
+            Reserva::whereKey($reserva->id)->lockForUpdate()->first();
+            $reserva->refresh();
+
             $estadoAnterior = $reserva->estado;
 
             if ($nuevoEstado !== $estadoAnterior) {

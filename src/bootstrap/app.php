@@ -15,13 +15,18 @@ return Application::configure(basePath: dirname(__DIR__))
     ->withMiddleware(function (Middleware $middleware): void {
         // Detrás de Caddy y HAProxy: se confía en X-Forwarded-* para saber que la petición llegó por
         // HTTPS (si no, los assets y los enlaces de los correos salen con http://) y cuál es la IP real
-        // de la clienta (el límite de intentos del login va por IP). Es seguro porque nginx solo es
-        // alcanzable desde la red interna de Docker, y Caddy descarta los X-Forwarded-* que manda el cliente
-        $middleware->trustProxies(at: '*');
+        // de la clienta (el límite de intentos del login va por IP). nginx solo es alcanzable desde la
+        // red interna de Docker. Solo For, Host y Proto: son las que Caddy reescribe; Prefix y Port
+        // pasarían tal cual las manda el cliente y con Prefix se podía desviar el enlace de recuperación
+        $middleware->trustProxies(at: '*', headers: Request::HEADER_X_FORWARDED_FOR
+            | Request::HEADER_X_FORWARDED_HOST
+            | Request::HEADER_X_FORWARDED_PROTO);
 
-        $middleware->validateCsrfTokens(except: [
-            'api/*',
-        ]);
+        // Protección CSRF también en /api (antes estaba excluida): esas rutas usan la cookie de sesión,
+        // así que un sitio ajeno podría mandar peticiones a nombre de quien tiene la sesión abierta.
+        // Laravel deja pasar lo que el navegador marca como Sec-Fetch-Site: same-origin; si no viene
+        // esa cabecera (navegadores viejos, o http sin localhost) exige el token, que api.js manda
+        // en X-XSRF-TOKEN. Los GET no se revisan.
 
         // Quien ya tiene sesión y abre /login va a su página: el equipo al panel, una clienta al salón
         $middleware->redirectUsersTo(function (Request $request) {

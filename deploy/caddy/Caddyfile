@@ -11,7 +11,14 @@
 	# El navegador recuerda por un año que este sitio va siempre por https
 	header Strict-Transport-Security "max-age=31536000"
 
-	reverse_proxy haproxy:80
+	reverse_proxy haproxy:80 {
+		# Caddy reescribe X-Forwarded-For, -Proto y -Host, pero el resto pasaría tal cual lo manda el
+		# cliente. Laravel ya las ignora; se borran acá también por si alguien cambia esa configuración
+		header_up -X-Forwarded-Prefix
+		header_up -X-Forwarded-Port
+		header_up -X-Forwarded-Server
+		header_up -Forwarded
+	}
 }
 
 www.{$DOMINIO} {

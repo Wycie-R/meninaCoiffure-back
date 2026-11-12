@@ -166,6 +166,55 @@ class PermisoTest extends TestCase
             ->assertStatus(201);
     }
 
+    public function test_sin_ver_el_expediente_el_listado_trae_solo_nombre_y_telefono(): void
+    {
+        // Con el permiso (por defecto) llega la ficha completa
+        $this->actingAs($this->carla);
+        $completa = $this->getJson('/api/clientes')->assertStatus(200)->json('data.0');
+        $this->assertArrayHasKey('email', $completa);
+
+        // Sin el permiso: lo justo para elegir a la clienta al agendar, sin correo, dirección ni ubicación
+        $this->quitarPermiso('puede_ver_clientes');
+        $recortada = $this->getJson('/api/clientes')->assertStatus(200)->json('data.0');
+        $this->assertSame(['id', 'nombre', 'apellido', 'telefono'], array_keys($recortada));
+    }
+
+    public function test_una_profesional_dada_de_baja_pierde_la_sesion_y_no_vuelve_a_entrar(): void
+    {
+        $this->actingAs($this->carla);
+        $this->getJson('/api/reservas')->assertStatus(200);
+
+        // La dueña la desactiva en Personal mientras tiene la sesión abierta
+        \App\Models\Personal::whereKey(2)->update(['activo' => false]);
+
+        // La próxima petición de su sesión (en cada petición la cuenta se lee de nuevo de la base)
+        $this->actingAs($this->carla->fresh());
+        $this->getJson('/api/reservas')
+            ->assertStatus(403)
+            ->assertJsonPath('message', 'Tu cuenta está desactivada. Habla con la administración del salón.');
+        $this->assertGuest();
+
+        // Y con la contraseña correcta tampoco entra
+        $this->postJson('/api/auth/login', ['email' => $this->carla->email, 'password' => 'password'])
+            ->assertStatus(422)
+            ->assertJsonPath('errors.email.0', 'Tu cuenta está desactivada. Habla con la administración del salón.');
+        $this->assertGuest();
+    }
+
+    public function test_una_profesional_sin_ficha_no_ve_las_reservas_del_salon(): void
+    {
+        // Antes quedaba personal_id = 0, el filtro se salteaba y veía las reservas de todas
+        $this->citaDeCarla();
+
+        $sinFicha = User::factory()->create([
+            'rol_id' => Role::firstOrCreate(['nombre' => 'profesional'])->id,
+            'personal_id' => null,
+        ]);
+        $this->actingAs($sinFicha);
+
+        $this->getJson('/api/reservas')->assertStatus(403);
+    }
+
     public function test_sin_crear_ni_ver_clientes_no_accede_al_listado(): void
     {
         $this->carla->update(['puede_ver_clientes' => false, 'puede_crear_reservas' => false]);

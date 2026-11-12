@@ -12,10 +12,12 @@ Internet ──► :80/:443 Caddy (HTTPS con Let's Encrypt, http → https)
               │      │
             app    app_b       (imagen menina/app: PHP-FPM con código, vendor y build)
               └──┬───┘
-             PostgreSQL 18 (sin puerto publicado)
+             PostgreSQL 18 (sin puerto publicado ni salida a internet)
 
-Portainer: 127.0.0.1:9443 (por túnel SSH)
+Portainer: 127.0.0.1:9443 (por túnel SSH; se levanta solo cuando se usa, ver sección 6)
 ```
+
+Cada tramo va en su propia red de Docker (`entrada`, `web`, `php`, `datos`), así cada contenedor solo ve a sus vecinos: Caddy y HAProxy no llegan a la base, y la base no tiene salida a internet. Todos los contenedores corren con `no-new-privileges`.
 
 | Archivo | Para qué |
 |---|---|
@@ -26,6 +28,7 @@ Portainer: 127.0.0.1:9443 (por túnel SSH)
 | `deploy/haproxy/haproxy.cfg` | Balanceo y panel de estadísticas |
 | `deploy/nginx/default.conf.template` | nginx de cada nodo |
 | `deploy/docker/` | Arranque del contenedor, `php.ini` y pool de PHP-FPM |
+| `deploy/postgres/` | Crea el usuario de la app (sin superusuario) al crear la base |
 | `deploy/deploy.sh` | Despliegue y actualización |
 | `deploy/primer-arranque.sh` | Solo la primera vez: despliegue, datos del salón y cuenta de la administración |
 | `deploy/backup.sh` / `deploy/restaurar.sh` | Backup y restauración de la base |
@@ -34,6 +37,11 @@ Todos los comandos de `docker compose` de esta guía se corren desde `/opt/menin
 
 ```bash
 alias dc='docker compose -f /opt/menina/docker-compose.prod.yml --env-file /opt/menina/deploy/.env.production'
+
+# Por si alguien escribe 'docker compose' a secas en /opt/menina: sin esto levantaría el compose de
+# desarrollo, que publica la base y los paneles en todas las interfaces con contraseñas que están en Git
+export COMPOSE_FILE=/opt/menina/docker-compose.prod.yml
+export COMPOSE_ENV_FILES=/opt/menina/deploy/.env.production
 ```
 
 ---
@@ -90,6 +98,10 @@ ufw enable
 apt install -y fail2ban unattended-upgrades
 dpkg-reconfigure -plow unattended-upgrades      # responder "Sí"
 
+# Los parches del kernel solo se aplican al reiniciar: que reinicie solo, de madrugada, si hace falta
+echo 'Unattended-Upgrade::Automatic-Reboot "true";' > /etc/apt/apt.conf.d/52-menina-reinicio
+echo 'Unattended-Upgrade::Automatic-Reboot-Time "04:30";' >> /etc/apt/apt.conf.d/52-menina-reinicio
+
 # Swap de 2 GB: un seguro por si algún proceso se dispara (con 8 GB el sistema usa unos 3)
 fallocate -l 2G /swapfile && chmod 600 /swapfile && mkswap /swapfile && swapon /swapfile
 echo '/swapfile none swap sw 0 0' >> /etc/fstab
@@ -132,7 +144,6 @@ Si el dominio está en **Cloudflare**, dejar el proxy **desactivado (nube gris)*
 sudo mkdir -p /opt/menina && sudo chown deploy:deploy /opt/menina
 git clone https://github.com/Wycie-R/meninaCoiffure-back.git /opt/menina
 cd /opt/menina
-git checkout adaptToProd        # o main, cuando la rama ya esté unida
 
 cp deploy/.env.production.example deploy/.env.production
 chmod 600 deploy/.env.production
@@ -142,13 +153,14 @@ Si el repositorio es privado, `git clone` pide usuario y un *token* de GitHub (S
 
 ### 3.1 Completar `deploy/.env.production`
 ```bash
-openssl rand -hex 32            # una vez para la base y otra para el panel de HAProxy
+openssl rand -hex 32            # tres veces: usuario de la app, superusuario de la base y panel de HAProxy
 nano deploy/.env.production
 ```
 
 - `DOMINIO`, `APP_URL` (`https://` + dominio) y `ACME_EMAIL`.
-- `DB_PASSWORD` y `POSTGRES_PASSWORD`: **el mismo valor**.
-- `HAPROXY_STATS_PASSWORD`: otro valor distinto.
+- `DB_PASSWORD`: la del usuario de la app (`DB_USERNAME=menina_app`, sin superusuario).
+- `POSTGRES_PASSWORD`: la del superusuario (`menina`), **distinta** de la anterior. Solo la usan los backups y la restauración; la app no la recibe.
+- `HAPROXY_STATS_PASSWORD`: otra distinta.
 - `MAIL_*` y `AVISOS_CORREO_DESTINO` (ver sección 9).
 - `SALON_WHATSAPP` (solo dígitos, con 595).
 - No usar el signo `$` en ningún valor: Docker Compose lo interpreta.
@@ -217,7 +229,7 @@ cd /opt/menina
 bash deploy/deploy.sh
 ```
 
-Trae los cambios (`git pull --ff-only`), reconstruye las imágenes, migra una sola vez, recrea los contenedores y comprueba `/up`. Antes de una actualización grande conviene correr `bash deploy/backup.sh` y, si es posible, un snapshot desde el panel de Contabo.
+Antes de tocar nada revisa que las contraseñas no tengan el valor de ejemplo y que `APP_DEBUG` sea `false`. Después trae los cambios (`git pull --ff-only`), baja las versiones nuevas de las imágenes base (PHP, nginx, Caddy, HAProxy, PostgreSQL 18: así llegan los parches de seguridad), reconstruye, migra una sola vez, recrea los contenedores y comprueba `/up`. Antes de una actualización grande conviene correr `bash deploy/backup.sh` y, si es posible, un snapshot desde el panel de Contabo.
 
 Después de cambiar `deploy/.env.production` también hay que correr `deploy.sh`: los contenedores cachean la configuración al arrancar y solo toman los valores nuevos al recrearse.
 
@@ -225,14 +237,21 @@ Después de cambiar `deploy/.env.production` también hay que correr `deploy.sh`
 
 ## 6. Portainer y estadísticas de HAProxy (túnel SSH)
 
-Los dos paneles solo escuchan en `127.0.0.1` del servidor. Desde tu PC:
+Los dos paneles solo escuchan en `127.0.0.1` del servidor. Portainer además **no arranca con el resto**: tiene acceso completo a Docker (equivale a root del servidor), así que se levanta cuando se va a usar y se apaga al terminar:
+
+```bash
+dc --profile admin up -d portainer     # encenderlo
+dc --profile admin stop portainer      # apagarlo al terminar
+```
+
+Desde tu PC:
 
 ```powershell
 ssh -L 9443:127.0.0.1:9443 -L 8404:127.0.0.1:8404 deploy@IP_DEL_VPS
 ```
 
 Con esa sesión abierta:
-- **Portainer:** https://localhost:9443 (el navegador avisa del certificado propio de Portainer: aceptar). La primera vez pide crear el usuario administrador; **hay que hacerlo en los primeros 5 minutos** después de levantar Portainer o se bloquea por seguridad (`dc restart portainer` para reintentar).
+- **Portainer:** https://localhost:9443 (el navegador avisa del certificado propio de Portainer: aceptar). La primera vez pide crear el usuario administrador; **hay que hacerlo en los primeros 5 minutos** después de levantar Portainer o se bloquea por seguridad (`dc --profile admin restart portainer` para reintentar).
 - **HAProxy:** http://localhost:8404/stats con el usuario `admin` y `HAPROXY_STATS_PASSWORD`. Muestra el estado de cada nodo, las sesiones, la cola y permite poner un nodo en mantenimiento (MAINT).
 
 ---
@@ -257,17 +276,21 @@ Crear un monitor HTTP gratuito en [UptimeRobot](https://uptimerobot.com) apuntan
 
 ## 9. Correo
 
-Gmail con una **contraseña de aplicación** (Cuenta de Google → Seguridad → Verificación en 2 pasos → Contraseñas de aplicaciones):
+Los correos salen por **Brevo** (gratis hasta 300 por día). En Brevo: el Gmail del salón confirmado en **Senders**, y en **SMTP y API → SMTP** el *Login* y una *SMTP key*:
 
 ```
 MAIL_MAILER=smtp
-MAIL_HOST=smtp.gmail.com
-MAIL_PORT=587
-MAIL_USERNAME=cuenta@gmail.com
-MAIL_PASSWORD=la-contraseña-de-aplicación
-MAIL_FROM_ADDRESS=cuenta@gmail.com
+MAIL_HOST=smtp-relay.brevo.com
+MAIL_PORT=465
+MAIL_SCHEME=smtps
+MAIL_USERNAME=el-login@smtp-brevo.com
+MAIL_PASSWORD=la-smtp-key
+MAIL_TIMEOUT=10
+MAIL_FROM_ADDRESS=correo-del-salon@gmail.com
 AVISOS_CORREO_DESTINO=correo-de-la-duena@gmail.com
 ```
+
+El 465 con `smtps` cifra desde el primer byte. Si Contabo bloqueara ese puerto, usar `MAIL_PORT=587` con `MAIL_SCHEME=null` (cifrado negociado).
 
 Probar (después de `bash deploy/deploy.sh` para que tome los valores):
 
@@ -275,7 +298,7 @@ Probar (después de `bash deploy/deploy.sh` para que tome los valores):
 dc run --rm app php artisan correo:probar
 ```
 
-Si el envío falla por red (Contabo no debería bloquear el 587), la alternativa es un proveedor con API HTTPS como Resend. Requiere instalar el paquete `resend/resend-laravel` (no está instalado) y usar `MAIL_MAILER=resend`.
+Cuando el salón tenga dominio propio, conviene verificarlo en Brevo (**Senders, Domains → Domains**) y enviar desde una dirección del dominio: los correos dejan de caer en spam.
 
 ---
 
@@ -296,7 +319,30 @@ bash deploy/restaurar.sh deploy/backups/menina_2026-11-20_0315.dump
 # pide escribir RESTAURAR para confirmar
 ```
 
-Detiene los nodos, reemplaza todos los datos por los del backup y vuelve a levantarlos. Funciona también sobre una base vacía (por ejemplo, en un servidor nuevo después de `primer-arranque.sh`).
+Detiene los nodos, reemplaza todos los datos por los del backup y vuelve a levantarlos. Funciona también sobre una base vacía (por ejemplo, en un servidor nuevo después de `primer-arranque.sh`). Las tablas restauradas quedan a nombre del usuario de la app, aunque el backup sea de antes de que existiera.
+
+### 10.1 Base creada antes del usuario de la app
+
+En un servidor nuevo no hace falta: el usuario `menina_app` se crea solo al crear la base. Solo si la base de producción ya existía cuando la app todavía usaba el superusuario, se convierte **una vez**, a mano:
+
+```bash
+cd /opt/menina
+bash deploy/backup.sh                       # por las dudas
+
+# 1. En deploy/.env.production: DB_USERNAME=menina_app y una DB_PASSWORD nueva (distinta de POSTGRES_PASSWORD)
+nano deploy/.env.production
+
+# 2. La base recibe las variables nuevas (recrea solo el contenedor; los datos quedan en el volumen)
+dc up -d --wait db
+
+# 3. Crea el usuario y le pasa la base y las tablas
+dc exec -T db sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v app_user="$APP_DB_USER" -v app_password="$APP_DB_PASSWORD" -v db_name="$POSTGRES_DB" -f /menina/usuario-app.sql'
+
+# 4. La app se reconecta con el usuario nuevo
+bash deploy/deploy.sh
+```
+
+El paso 3 es todo o nada: si falla, no cambia nada. Si dice `role "menina_app" already exists`, la conversión ya se había hecho: solo falta el paso 4.
 
 ---
 
@@ -322,5 +368,6 @@ bash deploy/deploy.sh
 | Error 503 de HAProxy | Los dos nodos caídos | `dc ps` y `dc logs --tail=100 app app_b` |
 | Error 500 en todas las páginas | `APP_KEY` vacía o base sin migrar | Revisar `.env.production` y `dc run --rm app php artisan migrate:status` |
 | Los cambios del `.env.production` no se aplican | La configuración se cachea al arrancar | `bash deploy/deploy.sh` |
-| No llegan los correos | Credenciales de Gmail o contraseña de aplicación | `dc run --rm app php artisan correo:probar` y `dc logs app` |
-| Portainer dice "timed out" | No se creó el admin en 5 minutos | `dc restart portainer` y crearlo enseguida |
+| No llegan los correos | Login o SMTP key de Brevo, o remitente sin confirmar | `dc run --rm app php artisan correo:probar` y `dc logs app`; en Brevo, **Transactional → Logs** |
+| Portainer dice "timed out" | No se creó el admin en 5 minutos | `dc --profile admin restart portainer` y crearlo enseguida |
+| `deploy.sh` dice que una contraseña tiene el valor de ejemplo | Quedó `cambiar-por-una-larga` o vacía en `.env.production` | Generar una con `openssl rand -hex 32` |

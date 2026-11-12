@@ -105,11 +105,18 @@ class SolicitudCitaController extends Controller
             'motivo_rechazo.max' => 'El motivo no puede superar los 255 caracteres.',
         ]);
 
-        $this->exigirPendiente($solicitud);
+        // Se rechaza solo si sigue pendiente, en la misma sentencia: si la clienta lo retiró o se aceptó
+        // en otra pestaña justo en el medio, no se pisa ese estado
+        $filasCambiadas = SolicitudCita::whereKey($solicitud->id)
+            ->where('estado', 'pendiente')
+            ->update(['estado' => 'rechazada', 'motivo_rechazo' => $datos['motivo_rechazo']]);
 
-        $solicitud->estado = 'rechazada';
-        $solicitud->motivo_rechazo = $datos['motivo_rechazo'];
-        $solicitud->save();
+        if ($filasCambiadas === 0) {
+            // Ya no está pendiente: el mismo aviso que al aceptar
+            $this->exigirPendiente($solicitud->fresh());
+        }
+
+        $solicitud->refresh();
         $solicitud->load(['cliente', 'servicios']);
 
         return response()->json([

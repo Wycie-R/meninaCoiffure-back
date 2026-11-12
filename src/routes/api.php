@@ -32,9 +32,12 @@ Route::prefix('auth')->middleware(['web'])->group(function () {
     Route::get('me', [AuthController::class, 'me']);
 });
 
-// HU-01: Consulta pública del catálogo (servicios, precios vigentes y categorías)
-Route::apiResource('categorias-servicio', CategoriaServicioController::class)->only(['index', 'show']);
-Route::apiResource('servicios', ServicioController::class)->only(['index', 'show']);
+// HU-01: Consulta pública del catálogo (servicios, precios vigentes y categorías). Con 'web' para leer
+// la sesión: el equipo ve además los servicios desactivados y los precios programados; el público, no
+Route::middleware(['web'])->group(function () {
+    Route::apiResource('categorias-servicio', CategoriaServicioController::class)->only(['index', 'show']);
+    Route::apiResource('servicios', ServicioController::class)->only(['index', 'show']);
+});
 
 // Página pública del salón: horario de atención y promociones vigentes hoy
 Route::get('horarios-atencion', [HorarioAtencionController::class, 'index']);
@@ -74,7 +77,8 @@ Route::prefix('mi-cuenta')->middleware(['web', 'auth', 'rol:cliente'])->group(fu
     Route::get('citas', [MiCuentaController::class, 'citas']);
     Route::get('horarios', [MiCuentaController::class, 'horarios']);
     Route::get('solicitudes', [MiCuentaController::class, 'solicitudes']);
-    Route::post('solicitudes', [MiCuentaController::class, 'pedirCita']);
+    // 10 pedidos cada 10 minutos por clienta (con sesión, el límite se cuenta por cuenta y no por IP)
+    Route::post('solicitudes', [MiCuentaController::class, 'pedirCita'])->middleware('throttle:10,10');
     Route::delete('solicitudes/{solicitud}', [MiCuentaController::class, 'cancelarSolicitud']);
 });
 

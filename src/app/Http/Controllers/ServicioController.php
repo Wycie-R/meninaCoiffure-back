@@ -17,31 +17,48 @@ class ServicioController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        // Validados: antes ?buscar[]=x o ?fecha[]=x llegaban como arreglo y daban error 500
+        $filtros = $request->validate([
+            'categoria_id' => ['nullable', 'integer'],
+            'buscar' => ['nullable', 'string', 'max:100'],
+            'solo_activos' => ['nullable', 'boolean'],
+            'fecha' => ['nullable', 'date_format:Y-m-d'],
+        ]);
+
+        // El catálogo es público; los servicios desactivados y los precios de otras fechas son del equipo
+        $usuario = $request->user();
+        $esDelEquipo = $usuario !== null && !$usuario->hasRole('cliente');
+
         $query = Servicio::with(['categoria', 'especialidad', 'precios']);
 
         // Filtro por categoría
-        if ($request->filled('categoria_id')) {
-            $query->where('categoria_id', $request->input('categoria_id'));
+        if (!empty($filtros['categoria_id'])) {
+            $query->where('categoria_id', $filtros['categoria_id']);
         }
 
         // Búsqueda por nombre o descripción
-        if ($request->filled('buscar')) {
-            $termino = $request->input('buscar');
+        if (!empty($filtros['buscar'])) {
+            $termino = $filtros['buscar'];
             $query->where(function ($q) use ($termino) {
                 $q->whereRaw('LOWER(nombre) LIKE ?', ['%' . strtolower($termino) . '%'])
                   ->orWhereRaw('LOWER(descripcion) LIKE ?', ['%' . strtolower($termino) . '%']);
             });
         }
 
-        // Por defecto, filtrar solo servicios activos para clientes a menos que se indique lo contrario
-        if ($request->boolean('solo_activos', true)) {
+        // Solo activos, salvo que el equipo pida también los desactivados (?solo_activos=0)
+        $soloActivos = $request->boolean('solo_activos', true);
+        if ($soloActivos || !$esDelEquipo) {
             $query->where('activo', true);
         }
 
         $servicios = $query->orderBy('nombre')->get();
 
-        // Mapear para adjuntar el precio vigente calculado
-        $fechaConsulta = $request->input('fecha', now()->toDateString());
+        // Mapear para adjuntar el precio vigente calculado. El público ve siempre el de hoy: con otra
+        // fecha se verían los cambios de precio que la dueña programó y todavía no anunció
+        $fechaConsulta = now()->toDateString();
+        if ($esDelEquipo && !empty($filtros['fecha'])) {
+            $fechaConsulta = $filtros['fecha'];
+        }
         $resultado = $servicios->map(function ($servicio) use ($fechaConsulta) {
             $precioVigente = $servicio->precioVigente($fechaConsulta);
             return [
@@ -79,9 +96,10 @@ class ServicioController extends Controller
             'categoria_id' => ['required', 'integer', 'exists:categorias_servicio,id'],
             'especialidad_id' => ['nullable', 'integer', 'exists:especialidades,id'],
             'nombre' => ['required', 'string', 'max:255'],
-            'descripcion' => ['nullable', 'string'],
+            'descripcion' => ['nullable', 'string', 'max:1000'],
             'duracion_minutos' => ['required', 'integer', 'min:5', 'max:480'],
-            'precio' => ['required', 'numeric', 'min:0'],
+            // Tope: un número enorme desbordaba la columna decimal y daba error 500
+            'precio' => ['required', 'numeric', 'min:0', 'max:99999999'],
             'activo' => ['nullable', 'boolean'],
         ], [
             'categoria_id.required' => 'La categoría es obligatoria.',
@@ -133,9 +151,21 @@ class ServicioController extends Controller
     /**
      * HU-01 / HU-10: Ver detalle de un servicio
      */
-    public function show(Servicio $servicio): JsonResponse
+    public function show(Request $request, Servicio $servicio): JsonResponse
     {
+        $usuario = $request->user();
+        $esDelEquipo = $usuario !== null && !$usuario->hasRole('cliente');
+
+        // Un servicio desactivado no existe para el público
+        abort_if(!$servicio->activo && !$esDelEquipo, 404);
+
         $precio = $servicio->precioVigente();
+
+        // El historial incluye los precios programados a futuro: solo para el equipo
+        $historial = [];
+        if ($esDelEquipo) {
+            $historial = $servicio->precios()->orderByDesc('vigente_desde')->get();
+        }
 
         return response()->json([
             'data' => [
@@ -148,7 +178,7 @@ class ServicioController extends Controller
                 'especialidad_id' => $servicio->especialidad_id,
                 'especialidad' => $servicio->especialidad,
                 'precio_actual' => $precio ? (float) $precio->precio : null,
-                'historial_precios' => $servicio->precios()->orderByDesc('vigente_desde')->get(),
+                'historial_precios' => $historial,
             ],
         ]);
     }
@@ -163,7 +193,7 @@ class ServicioController extends Controller
             // null quita la especialidad: el servicio lo puede hacer cualquiera sin aviso
             'especialidad_id' => ['sometimes', 'nullable', 'integer', 'exists:especialidades,id'],
             'nombre' => ['sometimes', 'string', 'max:255'],
-            'descripcion' => ['nullable', 'string'],
+            'descripcion' => ['nullable', 'string', 'max:1000'],
             'duracion_minutos' => ['sometimes', 'integer', 'min:5', 'max:480'],
             'activo' => ['sometimes', 'boolean'],
         ]);
@@ -182,7 +212,8 @@ class ServicioController extends Controller
     public function cambiarPrecio(Request $request, Servicio $servicio): JsonResponse
     {
         $validated = $request->validate([
-            'precio' => ['required', 'numeric', 'min:0'],
+            // Tope: un número enorme desbordaba la columna decimal y daba error 500
+            'precio' => ['required', 'numeric', 'min:0', 'max:99999999'],
             'vigente_desde' => ['nullable', 'date', 'after_or_equal:today'],
         ], [
             'precio.required' => 'El nuevo precio es obligatorio.',

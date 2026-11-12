@@ -68,7 +68,10 @@ class ReservaController extends Controller
         // HU-06: un profesional ve solo su propia agenda
         $usuario = $request->user();
         if (!$usuario->esAdmin()) {
-            $filtros['personal_id'] = $usuario->personal_id ?? 0;
+            // Sin ficha no hay agenda propia. Antes quedaba personal_id = 0, el filtro de abajo
+            // lo ignoraba y salían las reservas de todo el salón
+            abort_if($usuario->personal_id === null, 403, 'Tu cuenta no tiene una ficha de personal vinculada.');
+            $filtros['personal_id'] = $usuario->personal_id;
         }
 
         $reservas = Reserva::with(ReservaService::RELACIONES)
@@ -332,12 +335,13 @@ class ReservaController extends Controller
 
         $validated = $request->validate([
             'servicio_id' => ['required', 'integer', 'exists:servicios,id'],
-            'cantidad' => ['nullable', 'integer', 'min:1'],
+            'cantidad' => ['nullable', 'integer', 'min:1', 'max:20'],
         ], [
             'servicio_id.required' => 'El servicio_id es obligatorio.',
             'servicio_id.exists' => 'El servicio seleccionado no existe.',
             'cantidad.integer' => 'La cantidad debe ser un número entero.',
             'cantidad.min' => 'La cantidad debe ser al menos 1.',
+            'cantidad.max' => 'La cantidad no puede superar 20.',
         ]);
 
         $detalle = $this->reservaService->agregarDetalle(
@@ -367,9 +371,9 @@ class ReservaController extends Controller
     {
         $datos = $request->validate([
             'personal_id' => ['required', 'integer', 'exists:personal,id'],
-            'fecha' => ['required', 'date'],
+            'fecha' => ['required', 'date_format:Y-m-d'],
             'duracion_minutos' => ['required_without:servicios', 'nullable', 'integer', 'min:5', 'max:600'],
-            'servicios' => ['required_without:duracion_minutos', 'array'],
+            'servicios' => ['required_without:duracion_minutos', 'array', 'max:20'],
             'servicios.*' => ['integer', 'exists:servicios,id'],
             'fuera_de_horario' => ['nullable', 'boolean'],
             'a_domicilio' => ['nullable', 'boolean'],

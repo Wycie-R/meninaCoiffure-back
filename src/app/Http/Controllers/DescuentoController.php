@@ -83,7 +83,8 @@ class DescuentoController extends Controller
         $validated = $request->validate([
             'nombre' => ['required', 'string', 'max:255'],
             'tipo' => ['required', 'string', Rule::in(self::TIPOS)],
-            'valor' => ['required', 'numeric', 'gt:0'],
+            // Tope: un número enorme desbordaba la columna decimal(10,2) y daba error 500
+            'valor' => ['required', 'numeric', 'gt:0', 'max:99999999'],
             'fecha_inicio' => ['nullable', 'date'],
             'fecha_fin' => ['nullable', 'date'],
             'activo' => ['nullable', 'boolean'],
@@ -123,7 +124,7 @@ class DescuentoController extends Controller
         $validated = $request->validate([
             'nombre' => ['sometimes', 'required', 'string', 'max:255'],
             'tipo' => ['sometimes', 'required', 'string', Rule::in(self::TIPOS)],
-            'valor' => ['sometimes', 'required', 'numeric', 'gt:0'],
+            'valor' => ['sometimes', 'required', 'numeric', 'gt:0', 'max:99999999'],
             'fecha_inicio' => ['nullable', 'date'],
             'fecha_fin' => ['nullable', 'date'],
             'activo' => ['sometimes', 'boolean'],

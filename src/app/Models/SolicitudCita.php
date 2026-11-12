@@ -22,6 +22,9 @@ class SolicitudCita extends Model
     /** Cuántas solicitudes se listan como máximo: en la bandeja de la dueña y en "Mis pedidos". */
     public const MAXIMO_EN_LISTA = 50;
 
+    /** Pedidos que una clienta puede tener esperando respuesta a la vez (frena el spam a la bandeja). */
+    public const MAXIMO_PENDIENTES_POR_CLIENTA = 5;
+
     protected $table = 'solicitudes_cita';
 
     protected $fillable = [

@@ -6,6 +6,9 @@
 #   15 3 * * * bash /opt/menina/deploy/backup.sh >> /opt/menina/deploy/backups/backup.log 2>&1
 set -euo pipefail
 
+# Los backups tienen los datos de todas las clientas: solo el usuario deploy puede leerlos
+umask 077
+
 cd "$(dirname "$0")/.."
 
 COMPOSE="docker compose -f docker-compose.prod.yml --env-file deploy/.env.production"

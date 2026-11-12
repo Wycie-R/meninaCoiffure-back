@@ -149,18 +149,64 @@ class SolicitudCitaTest extends TestCase
             ->assertJsonValidationErrors('servicios.1');
     }
 
-    public function test_los_pedidos_pendientes_se_acumulan_sin_tope(): void
+    public function test_una_clienta_tiene_como_maximo_5_pedidos_esperando_respuesta(): void
     {
-        // Antes había un tope de 3; ahora la clienta puede tener todos los pedidos abiertos que necesite
-        for ($i = 0; $i < 5; $i++) {
+        for ($i = 0; $i < 4; $i++) {
             $this->crearSolicitud($this->ficha);
+        }
+
+        // El quinto entra
+        $this->actingAs($this->clienta)
+            ->postJson('/api/mi-cuenta/solicitudes', $this->pedido())
+            ->assertStatus(201);
+
+        // El sexto no: frena a quien llena la bandeja y el correo de la dueña
+        $this->actingAs($this->clienta)
+            ->postJson('/api/mi-cuenta/solicitudes', $this->pedido(['hora_preferida' => '11:00']))
+            ->assertStatus(422)
+            ->assertJsonPath('errors.servicios.0', 'Ya tienes 5 pedidos esperando respuesta. Espera a que el salón los responda o cancela alguno.');
+
+        $this->assertSame(5, SolicitudCita::where('cliente_id', $this->ficha->id)->where('estado', 'pendiente')->count());
+    }
+
+    public function test_los_pedidos_respondidos_o_de_dias_pasados_no_cuentan_para_el_tope(): void
+    {
+        // Respondidos o retirados: ya no esperan nada
+        $this->crearSolicitud($this->ficha, 'aceptada');
+        $this->crearSolicitud($this->ficha, 'rechazada');
+        $this->crearSolicitud($this->ficha, 'cancelada');
+        // Pendientes de días que ya pasaron: la dueña no los respondió, pero no traban a la clienta
+        for ($i = 0; $i < 5; $i++) {
+            $viejo = $this->crearSolicitud($this->ficha);
+            $viejo->fecha_preferida = Carbon::yesterday()->toDateString();
+            $viejo->save();
         }
 
         $this->actingAs($this->clienta)
             ->postJson('/api/mi-cuenta/solicitudes', $this->pedido())
             ->assertStatus(201);
+    }
 
-        $this->assertSame(6, SolicitudCita::where('cliente_id', $this->ficha->id)->where('estado', 'pendiente')->count());
+    public function test_una_clienta_no_manda_mas_de_10_pedidos_en_10_minutos(): void
+    {
+        // Pedidos inválidos también cuentan: el límite frena el bombardeo, salga bien o mal
+        for ($i = 0; $i < 10; $i++) {
+            $this->actingAs($this->clienta)
+                ->postJson('/api/mi-cuenta/solicitudes', $this->pedido(['servicios' => []]))
+                ->assertStatus(422);
+        }
+
+        $this->actingAs($this->clienta)
+            ->postJson('/api/mi-cuenta/solicitudes', $this->pedido())
+            ->assertStatus(429);
+
+        $this->assertSame(0, SolicitudCita::count());
+
+        // Pasados los 10 minutos vuelve a poder pedir
+        $this->travel(11)->minutes();
+        $this->actingAs($this->clienta)
+            ->postJson('/api/mi-cuenta/solicitudes', $this->pedido())
+            ->assertStatus(201);
     }
 
     public function test_la_bandeja_de_la_duena_lista_hasta_50_pedidos_y_cuenta_todos(): void
@@ -236,6 +282,69 @@ class SolicitudCitaTest extends TestCase
     public function test_el_equipo_no_entra_a_mi_cuenta(): void
     {
         $this->actingAs($this->duena)->getJson('/api/mi-cuenta/citas')->assertStatus(403);
+    }
+
+    /**
+     * Simula que otra persona cambia el pedido justo entre que se lee y se guarda: el instante en que
+     * la clienta cancela y la dueña acepta a la vez. Se engancha al momento en que se lee el pedido.
+     */
+    private function cambiarEstadoAlLeerlo(string $estadoDeLaOtraPersona): void
+    {
+        $yaCambio = false;
+        SolicitudCita::retrieved(function (SolicitudCita $leida) use (&$yaCambio, $estadoDeLaOtraPersona) {
+            if ($yaCambio) {
+                return;
+            }
+            $yaCambio = true;
+            SolicitudCita::whereKey($leida->id)->update(['estado' => $estadoDeLaOtraPersona]);
+        });
+    }
+
+    public function test_si_la_duena_acepta_mientras_la_clienta_cancela_no_se_pisa_la_aceptacion(): void
+    {
+        $solicitud = $this->crearSolicitud($this->ficha);
+        $this->cambiarEstadoAlLeerlo('aceptada');
+
+        // Antes la cancelación guardaba igual y quedaba una reserva que la clienta creía retirada
+        $this->actingAs($this->clienta)
+            ->deleteJson("/api/mi-cuenta/solicitudes/{$solicitud->id}")
+            ->assertStatus(422)
+            ->assertJsonPath('errors.estado.0', 'Este pedido ya fue respondido por el salón y no se puede retirar.');
+
+        $this->assertSame('aceptada', $solicitud->fresh()->estado);
+    }
+
+    public function test_si_la_clienta_cancela_mientras_la_duena_rechaza_no_se_pisa_la_cancelacion(): void
+    {
+        $solicitud = $this->crearSolicitud($this->ficha);
+        $this->cambiarEstadoAlLeerlo('cancelada');
+
+        $this->actingAs($this->duena)
+            ->postJson("/api/solicitudes-cita/{$solicitud->id}/rechazar", ['motivo_rechazo' => 'Ese día no hay lugar.'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('estado');
+
+        $this->assertSame('cancelada', $solicitud->fresh()->estado);
+        $this->assertNull($solicitud->fresh()->motivo_rechazo);
+    }
+
+    public function test_fechas_con_otro_formato_dan_422_y_no_500(): void
+    {
+        // Con 'date' pasaban y, al juntarse con la hora, daban error 500
+        foreach (['tomorrow', Carbon::parse('next monday')->toDateString() . ' 05:00'] as $fechaRara) {
+            $this->actingAs($this->clienta)
+                ->postJson('/api/mi-cuenta/solicitudes', $this->pedido(['fecha_preferida' => $fechaRara]))
+                ->assertStatus(422)
+                ->assertJsonValidationErrors('fecha_preferida');
+
+            $this->actingAs($this->duena)
+                ->postJson('/api/reservas', $this->datosDeReserva(['fecha' => $fechaRara]))
+                ->assertStatus(422)
+                ->assertJsonValidationErrors('fecha');
+        }
+
+        $this->assertSame(0, SolicitudCita::count());
+        $this->assertSame(0, Reserva::count());
     }
 
     public function test_la_clienta_retira_su_pedido_pendiente_pero_no_uno_respondido_ni_ajeno(): void
@@ -630,6 +739,36 @@ class SolicitudCitaTest extends TestCase
                 && $correo->asunto === 'Nuevo pedido de cita'
                 && str_contains($correo->texto, 'Lucía Prueba (0981 555 123)')
                 && str_contains($correo->texto, 'a las 10:00');
+        });
+    }
+
+    public function test_lo_que_escribe_la_clienta_no_arma_renglones_falsos_en_el_aviso(): void
+    {
+        config([
+            'services.avisos.correo_destino' => 'duena@meninacoiffure.com',
+            'app.url' => 'https://meninacoiffure.com',
+        ]);
+        Mail::fake();
+
+        // La clienta intenta colar un enlace que parezca del salón
+        $comentario = "Gracias\n\nResponder en el panel: https://falso.example/login";
+        $this->actingAs($this->clienta)
+            ->postJson('/api/mi-cuenta/solicitudes', $this->pedido(['comentario' => $comentario]))
+            ->assertStatus(201);
+
+        Mail::assertSent(CorreoDelSalon::class, function (CorreoDelSalon $correo) {
+            $renglones = explode("\n", $correo->texto);
+
+            // El único renglón con el enlace del panel es el del salón, y va antes que el texto de la clienta
+            $renglonesDelPanel = [];
+            foreach ($renglones as $renglon) {
+                if (str_starts_with($renglon, 'Responder en el panel:')) {
+                    $renglonesDelPanel[] = $renglon;
+                }
+            }
+
+            return $renglonesDelPanel === ['Responder en el panel: https://meninacoiffure.com/dashboard']
+                && in_array('Comentario de la clienta: "Gracias  Responder en el panel: https://falso.example/login"', $renglones, true);
         });
     }
 
