@@ -74,7 +74,8 @@ Route::prefix('mi-cuenta')->middleware(['web', 'auth', 'rol:cliente'])->group(fu
     Route::get('citas', [MiCuentaController::class, 'citas']);
     Route::get('horarios', [MiCuentaController::class, 'horarios']);
     Route::get('solicitudes', [MiCuentaController::class, 'solicitudes']);
-    Route::post('solicitudes', [MiCuentaController::class, 'pedirCita']);
+    // 10 pedidos cada 10 minutos por clienta (con sesión, el límite se cuenta por cuenta y no por IP)
+    Route::post('solicitudes', [MiCuentaController::class, 'pedirCita'])->middleware('throttle:10,10');
     Route::delete('solicitudes/{solicitud}', [MiCuentaController::class, 'cancelarSolicitud']);
 });
 

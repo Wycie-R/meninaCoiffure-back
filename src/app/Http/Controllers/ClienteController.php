@@ -20,10 +20,20 @@ class ClienteController extends Controller
      */
     public function index(Request $request): JsonResponse
     {
+        $filtros = $request->validate([
+            'buscar' => ['nullable', 'string', 'max:100'],
+        ]);
+
         $query = Cliente::query();
 
-        if ($request->filled('buscar')) {
-            $termino = '%' . mb_strtolower($request->input('buscar')) . '%';
+        // Una profesional que solo agenda necesita elegir a la clienta, no su expediente: sin
+        // "Ver el expediente" no recibe correo, dirección ni ubicación de la casa
+        if (!$request->user()->tienePermiso('puede_ver_clientes')) {
+            $query->select(['id', 'nombre', 'apellido', 'telefono']);
+        }
+
+        if (!empty($filtros['buscar'])) {
+            $termino = '%' . mb_strtolower($filtros['buscar']) . '%';
             $query->where(function ($q) use ($termino) {
                 $q->whereRaw("LOWER(nombre || ' ' || apellido) LIKE ?", [$termino])
                   ->orWhereRaw('LOWER(telefono) LIKE ?', [$termino])

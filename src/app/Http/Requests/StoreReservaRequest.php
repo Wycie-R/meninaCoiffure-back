@@ -27,8 +27,10 @@ class StoreReservaRequest extends FormRequest
             'fecha' => ['required', 'date', 'after_or_equal:today'],
             'hora_inicio' => ['required', 'date_format:H:i,H:i:s'],
             'hora_fin' => ['required', 'date_format:H:i,H:i:s', 'after:hora_inicio'],
-            'servicios' => ['required', 'array', 'min:1'],
-            'servicios.*' => ['required'],
+            'servicios' => ['required', 'array', 'min:1', 'max:20'],
+            // Solo ids, como al modificar: antes se aceptaba {servicio_id, cantidad} con cualquier
+            // cantidad, y con 0 o un negativo la reserva quedaba gratis o con total negativo
+            'servicios.*' => ['required', 'integer', 'distinct'],
             'descuento_id' => ['nullable', 'integer', 'exists:descuentos,id'],
             // Una reserva nace pendiente o confirmada; los demás estados se alcanzan después
             'estado' => ['nullable', 'string', 'in:pendiente,confirmada'],
@@ -62,6 +64,9 @@ class StoreReservaRequest extends FormRequest
             'servicios.required' => 'Debe incluir al menos un servicio.',
             'servicios.array' => 'Los servicios deben proporcionarse en una lista.',
             'servicios.min' => 'Debe incluir al menos un servicio.',
+            'servicios.max' => 'Una reserva puede tener como máximo 20 servicios.',
+            'servicios.*.integer' => 'Cada servicio debe indicarse con su número.',
+            'servicios.*.distinct' => 'La lista de servicios tiene elementos repetidos.',
             'estado.in' => 'Una reserva nueva solo puede quedar pendiente o confirmada.',
             'a_domicilio.boolean' => 'Indica si la reserva es a domicilio con verdadero o falso.',
             'direccion_domicilio.required_if_accepted' => 'La dirección es obligatoria para una reserva a domicilio.',

@@ -204,6 +204,18 @@ class MiCuentaController extends Controller
             'telefono.max' => 'El teléfono no puede superar los 30 caracteres.',
         ]);
 
+        // Tope de pedidos esperando respuesta: cada uno llena la bandeja y le manda un correo a la
+        // dueña. Los de días ya pasados no cuentan, así un pedido viejo sin responder no la traba
+        $pendientes = SolicitudCita::where('cliente_id', $ficha->id)
+            ->where('estado', 'pendiente')
+            ->where('fecha_preferida', '>=', now()->toDateString())
+            ->count();
+        if ($pendientes >= SolicitudCita::MAXIMO_PENDIENTES_POR_CLIENTA) {
+            throw ValidationException::withMessages([
+                'servicios' => ['Ya tienes ' . SolicitudCita::MAXIMO_PENDIENTES_POR_CLIENTA . ' pedidos esperando respuesta. Espera a que el salón los responda o cancela alguno.'],
+            ]);
+        }
+
         $aDomicilio = (bool) ($datos['a_domicilio'] ?? false);
         $direccionEscrita = trim((string) ($datos['direccion_domicilio'] ?? ''));
         $tieneUbicacion = isset($datos['latitud']) && isset($datos['longitud']);

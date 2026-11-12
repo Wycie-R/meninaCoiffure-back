@@ -95,8 +95,10 @@ class ReservaService
             // Pre-validar Reglas 3 y 4 para todos los servicios antes de crear cabecera
             $detallesParaCrear = [];
             foreach ($servicios as $item) {
-                $servicioId = is_array($item) ? ($item['servicio_id'] ?? $item['id'] ?? null) : $item;
-                $cantidad = is_array($item) ? ($item['cantidad'] ?? 1) : 1;
+                // StoreReservaRequest solo deja pasar ids: cada servicio va una vez (para repetir
+                // uno se usa "agregar servicio", que valida la cantidad)
+                $servicioId = (int) $item;
+                $cantidad = 1;
 
                 if (!$servicioId) {
                     throw ValidationException::withMessages([

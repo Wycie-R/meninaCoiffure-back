@@ -49,12 +49,23 @@ class AvisoCorreo
         return true;
     }
 
+    /**
+     * Lo que escribe la clienta va en una sola línea: con saltos de línea podría armar renglones
+     * que parezcan del salón (por ejemplo un "Responder en el panel:" con un enlace falso).
+     */
+    private function enUnaLinea(?string $texto): string
+    {
+        $sinSaltos = str_replace(["\r\n", "\r", "\n"], ' ', (string) $texto);
+
+        return trim($sinSaltos);
+    }
+
     private function textoDeLaSolicitud(SolicitudCita $solicitud): string
     {
         $cliente = $solicitud->cliente;
-        $nombreClienta = trim($cliente->nombre . ' ' . $cliente->apellido);
+        $nombreClienta = $this->enUnaLinea($cliente->nombre . ' ' . $cliente->apellido);
         if ($cliente->telefono) {
-            $nombreClienta .= ' (' . $cliente->telefono . ')';
+            $nombreClienta .= ' (' . $this->enUnaLinea($cliente->telefono) . ')';
         }
 
         $servicios = [];
@@ -72,11 +83,14 @@ class AvisoCorreo
 
         $lugar = 'En el salón';
         if ($solicitud->a_domicilio) {
-            $lugar = 'A domicilio: ' . $solicitud->direccion_domicilio;
+            $lugar = 'A domicilio: ' . $this->enUnaLinea($solicitud->direccion_domicilio);
         }
 
+        // El enlace del salón va arriba, antes de cualquier texto de la clienta, y sale de APP_URL
         $lineas = [
             'Nuevo pedido de cita',
+            '',
+            'Responder en el panel: ' . rtrim((string) config('app.url'), '/') . '/dashboard',
             '',
             'Clienta: ' . $nombreClienta,
             'Servicios: ' . implode(', ', $servicios),
@@ -87,12 +101,11 @@ class AvisoCorreo
         if ($solicitud->a_domicilio && $cliente->latitud !== null) {
             $lineas[] = 'Cómo llegar: https://www.google.com/maps?q=' . $cliente->latitud . ',' . $cliente->longitud;
         }
+        // Al final y entre comillas, para que se lea como texto de la clienta y no del salón
         if ($solicitud->comentario) {
-            $lineas[] = 'Comentario: ' . $solicitud->comentario;
+            $lineas[] = '';
+            $lineas[] = 'Comentario de la clienta: "' . $this->enUnaLinea($solicitud->comentario) . '"';
         }
-
-        $lineas[] = '';
-        $lineas[] = 'Responder en el panel: ' . url('/dashboard');
 
         return implode("\n", $lineas);
     }

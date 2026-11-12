@@ -43,6 +43,8 @@ export function mensajeError(respuesta, accion) {
         return mensaje && mensaje !== 'This action is unauthorized.' && mensaje !== 'Forbidden' ? mensaje : SIN_PERMISO
     }
     if (respuesta.status === 404) return 'Ese registro ya no existe. Recarga la página para ver los datos actuales.'
+    // El throttle de Laravel responde en inglés ("Too Many Attempts.")
+    if (respuesta.status === 429) return 'Hiciste muchos intentos seguidos. Espera unos minutos y vuelve a intentar.'
     if (respuesta.status >= 500) return `El servidor no pudo ${accion}. Vuelve a intentar en unos minutos.`
     return respuesta.cuerpo?.message ?? `No se pudo ${accion}.`
 }

@@ -90,6 +90,23 @@ class User extends Authenticatable
     }
 
     /**
+     * Una profesional sin ficha o con la ficha dada de baja no puede operar: así, desactivarla en
+     * Personal le corta el acceso aunque tenga la sesión abierta o el "Seguir conectado".
+     */
+    public function esProfesionalSinFichaActiva(): bool
+    {
+        if (!$this->hasRole('profesional')) {
+            return false;
+        }
+
+        if ($this->personal === null) {
+            return true;
+        }
+
+        return !$this->personal->activo;
+    }
+
+    /**
      * Adónde va la cuenta al iniciar sesión: el equipo a su panel, una clienta a sus citas.
      */
     public function paginaInicial(): string
@@ -107,11 +124,14 @@ class User extends Authenticatable
      */
     public function sendPasswordResetNotification($token): void
     {
-        $enlace = url('/restablecer-contrasena/' . $token) . '?email=' . urlencode($this->email);
+        // Con APP_URL y no con url(): así el enlace nunca depende de las cabeceras de quien lo pidió
+        $enlace = rtrim((string) config('app.url'), '/') . '/restablecer-contrasena/' . $token . '?email=' . urlencode($this->email);
         $minutosDeValidez = config('auth.passwords.users.expire');
 
+        // Sin el nombre: lo escribe quien se registra y no se verifica el correo, así que alguien
+        // podría usar este correo legítimo del salón para mandarle un texto propio a un tercero
         $lineas = [
-            'Hola, ' . $this->name . '.',
+            'Hola.',
             '',
             'Pediste crear una contraseña nueva para tu cuenta de Menina Coiffure.',
             'Abre este enlace para elegirla (vence en ' . $minutosDeValidez . ' minutos):',

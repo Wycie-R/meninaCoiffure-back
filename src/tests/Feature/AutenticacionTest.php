@@ -8,6 +8,7 @@ use App\Models\Role;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Mail;
 use Illuminate\Support\Facades\Password;
 use Tests\TestCase;
@@ -222,6 +223,41 @@ class AutenticacionTest extends TestCase
         });
     }
 
+    public function test_el_enlace_sale_de_app_url_aunque_manden_cabeceras_de_proxy(): void
+    {
+        config(['app.url' => 'https://meninacoiffure.com']);
+        Mail::fake();
+        $usuario = $this->crearUsuario('cliente', 'lucia@gmail.com');
+        // El nombre lo elige quien se registra: no tiene que aparecer en el correo
+        $usuario->name = 'Gana un premio en http://malo.example';
+        $usuario->save();
+
+        // Con X-Forwarded-Prefix el enlace salía como https://meninacoiffure.com.atacante.example/...
+        $this->withHeaders([
+            'X-Forwarded-Prefix' => '.atacante.example',
+            'X-Forwarded-Port' => '8443',
+        ])->postJson('/api/auth/recuperar-contrasena', ['email' => 'lucia@gmail.com'])->assertOk();
+
+        Mail::assertSent(CorreoDelSalon::class, function (CorreoDelSalon $correo) {
+            return str_contains($correo->texto, "\nhttps://meninacoiffure.com/restablecer-contrasena/")
+                && !str_contains($correo->texto, 'atacante')
+                && !str_contains($correo->texto, '8443')
+                && !str_contains($correo->texto, 'malo.example');
+        });
+    }
+
+    public function test_la_app_no_confia_en_x_forwarded_prefix_ni_port(): void
+    {
+        // Solo For, Host y Proto: son las que Caddy reescribe antes de que lleguen a la app
+        $this->withHeaders([
+            'X-Forwarded-Prefix' => '.atacante.example',
+            'X-Forwarded-Port' => '8443',
+        ])->get('/up');
+
+        $this->assertSame('', request()->getBaseUrl());
+        $this->assertStringNotContainsString('8443', url('/dashboard'));
+    }
+
     public function test_un_correo_sin_cuenta_recibe_la_misma_respuesta_y_no_se_envia_nada(): void
     {
         Mail::fake();
@@ -266,6 +302,34 @@ class AutenticacionTest extends TestCase
         Auth::logout();
         $this->postJson('/api/auth/login', ['email' => 'lucia@gmail.com', 'password' => 'password123'])->assertStatus(422);
         $this->postJson('/api/auth/login', ['email' => 'lucia@gmail.com', 'password' => 'clave-nueva-1'])->assertOk();
+    }
+
+    public function test_restablecer_la_contrasena_cierra_las_sesiones_abiertas_de_esa_cuenta(): void
+    {
+        $usuario = $this->crearUsuario('admin', 'duena@gmail.com');
+        $otra = $this->crearUsuario('cliente', 'lucia@gmail.com');
+        // Una sesión abierta en otro dispositivo (quizás robada) y la de otra persona
+        foreach ([['robada', $usuario->id], ['de-lucia', $otra->id]] as [$id, $userId]) {
+            DB::table('sessions')->insert([
+                'id' => $id,
+                'user_id' => $userId,
+                'ip_address' => '203.0.113.5',
+                'user_agent' => 'Prueba',
+                'payload' => '',
+                'last_activity' => now()->timestamp,
+            ]);
+        }
+
+        $this->postJson('/api/auth/restablecer-contrasena', [
+            'token' => Password::createToken($usuario),
+            'email' => 'duena@gmail.com',
+            'password' => 'clave-nueva-1',
+            'password_confirmation' => 'clave-nueva-1',
+        ])->assertOk();
+
+        $this->assertDatabaseMissing('sessions', ['id' => 'robada']);
+        $this->assertDatabaseHas('sessions', ['id' => 'de-lucia']);
+        $this->assertAuthenticatedAs($usuario);
     }
 
     public function test_una_cuenta_sin_contrasena_puede_crear_una_con_el_enlace(): void

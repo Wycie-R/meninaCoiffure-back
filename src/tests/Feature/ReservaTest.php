@@ -102,6 +102,38 @@ class ReservaTest extends TestCase
     }
 
     /**
+     * Seguridad: al crear, los servicios van solo como ids. Antes se aceptaba {servicio_id, cantidad}
+     * con cualquier cantidad, y con 0 o un negativo la reserva quedaba gratis o con total negativo.
+     */
+    public function test_al_crear_no_se_puede_mandar_una_cantidad_ni_repetir_servicios(): void
+    {
+        $base = [
+            'cliente_id' => 1,
+            'personal_id' => 1,
+            'fecha' => $this->obtenerProximoLunes(),
+            'hora_inicio' => '10:00',
+            'hora_fin' => '11:00',
+        ];
+
+        $this->postJson('/api/reservas', [...$base, 'servicios' => [['servicio_id' => 1, 'cantidad' => -1]]])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['servicios.0']);
+        $this->postJson('/api/reservas', [...$base, 'servicios' => [1, 1]])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['servicios.0']);
+        $this->postJson('/api/reservas', [...$base, 'servicios' => ['abc']])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors(['servicios.0']);
+
+        $this->assertSame(0, Reserva::count());
+
+        // Agregar en el momento sí acepta cantidad, pero entre 1 y 20
+        $id = $this->postJson('/api/reservas', [...$base, 'servicios' => [1]])->assertStatus(201)->json('data.id');
+        $this->postJson("/api/reservas/{$id}/servicios", ['servicio_id' => 2, 'cantidad' => 0])->assertStatus(422);
+        $this->postJson("/api/reservas/{$id}/servicios", ['servicio_id' => 2, 'cantidad' => 999999999])->assertStatus(422);
+    }
+
+    /**
      * Test 2: Falla por solapamiento de horarios (Regla 1).
      */
     public function test_falla_por_solapamiento_de_horarios_regla_1(): void

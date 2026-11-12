@@ -65,6 +65,13 @@ class AuthController extends Controller
 
         RateLimiter::clear($claveDeIntentos);
 
+        // La dueña la dio de baja en Personal: la contraseña es correcta pero ya no entra
+        if ($user->esProfesionalSinFichaActiva()) {
+            throw ValidationException::withMessages([
+                'email' => ['Tu cuenta está desactivada. Habla con la administración del salón.'],
+            ]);
+        }
+
         // "Seguir conectado": la sesión sobrevive al cierre del navegador con la cookie remember_token
         Auth::login($user, $request->boolean('recordar'));
         if ($request->hasSession()) {
@@ -206,6 +213,7 @@ class AuthController extends Controller
         ]);
 
         $email = strtolower(trim($datos['email']));
+        $usuarioRestablecido = null;
 
         $estado = Password::reset(
             [
@@ -213,11 +221,16 @@ class AuthController extends Controller
                 'password' => $datos['password'],
                 'token' => $datos['token'],
             ],
-            function (User $usuario, string $contrasenaNueva) {
+            function (User $usuario, string $contrasenaNueva) use (&$usuarioRestablecido) {
                 $usuario->password = $contrasenaNueva;
                 // Cierra el "seguir conectado" de otros dispositivos: la contraseña vieja ya no sirve
                 $usuario->setRememberToken(Str::random(60));
                 $usuario->save();
+
+                // Y las sesiones abiertas: si alguien tenía una robada, cambiar la contraseña lo saca
+                DB::table('sessions')->where('user_id', $usuario->id)->delete();
+
+                $usuarioRestablecido = $usuario;
             }
         );
 
@@ -227,7 +240,8 @@ class AuthController extends Controller
             ]);
         }
 
-        $usuario = User::whereRaw('LOWER(email) = ?', [$email])->first();
+        // Se entra con la misma cuenta a la que se le cambió la contraseña (no se vuelve a buscar por correo)
+        $usuario = $usuarioRestablecido;
         Auth::login($usuario);
         if ($request->hasSession()) {
             $request->session()->regenerate();
