@@ -1,18 +1,14 @@
 <script setup>
-defineProps({
+import { computed } from 'vue'
+
+const props = defineProps({
     size: {
         type: Number,
         default: 40,
     },
 })
 
-const mechones = [
-    { angulo: -44, color: '#aeb9c7' },
-    { angulo: -22, color: '#8fd5b5' },
-    { angulo: 0, color: '#d9a9e9' },
-    { angulo: 22, color: '#f2bf70' },
-    { angulo: 44, color: '#f08ca5' },
-]
+const compacto = computed(() => props.size <= 32)
 </script>
 
 <template>
@@ -23,13 +19,14 @@ const mechones = [
         role="img"
         aria-label="Menina Coiffure"
     >
-        <path
-            v-for="mechon in mechones"
-            :key="mechon.angulo"
-            d="M24 41 C 21.2 32, 27 23.5, 22.6 8.5 C 28.6 16.5, 29 30, 24 41 Z"
-            :fill="mechon.color"
-            :transform="`rotate(${mechon.angulo} 24 41)`"
-        />
-        <circle cx="24" cy="41" r="3.6" fill="#17111c" stroke="#f6eff4" stroke-width="1.4" />
+        <template v-if="compacto">
+            <circle cx="24" cy="24" r="23" fill="#d9a9e9" />
+            <path d="M22.19 35.3 14.12 16.81 12.77 31.96Q12.65 33.11 13.43 33.83Q14.21 34.55 15.33 34.61V34.9H9.57V34.61Q10.67 34.55 11.42 33.8Q12.16 33.05 12.28 31.93L13.72 16.01Q13.17 14.88 12.35 14.24Q11.53 13.59 10.24 13.59V13.3H17.15L24.17 29.57L31.2 13.3H36.58V13.59Q35.66 13.59 35.03 14.14Q34.4 14.68 34.45 15.63L35.92 32.68Q36.07 33.66 36.86 34.15Q37.65 34.64 38.43 34.64V34.9H29.5V34.64Q29.99 34.64 30.51 34.41Q31.03 34.18 31.36 33.75Q31.69 33.31 31.6 32.74L30.19 16.84Z" fill="#17111c" />
+        </template>
+        <template v-else>
+            <circle cx="24" cy="24" r="22.4" fill="none" stroke="#d9a9e9" stroke-width="1.8" />
+            <circle cx="24" cy="24" r="19.4" fill="none" stroke="#d9a9e9" stroke-width="0.8" />
+            <path d="M22.47 33.55 15.69 18 14.56 30.74Q14.46 31.71 15.11 32.32Q15.77 32.92 16.71 32.97V33.21H11.87V32.97Q12.79 32.92 13.42 32.29Q14.05 31.66 14.14 30.72L15.36 17.33Q14.9 16.38 14.21 15.84Q13.52 15.29 12.43 15.29V15.05H18.24L24.15 28.73L30.05 15.05H34.58V15.29Q33.81 15.29 33.27 15.75Q32.74 16.21 32.79 17.01L34.02 31.35Q34.15 32.17 34.81 32.58Q35.48 32.99 36.13 32.99V33.21H28.62V32.99Q29.04 32.99 29.47 32.8Q29.91 32.61 30.19 32.24Q30.47 31.88 30.39 31.39L29.21 18.03Z" fill="#f6eff4" />
+        </template>
     </svg>
 </template>
