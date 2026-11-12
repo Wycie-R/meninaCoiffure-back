@@ -31,11 +31,22 @@ fi
 # Contraseñas sin completar: con el valor de ejemplo quedarían públicas (la plantilla está en GitHub)
 for variable in DB_PASSWORD POSTGRES_PASSWORD HAPROXY_STATS_PASSWORD MAIL_PASSWORD; do
     valor="$(leer_variable "$variable")"
-    if [ -z "$valor" ] || [ "$valor" = "cambiar-por-una-larga" ] || [ "$valor" = "clave-smtp-de-brevo" ]; then
+    if [ -z "$valor" ] || [ "$valor" = "cambiar-por-una-larga" ] || [ "$valor" = "cambiar-por-otra-larga" ] || [ "$valor" = "clave-smtp-de-brevo" ]; then
         echo "$variable está vacía o con el valor de ejemplo en $ARCHIVO_ENV. Complétala antes de desplegar." >&2
         exit 1
     fi
 done
+
+# La app usa su propio usuario sin superusuario (deploy/postgres/): si fuera el mismo, no sirve de nada
+if [ "$(leer_variable DB_USERNAME)" = "$(leer_variable POSTGRES_USER)" ]; then
+    echo "DB_USERNAME y POSTGRES_USER son iguales: la app se conectaría como superusuario." >&2
+    echo "Usa DB_USERNAME=menina_app (ver deploy/.env.production.example)." >&2
+    exit 1
+fi
+if [ "$(leer_variable DB_PASSWORD)" = "$(leer_variable POSTGRES_PASSWORD)" ]; then
+    echo "DB_PASSWORD y POSTGRES_PASSWORD son iguales: genera otra para cada una con 'openssl rand -hex 32'." >&2
+    exit 1
+fi
 
 if [ "$(leer_variable APP_DEBUG)" != "false" ]; then
     echo "APP_DEBUG tiene que ser false en producción: con true, un error muestra las contraseñas del .env." >&2

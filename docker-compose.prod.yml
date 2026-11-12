@@ -31,11 +31,19 @@ services:
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB}
+      # Superusuario: solo para backups, restauraciones y administración. La app NO lo usa
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      # Usuario de la app, sin superusuario: lo crea deploy/postgres/ al crear la base
+      APP_DB_USER: ${DB_USERNAME}
+      APP_DB_PASSWORD: ${DB_PASSWORD}
     # Sin ports: solo los contenedores de la red interna llegan a la base
     volumes:
       - db_data:/var/lib/postgresql
+      # Corre una sola vez, cuando el volumen está vacío. El .sql va en otra carpeta porque la
+      # imagen ejecutaría solo todo lo que hay en docker-entrypoint-initdb.d, sin las variables
+      - ./deploy/postgres/crear-usuario-app.sh:/docker-entrypoint-initdb.d/10-usuario-app.sh:ro
+      - ./deploy/postgres/usuario-app.sql:/menina/usuario-app.sql:ro
     healthcheck:
       # $$ para que la variable la lea el contenedor y no Compose
       test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
@@ -59,6 +67,11 @@ services:
     hostname: nodo-a
     restart: unless-stopped
     env_file: deploy/.env.production
+    # env_file trae todo el archivo: se vacían las contraseñas que PHP no usa. Si alguien tomara
+    # el control de PHP, no encontraría la del superusuario de la base ni la del panel de HAProxy
+    environment: &sin-secretos-ajenos
+      POSTGRES_PASSWORD: ""
+      HAPROXY_STATS_PASSWORD: ""
     depends_on:
       db:
         condition: service_healthy
@@ -75,6 +88,7 @@ services:
     hostname: nodo-b
     restart: unless-stopped
     env_file: deploy/.env.production
+    environment: *sin-secretos-ajenos
     depends_on:
       db:
         condition: service_healthy

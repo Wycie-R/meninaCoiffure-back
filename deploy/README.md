@@ -28,6 +28,7 @@ Cada tramo va en su propia red de Docker (`entrada`, `web`, `php`, `datos`), as�
 | `deploy/haproxy/haproxy.cfg` | Balanceo y panel de estadísticas |
 | `deploy/nginx/default.conf.template` | nginx de cada nodo |
 | `deploy/docker/` | Arranque del contenedor, `php.ini` y pool de PHP-FPM |
+| `deploy/postgres/` | Crea el usuario de la app (sin superusuario) al crear la base |
 | `deploy/deploy.sh` | Despliegue y actualización |
 | `deploy/primer-arranque.sh` | Solo la primera vez: despliegue, datos del salón y cuenta de la administración |
 | `deploy/backup.sh` / `deploy/restaurar.sh` | Backup y restauración de la base |
@@ -152,13 +153,14 @@ Si el repositorio es privado, `git clone` pide usuario y un *token* de GitHub (S
 
 ### 3.1 Completar `deploy/.env.production`
 ```bash
-openssl rand -hex 32            # una vez para la base y otra para el panel de HAProxy
+openssl rand -hex 32            # tres veces: usuario de la app, superusuario de la base y panel de HAProxy
 nano deploy/.env.production
 ```
 
 - `DOMINIO`, `APP_URL` (`https://` + dominio) y `ACME_EMAIL`.
-- `DB_PASSWORD` y `POSTGRES_PASSWORD`: **el mismo valor**.
-- `HAPROXY_STATS_PASSWORD`: otro valor distinto.
+- `DB_PASSWORD`: la del usuario de la app (`DB_USERNAME=menina_app`, sin superusuario).
+- `POSTGRES_PASSWORD`: la del superusuario (`menina`), **distinta** de la anterior. Solo la usan los backups y la restauración; la app no la recibe.
+- `HAPROXY_STATS_PASSWORD`: otra distinta.
 - `MAIL_*` y `AVISOS_CORREO_DESTINO` (ver sección 9).
 - `SALON_WHATSAPP` (solo dígitos, con 595).
 - No usar el signo `$` en ningún valor: Docker Compose lo interpreta.
@@ -317,7 +319,30 @@ bash deploy/restaurar.sh deploy/backups/menina_2026-11-20_0315.dump
 # pide escribir RESTAURAR para confirmar
 ```
 
-Detiene los nodos, reemplaza todos los datos por los del backup y vuelve a levantarlos. Funciona también sobre una base vacía (por ejemplo, en un servidor nuevo después de `primer-arranque.sh`).
+Detiene los nodos, reemplaza todos los datos por los del backup y vuelve a levantarlos. Funciona también sobre una base vacía (por ejemplo, en un servidor nuevo después de `primer-arranque.sh`). Las tablas restauradas quedan a nombre del usuario de la app, aunque el backup sea de antes de que existiera.
+
+### 10.1 Base creada antes del usuario de la app
+
+En un servidor nuevo no hace falta: el usuario `menina_app` se crea solo al crear la base. Solo si la base de producción ya existía cuando la app todavía usaba el superusuario, se convierte **una vez**, a mano:
+
+```bash
+cd /opt/menina
+bash deploy/backup.sh                       # por las dudas
+
+# 1. En deploy/.env.production: DB_USERNAME=menina_app y una DB_PASSWORD nueva (distinta de POSTGRES_PASSWORD)
+nano deploy/.env.production
+
+# 2. La base recibe las variables nuevas (recrea solo el contenedor; los datos quedan en el volumen)
+dc up -d --wait db
+
+# 3. Crea el usuario y le pasa la base y las tablas
+dc exec -T db sh -c 'psql -v ON_ERROR_STOP=1 --single-transaction -U "$POSTGRES_USER" -d "$POSTGRES_DB" -v app_user="$APP_DB_USER" -v app_password="$APP_DB_PASSWORD" -v db_name="$POSTGRES_DB" -f /menina/usuario-app.sql'
+
+# 4. La app se reconecta con el usuario nuevo
+bash deploy/deploy.sh
+```
+
+El paso 3 es todo o nada: si falla, no cambia nada. Si dice `role "menina_app" already exists`, la conversión ya se había hecho: solo falta el paso 4.
 
 ---
 
