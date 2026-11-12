@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue'
 import { router } from '@inertiajs/vue3'
+import { tokenCsrf } from './api'
 
 const usuario = ref(null)
 let consulta = null
@@ -58,7 +59,7 @@ export async function cerrarSesion() {
     try {
         await fetch('/api/auth/logout', {
             method: 'POST',
-            headers: { Accept: 'application/json' },
+            headers: { Accept: 'application/json', 'X-XSRF-TOKEN': tokenCsrf() },
             credentials: 'same-origin',
         })
     } finally {

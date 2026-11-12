@@ -371,9 +371,9 @@ class ReservaController extends Controller
     {
         $datos = $request->validate([
             'personal_id' => ['required', 'integer', 'exists:personal,id'],
-            'fecha' => ['required', 'date'],
+            'fecha' => ['required', 'date_format:Y-m-d'],
             'duracion_minutos' => ['required_without:servicios', 'nullable', 'integer', 'min:5', 'max:600'],
-            'servicios' => ['required_without:duracion_minutos', 'array'],
+            'servicios' => ['required_without:duracion_minutos', 'array', 'max:20'],
             'servicios.*' => ['integer', 'exists:servicios,id'],
             'fuera_de_horario' => ['nullable', 'boolean'],
             'a_domicilio' => ['nullable', 'boolean'],

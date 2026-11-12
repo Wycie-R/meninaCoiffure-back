@@ -32,7 +32,8 @@ class HorarioAtencionController extends Controller
     public function guardar(Request $request): JsonResponse
     {
         $validated = $request->validate([
-            'horarios' => ['required', 'array', 'min:1'],
+            // Hasta 4 franjas por día alcanza de sobra; sin tope se podía mandar una lista enorme
+            'horarios' => ['required', 'array', 'min:1', 'max:28'],
             'horarios.*.dia_semana' => ['required', 'integer', 'between:1,7'],
             'horarios.*.hora_apertura' => ['required', 'date_format:H:i,H:i:s'],
             'horarios.*.hora_cierre' => ['required', 'date_format:H:i,H:i:s'],

@@ -284,6 +284,69 @@ class SolicitudCitaTest extends TestCase
         $this->actingAs($this->duena)->getJson('/api/mi-cuenta/citas')->assertStatus(403);
     }
 
+    /**
+     * Simula que otra persona cambia el pedido justo entre que se lee y se guarda: el instante en que
+     * la clienta cancela y la dueña acepta a la vez. Se engancha al momento en que se lee el pedido.
+     */
+    private function cambiarEstadoAlLeerlo(string $estadoDeLaOtraPersona): void
+    {
+        $yaCambio = false;
+        SolicitudCita::retrieved(function (SolicitudCita $leida) use (&$yaCambio, $estadoDeLaOtraPersona) {
+            if ($yaCambio) {
+                return;
+            }
+            $yaCambio = true;
+            SolicitudCita::whereKey($leida->id)->update(['estado' => $estadoDeLaOtraPersona]);
+        });
+    }
+
+    public function test_si_la_duena_acepta_mientras_la_clienta_cancela_no_se_pisa_la_aceptacion(): void
+    {
+        $solicitud = $this->crearSolicitud($this->ficha);
+        $this->cambiarEstadoAlLeerlo('aceptada');
+
+        // Antes la cancelación guardaba igual y quedaba una reserva que la clienta creía retirada
+        $this->actingAs($this->clienta)
+            ->deleteJson("/api/mi-cuenta/solicitudes/{$solicitud->id}")
+            ->assertStatus(422)
+            ->assertJsonPath('errors.estado.0', 'Este pedido ya fue respondido por el salón y no se puede retirar.');
+
+        $this->assertSame('aceptada', $solicitud->fresh()->estado);
+    }
+
+    public function test_si_la_clienta_cancela_mientras_la_duena_rechaza_no_se_pisa_la_cancelacion(): void
+    {
+        $solicitud = $this->crearSolicitud($this->ficha);
+        $this->cambiarEstadoAlLeerlo('cancelada');
+
+        $this->actingAs($this->duena)
+            ->postJson("/api/solicitudes-cita/{$solicitud->id}/rechazar", ['motivo_rechazo' => 'Ese día no hay lugar.'])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('estado');
+
+        $this->assertSame('cancelada', $solicitud->fresh()->estado);
+        $this->assertNull($solicitud->fresh()->motivo_rechazo);
+    }
+
+    public function test_fechas_con_otro_formato_dan_422_y_no_500(): void
+    {
+        // Con 'date' pasaban y, al juntarse con la hora, daban error 500
+        foreach (['tomorrow', Carbon::parse('next monday')->toDateString() . ' 05:00'] as $fechaRara) {
+            $this->actingAs($this->clienta)
+                ->postJson('/api/mi-cuenta/solicitudes', $this->pedido(['fecha_preferida' => $fechaRara]))
+                ->assertStatus(422)
+                ->assertJsonValidationErrors('fecha_preferida');
+
+            $this->actingAs($this->duena)
+                ->postJson('/api/reservas', $this->datosDeReserva(['fecha' => $fechaRara]))
+                ->assertStatus(422)
+                ->assertJsonValidationErrors('fecha');
+        }
+
+        $this->assertSame(0, SolicitudCita::count());
+        $this->assertSame(0, Reserva::count());
+    }
+
     public function test_la_clienta_retira_su_pedido_pendiente_pero_no_uno_respondido_ni_ajeno(): void
     {
         $pendiente = $this->crearSolicitud($this->ficha);

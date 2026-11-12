@@ -52,9 +52,14 @@ class AuthController extends Controller
         $user = User::with(['role', 'personal'])->whereRaw('LOWER(email) = ?', [$email])->first();
 
         // Una cuenta sin contraseña local (creada antes con Keycloak) no entra hasta crear una
-        $contrasenaCorrecta = $user !== null
-            && $user->password !== null
-            && Hash::check($credentials['password'], $user->password);
+        $contrasenaCorrecta = false;
+        if ($user !== null && $user->password !== null) {
+            $contrasenaCorrecta = Hash::check($credentials['password'], $user->password);
+        } else {
+            // Sin cuenta igual se calcula un hash: la respuesta tarda lo mismo (unos 200 ms) y el
+            // tiempo no revela qué correos tienen cuenta en el salón
+            Hash::make($credentials['password']);
+        }
 
         if (!$contrasenaCorrecta) {
             RateLimiter::hit($claveDeIntentos, self::SEGUNDOS_DE_ESPERA);
@@ -107,7 +112,8 @@ class AuthController extends Controller
             'nombre' => ['required', 'string', 'max:100'],
             'apellido' => ['required', 'string', 'max:100'],
             'email' => ['required', 'string', 'email', 'max:255'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            // max:72: bcrypt solo usa los primeros 72 bytes; lo que sigue se ignoraría sin avisar
+            'password' => ['required', 'string', 'min:8', 'max:72', 'confirmed'],
         ], [
             'nombre.required' => 'Escribe tu nombre.',
             'apellido.required' => 'Escribe tu apellido.',
@@ -115,6 +121,7 @@ class AuthController extends Controller
             'email.email' => 'Ese correo no es válido.',
             'password.required' => 'Escribe una contraseña.',
             'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
+            'password.max' => 'La contraseña no puede superar los 72 caracteres.',
             'password.confirmed' => 'Las contraseñas no coinciden.',
         ]);
 
@@ -205,10 +212,11 @@ class AuthController extends Controller
         $datos = $request->validate([
             'token' => ['required', 'string'],
             'email' => ['required', 'string', 'email'],
-            'password' => ['required', 'string', 'min:8', 'confirmed'],
+            'password' => ['required', 'string', 'min:8', 'max:72', 'confirmed'],
         ], [
             'password.required' => 'Escribe la contraseña nueva.',
             'password.min' => 'La contraseña debe tener al menos 8 caracteres.',
+            'password.max' => 'La contraseña no puede superar los 72 caracteres.',
             'password.confirmed' => 'Las contraseñas no coinciden.',
         ]);
 
@@ -222,6 +230,15 @@ class AuthController extends Controller
                 'token' => $datos['token'],
             ],
             function (User $usuario, string $contrasenaNueva) use (&$usuarioRestablecido) {
+                // El equipo necesita 12 caracteres, igual que al crear la cuenta por terminal. Se revisa
+                // acá, con el enlace ya validado: antes revelaría qué correos son del equipo. El token
+                // no se consume, así puede volver a intentar con una más larga
+                if (!$usuario->hasRole('cliente') && mb_strlen($contrasenaNueva) < 12) {
+                    throw ValidationException::withMessages([
+                        'password' => ['Las cuentas del equipo necesitan una contraseña de al menos 12 caracteres.'],
+                    ]);
+                }
+
                 $usuario->password = $contrasenaNueva;
                 // Cierra el "seguir conectado" de otros dispositivos: la contraseña vieja ya no sirve
                 $usuario->setRememberToken(Str::random(60));

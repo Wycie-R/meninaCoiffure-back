@@ -4,6 +4,7 @@ import { router } from '@inertiajs/vue3'
 import Button from '../../Components/Button.vue'
 import Monograma from '../../Components/Monograma.vue'
 import Icono from '../../Components/Icono.vue'
+import { tokenCsrf, PAGINA_VENCIDA } from '../../api'
 
 const props = defineProps({
     // Vienen del enlace del correo: /restablecer-contrasena/{token}?email=...
@@ -41,6 +42,7 @@ async function guardar() {
             headers: {
                 'Content-Type': 'application/json',
                 Accept: 'application/json',
+                'X-XSRF-TOKEN': tokenCsrf(),
             },
             credentials: 'same-origin',
             body: JSON.stringify({
@@ -60,7 +62,9 @@ async function guardar() {
             return
         }
 
-        if (respuesta.status === 422 && datos.errors) {
+        if (respuesta.status === 419) {
+            errorGeneral.value = PAGINA_VENCIDA
+        } else if (respuesta.status === 422 && datos.errors) {
             // El enlace vencido llega como error de "email": se muestra arriba, no hay campo de correo
             if (datos.errors.email) {
                 errorGeneral.value = datos.errors.email[0]

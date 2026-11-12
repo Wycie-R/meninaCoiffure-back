@@ -22,9 +22,11 @@ return Application::configure(basePath: dirname(__DIR__))
             | Request::HEADER_X_FORWARDED_HOST
             | Request::HEADER_X_FORWARDED_PROTO);
 
-        $middleware->validateCsrfTokens(except: [
-            'api/*',
-        ]);
+        // Protección CSRF también en /api (antes estaba excluida): esas rutas usan la cookie de sesión,
+        // así que un sitio ajeno podría mandar peticiones a nombre de quien tiene la sesión abierta.
+        // Laravel deja pasar lo que el navegador marca como Sec-Fetch-Site: same-origin; si no viene
+        // esa cabecera (navegadores viejos, o http sin localhost) exige el token, que api.js manda
+        // en X-XSRF-TOKEN. Los GET no se revisan.
 
         // Quien ya tiene sesión y abre /login va a su página: el equipo al panel, una clienta al salón
         $middleware->redirectUsersTo(function (Request $request) {

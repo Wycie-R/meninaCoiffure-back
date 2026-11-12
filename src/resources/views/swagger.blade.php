@@ -111,7 +111,17 @@
                 docExpansion: "list",
                 filter: true,
                 showRequestHeaders: true,
-                tryItOutEnabled: true
+                tryItOutEnabled: true,
+                // "Try it out" con POST, PUT o DELETE: la API pide el token CSRF, igual que el panel
+                requestInterceptor: function (pedido) {
+                    var partes = document.cookie.split('; ');
+                    for (var i = 0; i < partes.length; i++) {
+                        if (partes[i].indexOf('XSRF-TOKEN=') === 0) {
+                            pedido.headers['X-XSRF-TOKEN'] = decodeURIComponent(partes[i].slice('XSRF-TOKEN='.length));
+                        }
+                    }
+                    return pedido;
+                }
             });
         };
     </script>

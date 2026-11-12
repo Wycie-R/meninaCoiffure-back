@@ -170,6 +170,12 @@ class ReservaService
         }
 
         return DB::transaction(function () use ($reserva, $datos, $nuevoEstado) {
+            // Se bloquea la fila de la reserva, como al registrar un pago: un pago y un cambio de
+            // servicios o de promoción al mismo tiempo podían dejar lo pagado por encima del total.
+            // refresh(): se trabaja con lo que quedó guardado, por si el pago entró justo antes
+            Reserva::whereKey($reserva->id)->lockForUpdate()->first();
+            $reserva->refresh();
+
             $estadoAnterior = $reserva->estado;
 
             if ($nuevoEstado !== $estadoAnterior) {

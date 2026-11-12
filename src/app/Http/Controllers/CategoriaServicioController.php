@@ -19,7 +19,7 @@ class CategoriaServicioController extends Controller
     {
         $validated = $request->validate([
             'nombre' => ['required', 'string', 'max:255', 'unique:categorias_servicio,nombre'],
-            'descripcion' => ['nullable', 'string'],
+            'descripcion' => ['nullable', 'string', 'max:1000'],
         ], [
             'nombre.required' => 'El nombre de la categoría es obligatorio.',
             'nombre.unique' => 'Ya existe una categoría con este nombre.',
@@ -33,10 +33,22 @@ class CategoriaServicioController extends Controller
         ], 201);
     }
 
-    public function show(CategoriaServicio $categorias_servicio): JsonResponse
+    public function show(Request $request, CategoriaServicio $categorias_servicio): JsonResponse
     {
+        $usuario = $request->user();
+        $esDelEquipo = $usuario !== null && !$usuario->hasRole('cliente');
+
+        // El público ve solo los servicios activos de la categoría; el equipo, todos
+        if ($esDelEquipo) {
+            $categorias_servicio->load('servicios');
+        } else {
+            $categorias_servicio->load(['servicios' => function ($consulta) {
+                $consulta->where('activo', true);
+            }]);
+        }
+
         return response()->json([
-            'data' => $categorias_servicio->load('servicios'),
+            'data' => $categorias_servicio,
         ]);
     }
 
@@ -44,7 +56,7 @@ class CategoriaServicioController extends Controller
     {
         $validated = $request->validate([
             'nombre' => ['sometimes', 'required', 'string', 'max:255', 'unique:categorias_servicio,nombre,' . $categorias_servicio->id],
-            'descripcion' => ['nullable', 'string'],
+            'descripcion' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $categorias_servicio->update($validated);

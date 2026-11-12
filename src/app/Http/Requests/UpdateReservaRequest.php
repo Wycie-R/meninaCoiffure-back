@@ -24,7 +24,7 @@ class UpdateReservaRequest extends FormRequest
         return [
             'cliente_id' => ['sometimes', 'integer', 'exists:clientes,id'],
             'personal_id' => ['sometimes', 'integer', 'exists:personal,id'],
-            'fecha' => ['sometimes', 'date'],
+            'fecha' => ['sometimes', 'date_format:Y-m-d'],
             'hora_inicio' => ['sometimes', 'date_format:H:i,H:i:s'],
             'hora_fin' => ['sometimes', 'date_format:H:i,H:i:s'],
             'estado' => ['sometimes', 'string', 'in:pendiente,confirmada,cancelada,completada,no_asistio'],
@@ -34,7 +34,7 @@ class UpdateReservaRequest extends FormRequest
             'minutos_traslado' => ['nullable', 'integer', 'min:0', 'max:240'],
             'fuera_de_horario' => ['sometimes', 'boolean'],
             // Modificar la reserva: la lista reemplaza a los servicios actuales
-            'servicios' => ['sometimes', 'array', 'min:1'],
+            'servicios' => ['sometimes', 'array', 'min:1', 'max:20'],
             'servicios.*' => ['required', 'integer', 'distinct', 'exists:servicios,id'],
             // HU-13: observaciones de la atención; al completar quedan en el historial del cliente
             'notas' => ['nullable', 'string', 'max:2000'],
@@ -49,7 +49,7 @@ class UpdateReservaRequest extends FormRequest
         return [
             'cliente_id.exists' => 'El cliente seleccionado no existe.',
             'personal_id.exists' => 'El personal seleccionado no existe.',
-            'fecha.date' => 'La fecha debe tener un formato válido.',
+            'fecha.date_format' => 'La fecha debe tener el formato AAAA-MM-DD.',
             'hora_inicio.date_format' => 'La hora de inicio debe tener el formato HH:MM o HH:MM:SS.',
             'hora_fin.date_format' => 'La hora de fin debe tener el formato HH:MM o HH:MM:SS.',
             'estado.in' => 'El estado proporcionado no es válido.',

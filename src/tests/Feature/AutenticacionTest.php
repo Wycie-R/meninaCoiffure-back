@@ -6,6 +6,7 @@ use App\Mail\CorreoDelSalon;
 use App\Models\Cliente;
 use App\Models\Role;
 use App\Models\User;
+use Illuminate\Foundation\Http\Middleware\PreventRequestForgery;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -330,6 +331,108 @@ class AutenticacionTest extends TestCase
         $this->assertDatabaseMissing('sessions', ['id' => 'robada']);
         $this->assertDatabaseHas('sessions', ['id' => 'de-lucia']);
         $this->assertAuthenticatedAs($usuario);
+    }
+
+    public function test_las_cuentas_del_equipo_necesitan_12_caracteres_al_restablecer(): void
+    {
+        $duena = $this->crearUsuario('admin', 'duena@gmail.com');
+        $token = Password::createToken($duena);
+
+        // 9 caracteres: alcanza para una clienta, no para el equipo
+        $this->postJson('/api/auth/restablecer-contrasena', [
+            'token' => $token,
+            'email' => 'duena@gmail.com',
+            'password' => 'corta-123',
+            'password_confirmation' => 'corta-123',
+        ])->assertStatus(422)
+            ->assertJsonPath('errors.password.0', 'Las cuentas del equipo necesitan una contraseña de al menos 12 caracteres.');
+        $this->assertGuest();
+
+        // El enlace sigue sirviendo para probar con una más larga
+        $this->postJson('/api/auth/restablecer-contrasena', [
+            'token' => $token,
+            'email' => 'duena@gmail.com',
+            'password' => 'una-clave-bien-larga',
+            'password_confirmation' => 'una-clave-bien-larga',
+        ])->assertOk();
+        $this->assertAuthenticatedAs($duena);
+    }
+
+    public function test_una_clienta_puede_restablecer_con_8_caracteres_pero_no_con_mas_de_72(): void
+    {
+        $lucia = $this->crearUsuario('cliente', 'lucia@gmail.com');
+        $token = Password::createToken($lucia);
+        $larguisima = str_repeat('a', 73);
+
+        $this->postJson('/api/auth/restablecer-contrasena', [
+            'token' => $token,
+            'email' => 'lucia@gmail.com',
+            'password' => $larguisima,
+            'password_confirmation' => $larguisima,
+        ])->assertStatus(422)->assertJsonValidationErrors('password');
+
+        $this->postJson('/api/auth/restablecer-contrasena', [
+            'token' => $token,
+            'email' => 'lucia@gmail.com',
+            'password' => 'clave123',
+            'password_confirmation' => 'clave123',
+        ])->assertOk();
+    }
+
+    // ---------- CSRF ----------
+
+    /**
+     * En los tests Laravel no revisa CSRF: se cambia por una versión que sí lo hace.
+     */
+    private function activarCsrf(): void
+    {
+        $this->app->instance(PreventRequestForgery::class, new class($this->app, $this->app['encrypter']) extends PreventRequestForgery {
+            protected function runningUnitTests()
+            {
+                return false;
+            }
+        });
+    }
+
+    public function test_la_api_rechaza_peticiones_de_otro_sitio_sin_token(): void
+    {
+        $this->activarCsrf();
+        $this->crearUsuario('cliente', 'lucia@gmail.com');
+        $credenciales = ['email' => 'lucia@gmail.com', 'password' => 'password123'];
+
+        // Un formulario de otro sitio que intenta iniciar sesión (o cualquier POST) a nombre de la víctima
+        $this->withHeaders(['Sec-Fetch-Site' => 'cross-site'])
+            ->postJson('/api/auth/login', $credenciales)
+            ->assertStatus(419);
+        $this->flushHeaders();
+
+        // Un navegador viejo que no manda Sec-Fetch-Site, sin token
+        $this->postJson('/api/auth/login', $credenciales)->assertStatus(419);
+        $this->assertGuest();
+
+        // Desde el propio sitio sí
+        $this->withHeaders(['Sec-Fetch-Site' => 'same-origin'])
+            ->postJson('/api/auth/login', $credenciales)
+            ->assertOk();
+    }
+
+    public function test_sin_sec_fetch_site_alcanza_con_el_token(): void
+    {
+        $this->activarCsrf();
+        $this->crearUsuario('cliente', 'lucia@gmail.com');
+
+        // Lo que hace api.js en un navegador que no manda Sec-Fetch-Site: el token de la sesión en la cabecera
+        $this->withSession(['_token' => 'token-de-la-sesion'])
+            ->withHeaders(['X-CSRF-TOKEN' => 'token-de-la-sesion'])
+            ->postJson('/api/auth/login', ['email' => 'lucia@gmail.com', 'password' => 'password123'])
+            ->assertOk();
+    }
+
+    public function test_las_consultas_get_no_piden_token(): void
+    {
+        $this->activarCsrf();
+
+        $this->withHeaders(['Sec-Fetch-Site' => 'cross-site'])->getJson('/api/servicios')->assertOk();
     }
 
     public function test_una_cuenta_sin_contrasena_puede_crear_una_con_el_enlace(): void

@@ -59,12 +59,13 @@ class MiCuentaController extends Controller
         $this->fichaDeLaSesion($request);
 
         $datos = $request->validate([
-            'fecha' => ['required', 'date', 'after_or_equal:today'],
+            'fecha' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
             'servicios' => ['required', 'array', 'min:1', 'max:' . SolicitudCita::MAXIMO_SERVICIOS],
             'servicios.*' => ['integer', Rule::exists('servicios', 'id')->where('activo', true)],
             'a_domicilio' => ['nullable', 'boolean'],
             'fuera_de_horario' => ['nullable', 'boolean'],
         ], [
+            'fecha.date_format' => 'La fecha no tiene un formato válido.',
             'fecha.after_or_equal' => 'La fecha no puede ser anterior a hoy.',
             'servicios.required' => 'Elige al menos un servicio.',
         ]);
@@ -169,7 +170,8 @@ class MiCuentaController extends Controller
         $datos = $request->validate([
             'servicios' => ['required', 'array', 'min:1', 'max:' . SolicitudCita::MAXIMO_SERVICIOS],
             'servicios.*' => ['required', 'integer', 'distinct', Rule::exists('servicios', 'id')->where('activo', true)],
-            'fecha_preferida' => ['required', 'date', 'after_or_equal:today'],
+            // Y-m-d exacto: con 'date' pasaban textos como "tomorrow" o con hora, que daban error 500
+            'fecha_preferida' => ['required', 'date_format:Y-m-d', 'after_or_equal:today'],
             // La clienta elige la hora; la franja queda por compatibilidad y se deduce de la hora
             'hora_preferida' => ['required', 'date_format:H:i'],
             'fuera_de_horario' => ['nullable', 'boolean'],
@@ -190,7 +192,7 @@ class MiCuentaController extends Controller
             'servicios.*.distinct' => 'Elegiste el mismo servicio dos veces.',
             'servicios.*.exists' => 'Uno de los servicios ya no está disponible.',
             'fecha_preferida.required' => 'Elige el día que prefieres.',
-            'fecha_preferida.date' => 'La fecha no tiene un formato válido.',
+            'fecha_preferida.date_format' => 'La fecha no tiene un formato válido.',
             'fecha_preferida.after_or_equal' => 'La fecha no puede ser anterior a hoy.',
             'hora_preferida.required' => 'Elige el horario que prefieres.',
             'hora_preferida.date_format' => 'El horario no tiene un formato válido.',
@@ -314,14 +316,20 @@ class MiCuentaController extends Controller
             abort(404);
         }
 
-        if ($solicitud->estado !== 'pendiente') {
+        // Se cancela solo si sigue pendiente, en la misma sentencia. Antes se leía el estado y después se
+        // guardaba: si la dueña lo aceptaba justo en el medio, la cancelación pisaba la aceptación y
+        // quedaba una reserva en la agenda que la clienta creía retirada
+        $filasCambiadas = SolicitudCita::whereKey($solicitud->id)
+            ->where('estado', 'pendiente')
+            ->update(['estado' => 'cancelada']);
+
+        if ($filasCambiadas === 0) {
             throw ValidationException::withMessages([
                 'estado' => ['Este pedido ya fue respondido por el salón y no se puede retirar.'],
             ]);
         }
 
-        $solicitud->estado = 'cancelada';
-        $solicitud->save();
+        $solicitud->refresh();
         $solicitud->load(['servicios', 'reserva']);
 
         return response()->json([

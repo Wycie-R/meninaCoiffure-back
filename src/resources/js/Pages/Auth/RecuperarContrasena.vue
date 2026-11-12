@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import Button from '../../Components/Button.vue'
 import Monograma from '../../Components/Monograma.vue'
 import Icono from '../../Components/Icono.vue'
+import { tokenCsrf, PAGINA_VENCIDA } from '../../api'
 
 const email = ref('')
 const errorEmail = ref('')
@@ -25,6 +26,7 @@ async function enviarEnlace() {
             headers: {
                 'Content-Type': 'application/json',
                 Accept: 'application/json',
+                'X-XSRF-TOKEN': tokenCsrf(),
             },
             credentials: 'same-origin',
             body: JSON.stringify({ email: email.value }),
@@ -37,7 +39,9 @@ async function enviarEnlace() {
             return
         }
 
-        if (respuesta.status === 422 && datos.errors?.email) {
+        if (respuesta.status === 419) {
+            errorGeneral.value = PAGINA_VENCIDA
+        } else if (respuesta.status === 422 && datos.errors?.email) {
             errorEmail.value = datos.errors.email[0]
         } else if (respuesta.status === 429) {
             errorGeneral.value = 'Hiciste muchos pedidos seguidos. Espera un minuto y vuelve a probar.'
