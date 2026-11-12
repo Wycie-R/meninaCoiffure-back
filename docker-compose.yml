@@ -1,3 +1,5 @@
+name: menina_coiffure
+
 services:
   app:
     build:
